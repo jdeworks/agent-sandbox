@@ -1,0 +1,55 @@
+{
+  "python": {
+    "label": "Python 3",
+    "detect": ["requirements.txt", "setup.py", "pyproject.toml", "Pipfile"],
+    "dockerfile": [
+      "# Python",
+      "RUN apt update && apt install -y \\",
+      "    python3 \\",
+      "    python3-venv \\",
+      "    python3-pip \\",
+      "    && ln -sf /usr/bin/python3 /usr/bin/python \\",
+      "    && rm -rf /var/lib/apt/lists/*"
+    ],
+    "volumes": {
+      "venv_{{PROJECT_NAME}}": "/workspace/.venv",
+      "pip_cache_{{PROJECT_NAME}}": "/workspace/.cache/pip"
+    },
+    "path_prepend": "/workspace/.venv/bin"
+  },
+  "node": {
+    "label": "Node.js (project deps)",
+    "detect": ["package.json"],
+    "dockerfile": [],
+    "volumes": {
+      "npm_cache_{{PROJECT_NAME}}": "/workspace/.npm"
+    },
+    "path_prepend": ""
+  },
+  "go": {
+    "label": "Go",
+    "detect": ["go.mod", "go.sum"],
+    "dockerfile": [
+      "# Go",
+      "RUN apt update && apt install -y golang-go && rm -rf /var/lib/apt/lists/*"
+    ],
+    "volumes": {
+      "gopath_{{PROJECT_NAME}}": "/workspace/go"
+    },
+    "path_prepend": "/workspace/go/bin"
+  },
+  "rust": {
+    "label": "Rust",
+    "detect": ["Cargo.toml", "Cargo.lock"],
+    "dockerfile": [
+      "# Rust",
+      "ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo",
+      "RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path",
+      "ENV PATH=\"/opt/cargo/bin:${PATH}\""
+    ],
+    "volumes": {
+      "cargo_registry_{{PROJECT_NAME}}": "/opt/cargo/registry"
+    },
+    "path_prepend": "/opt/cargo/bin"
+  }
+}

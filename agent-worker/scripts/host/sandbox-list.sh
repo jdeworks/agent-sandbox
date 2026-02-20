@@ -10,8 +10,8 @@ if [ ! -d "$PROJECTS_DIR" ] || [ -z "$(ls -A "$PROJECTS_DIR" 2>/dev/null)" ]; th
     exit 0
 fi
 
-printf "%-25s %-12s %-30s %s\n" "PROJECT" "STATUS" "WORKSPACE" "CREATED"
-printf "%-25s %-12s %-30s %s\n" "-------" "------" "---------" "-------"
+printf "%-20s %-12s %-14s %-30s %s\n" "PROJECT" "STATUS" "PROFILE" "WORKSPACE" "CREATED"
+printf "%-20s %-12s %-14s %-30s %s\n" "-------" "------" "-------" "---------" "-------"
 
 for project_dir in "$PROJECTS_DIR"/*/; do
     [ -d "$project_dir" ] || continue
@@ -20,9 +20,11 @@ for project_dir in "$PROJECTS_DIR"/*/; do
 
     workspace="-"
     created="-"
+    profile="-"
     if [ -f "$project_dir/config.env" ]; then
         workspace="$(grep '^WORKSPACE_PATH=' "$project_dir/config.env" | cut -d= -f2-)"
         created="$(grep '^CREATED=' "$project_dir/config.env" | cut -d= -f2-)"
+        profile="$(grep '^PROFILE=' "$project_dir/config.env" | cut -d= -f2-)" || true
     fi
 
     status="stopped"
@@ -32,5 +34,5 @@ for project_dir in "$PROJECTS_DIR"/*/; do
         status="exited"
     fi
 
-    printf "%-25s %-12s %-30s %s\n" "$name" "$status" "$workspace" "$created"
+    printf "%-20s %-12s %-14s %-30s %s\n" "$name" "$status" "${profile:--}" "$workspace" "$created"
 done

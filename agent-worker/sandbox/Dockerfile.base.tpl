@@ -15,20 +15,12 @@ RUN apt update && apt install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Python
-RUN apt update && apt install -y \
-    python3 \
-    python3-venv \
-    python3-pip \
-    && ln -sf /usr/bin/python3 /usr/bin/python \
-    && rm -rf /var/lib/apt/lists/*
-
-# Node 20
+# Node (always included — required for OpenCode plugin runtime)
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# OpenCode (install then move to /opt so non-root user can run it)
+# OpenCode
 RUN curl -fsSL https://opencode.ai/install | bash \
     && mv /root/.opencode /opt/opencode \
     && chmod -R a+rX /opt/opencode \
@@ -38,9 +30,11 @@ ENV PATH="/opt/opencode/bin:${PATH}"
 # Oh My OpenCode
 RUN npm install -g oh-my-opencode
 
+# {{LANGUAGE_LAYERS}}
+
 WORKDIR /workspace
 
-COPY scripts/container/install.sh /install.sh
+COPY install.sh /install.sh
 RUN chmod +x /install.sh
 
 ENTRYPOINT ["/install.sh"]

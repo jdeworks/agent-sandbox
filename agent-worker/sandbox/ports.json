@@ -1,0 +1,131 @@
+{
+  "base": {
+    "ports": [8080, 9229],
+    "label": "Generic HTTP + Node debugger"
+  },
+  "python": {
+    "default": [5000, 8000],
+    "frameworks": {
+      "flask": {
+        "ports": [5000],
+        "detect_in": "requirements.txt",
+        "patterns": ["flask", "Flask"]
+      },
+      "django": {
+        "ports": [8000],
+        "detect_in": "requirements.txt",
+        "patterns": ["django", "Django"]
+      },
+      "fastapi": {
+        "ports": [8000],
+        "detect_in": "requirements.txt",
+        "patterns": ["fastapi", "uvicorn"]
+      },
+      "streamlit": {
+        "ports": [8501],
+        "detect_in": "requirements.txt",
+        "patterns": ["streamlit"]
+      },
+      "gradio": {
+        "ports": [7860],
+        "detect_in": "requirements.txt",
+        "patterns": ["gradio"]
+      },
+      "jupyter": {
+        "ports": [8888],
+        "detect_in": "requirements.txt",
+        "patterns": ["jupyter", "notebook"]
+      }
+    }
+  },
+  "node": {
+    "default": [3000],
+    "frameworks": {
+      "next": {
+        "ports": [3000],
+        "detect_in": "package.json",
+        "patterns": ["next"]
+      },
+      "vite": {
+        "ports": [5173, 24678],
+        "detect_in": "package.json",
+        "patterns": ["vite"]
+      },
+      "angular": {
+        "ports": [4200],
+        "detect_in": "package.json",
+        "patterns": ["@angular/core"]
+      },
+      "create-react-app": {
+        "ports": [3000],
+        "detect_in": "package.json",
+        "patterns": ["react-scripts"]
+      },
+      "express": {
+        "ports": [3000],
+        "detect_in": "package.json",
+        "patterns": ["express"]
+      },
+      "nuxt": {
+        "ports": [3000],
+        "detect_in": "package.json",
+        "patterns": ["nuxt"]
+      },
+      "svelte": {
+        "ports": [5173],
+        "detect_in": "package.json",
+        "patterns": ["svelte"]
+      },
+      "remix": {
+        "ports": [5173],
+        "detect_in": "package.json",
+        "patterns": ["@remix-run/dev"]
+      },
+      "astro": {
+        "ports": [4321],
+        "detect_in": "package.json",
+        "patterns": ["astro"]
+      }
+    }
+  },
+  "go": {
+    "default": [8080],
+    "frameworks": {
+      "gin": {
+        "ports": [8080],
+        "detect_in": "go.mod",
+        "patterns": ["github.com/gin-gonic/gin"]
+      },
+      "fiber": {
+        "ports": [3000],
+        "detect_in": "go.mod",
+        "patterns": ["github.com/gofiber/fiber"]
+      },
+      "echo": {
+        "ports": [1323],
+        "detect_in": "go.mod",
+        "patterns": ["github.com/labstack/echo"]
+      }
+    }
+  },
+  "rust": {
+    "default": [8080],
+    "frameworks": {
+      "actix": {
+        "ports": [8080],
+        "detect_in": "Cargo.toml",
+        "patterns": ["actix-web"]
+      },
+      "axum": {
+        "ports": [3000],
+        "detect_in": "Cargo.toml",
+        "patterns": ["axum"]
+      },
+      "rocket": {
+        "ports": [8000],
+        "detect_in": "Cargo.toml",
+        "patterns": ["rocket"]
+      }
+    }
+  }
+}

@@ -2,7 +2,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SANDBOX_CMD="$SCRIPT_DIR/sandbox.sh"
+PREPARE_CMD="$SCRIPT_DIR/prepare.sh"
 
 echo "=== Agent Sandbox Setup ==="
 echo ""
@@ -41,16 +41,27 @@ fi
 echo ""
 
 ########################################
-# Shell alias
+# Check jq (needed by prepare)
+########################################
+if command -v jq &>/dev/null; then
+    echo "[setup] jq found: $(jq --version)"
+else
+    echo "[setup] Warning: jq not found. It is required by 'prepare'."
+    echo "[setup] Install it with: sudo apt install -y jq"
+fi
+
+echo ""
+
+########################################
+# Shell alias for prepare
 ########################################
 ALIASES_FILE="$HOME/.bash_aliases"
 
-read -rp "Choose alias name [sandbox]: " alias_name
-alias_name="${alias_name:-sandbox}"
+read -rp "Choose alias name for the prepare command [prepare]: " alias_name
+alias_name="${alias_name:-prepare}"
 
-alias_line="alias $alias_name='$SANDBOX_CMD'"
+alias_line="alias $alias_name='$PREPARE_CMD'"
 
-# Ensure .bash_aliases exists
 touch "$ALIASES_FILE"
 
 existing=$(grep "^alias ${alias_name}=" "$ALIASES_FILE" 2>/dev/null || true)
@@ -86,6 +97,10 @@ if [ -f "$HOME/.bashrc" ] && ! grep -q '\.bash_aliases' "$HOME/.bashrc" 2>/dev/n
 fi
 
 echo ""
-echo "[setup] Done. Run 'source ~/.bash_aliases' or open a new terminal."
-echo "  $alias_name .              # sandbox current directory"
-echo "  $alias_name /path/to/dir   # sandbox any directory"
+echo "[setup] Done. Run 'source ~/.bash_aliases' or open a new terminal, then:"
+echo "  $alias_name              # prepare a sandbox environment"
+echo ""
+echo "The prepare command will:"
+echo "  1. Auto-detect or let you pick languages for your project"
+echo "  2. Generate a tailored Docker environment"
+echo "  3. Create a 'sandbox-<profile>' alias to launch sandboxes"
