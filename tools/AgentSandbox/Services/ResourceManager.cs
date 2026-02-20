@@ -10,7 +10,7 @@ public static class ResourceManager
 {
     private static readonly Assembly Asm = Assembly.GetExecutingAssembly();
     private const string Prefix = "AgentSandbox.Resources.";
-    private const string VersionStamp = "1.0.0";
+    private const string VersionStamp = "1.0.2";
 
     public static string AppDataRoot { get; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AgentSandbox");
@@ -48,8 +48,9 @@ public static class ResourceManager
 
             Directory.CreateDirectory(Path.GetDirectoryName(diskPath)!);
             using var stream = Asm.GetManifestResourceStream(name)!;
-            using var fs = File.Create(diskPath);
-            stream.CopyTo(fs);
+            using var reader = new StreamReader(stream);
+            var content = reader.ReadToEnd();
+            WriteLf(diskPath, content);
         }
     }
 
@@ -103,20 +104,25 @@ public static class ResourceManager
         return embedded;
     }
 
-    public static string ReadEmbedded(string relativePath)
-    {
-        var diskPath = relativePath.Contains(Path.DirectorySeparatorChar) || relativePath.Contains('/')
-            ? Path.Combine(AppDataRoot, relativePath)
-            : Path.Combine(SandboxDir, relativePath);
-        return File.ReadAllText(diskPath);
-    }
-
     public static string ReadSandboxFile(string fileName) =>
-        File.ReadAllText(Path.Combine(SandboxDir, fileName));
+        NormalizeLf(File.ReadAllText(Path.Combine(SandboxDir, fileName)));
 
     public static string ReadFragment(string fileName) =>
-        File.ReadAllText(Path.Combine(FragmentsDir, fileName));
+        NormalizeLf(File.ReadAllText(Path.Combine(FragmentsDir, fileName)));
 
     public static string ReadTemplate(string fileName) =>
-        File.ReadAllText(Path.Combine(TemplatesDir, fileName));
+        NormalizeLf(File.ReadAllText(Path.Combine(TemplatesDir, fileName)));
+
+    /// <summary>
+    /// Write a file with LF line endings regardless of OS.
+    /// All files that end up inside Docker containers MUST use this.
+    /// </summary>
+    public static void WriteLf(string path, string content)
+    {
+        File.WriteAllText(path, NormalizeLf(content));
+    }
+
+    /// <summary>Strip \r so all content uses LF only.</summary>
+    public static string NormalizeLf(string text) =>
+        text.Replace("\r\n", "\n").Replace("\r", "\n");
 }

@@ -22,15 +22,14 @@ echo "[build] Source: $PROJECT_DIR"
 echo "[build] Output: $OUTPUT_DIR/agent-sandbox.exe"
 echo ""
 
+# Cross-compile from Linux to win-x64. The .NET SDK pulls the Windows
+# Desktop targeting pack (WinForms) from NuGet automatically.
 docker run --rm \
     -v "$PROJECT_DIR":/src \
     -v "$OUTPUT_DIR":/out \
     -w /src \
     "$IMAGE" \
-    bash -c '
-        dotnet restore
-        dotnet publish -c Release -r win-x64 --self-contained true -o /out /p:PublishSingleFile=true
-    '
+    bash -c 'dotnet publish -c Release -r win-x64 --self-contained true -o /out -p:PublishSingleFile=true -p:EnableWindowsTargeting=true'
 
 if [ -f "$OUTPUT_DIR/agent-sandbox.exe" ]; then
     size=$(du -h "$OUTPUT_DIR/agent-sandbox.exe" | cut -f1)

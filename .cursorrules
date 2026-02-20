@@ -5,7 +5,9 @@
 This repo has two parallel implementations:
 
 - **Unix (Linux / macOS / WSL)**: Bash scripts in `agent-worker/scripts/unix/` that use `jq` to read JSON config and `generate_profile.sh` to assemble Docker profiles.
-- **Windows**: A self-contained C# exe in `tools/AgentSandbox/` that embeds all data files and replicates the same detection, generation, and Docker orchestration logic.
+- **Windows**: A self-contained C# exe in `tools/AgentSandbox/` that embeds all data files and replicates the same detection, generation, and Docker orchestration logic. It has two modes:
+  - **GUI mode** (default / double-click): WinForms wizard with folder picker, language checkboxes, version/port editing. Entry: `UI/WizardForm.cs`.
+  - **CLI mode** (explicit subcommands like `prepare`, `sandbox`, `list`): Console-based, same UX as the unix scripts. Entry: `Cli.cs`.
 
 Both implementations consume the same source-of-truth data files under `agent-worker/sandbox/`.
 

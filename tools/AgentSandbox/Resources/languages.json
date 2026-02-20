@@ -1,7 +1,7 @@
 {
   "cpp": {
     "label": "C/C++",
-    "detect": ["CMakeLists.txt", "meson.build", "configure.ac", "conanfile.txt", "vcpkg.json"],
+    "detect": ["CMakeLists.txt", "meson.build", "configure.ac", "conanfile.txt", "vcpkg.json", "*.c", "*.cpp", "*.h", "*.hpp"],
     "default_version": "",
     "version_detect": [],
     "dockerfile": [
@@ -13,7 +13,7 @@
   },
   "dart": {
     "label": "Dart",
-    "detect": ["pubspec.yaml", "pubspec.lock"],
+    "detect": ["pubspec.yaml", "pubspec.lock", "*.dart"],
     "default_version": "latest",
     "version_detect": [
       {"file": "pubspec.yaml", "regex": "sdk:\\s*['\"]?>=?\\s*([0-9]+\\.[0-9]+)"},
@@ -33,7 +33,7 @@
   },
   "dotnet": {
     "label": "C# / .NET",
-    "detect": ["*.csproj", "*.sln", "*.fsproj", "global.json"],
+    "detect": ["*.csproj", "*.sln", "*.fsproj", "global.json", "*.cs", "*.fs"],
     "default_version": "8.0",
     "version_detect": [
       {"file": "global.json", "regex": "\"version\":\\s*\"([0-9]+\\.[0-9]+)"},
@@ -55,7 +55,7 @@
   },
   "go": {
     "label": "Go",
-    "detect": ["go.mod", "go.sum"],
+    "detect": ["go.mod", "go.sum", "*.go"],
     "default_version": "system",
     "version_detect": [
       {"file": "go.mod", "regex": "^go\\s+([0-9]+\\.[0-9]+)"},
@@ -80,7 +80,7 @@
   },
   "java": {
     "label": "Java",
-    "detect": ["pom.xml", "build.gradle", "build.gradle.kts", "gradlew", "mvnw"],
+    "detect": ["pom.xml", "build.gradle", "build.gradle.kts", "gradlew", "mvnw", "*.java"],
     "default_version": "21",
     "version_detect": [
       {"file": ".java-version", "regex": "([0-9]+)"},
@@ -105,7 +105,7 @@
   },
   "kotlin": {
     "label": "Kotlin",
-    "detect": ["*.kt"],
+    "detect": ["*.kt", "*.kts"],
     "default_version": "21",
     "version_detect": [
       {"file": ".java-version", "regex": "([0-9]+)"},
@@ -125,7 +125,7 @@
   },
   "node": {
     "label": "Node.js (project deps)",
-    "detect": ["package.json"],
+    "detect": ["package.json", "*.js", "*.ts", "*.jsx", "*.tsx"],
     "default_version": "20",
     "version_detect": [
       {"file": ".nvmrc", "regex": "v?([0-9]+)"},
@@ -142,7 +142,7 @@
   },
   "php": {
     "label": "PHP",
-    "detect": ["composer.json", "composer.lock", "artisan"],
+    "detect": ["composer.json", "composer.lock", "artisan", "*.php"],
     "default_version": "system",
     "version_detect": [
       {"file": ".php-version", "regex": "([0-9]+\\.[0-9]+)"},
@@ -176,7 +176,7 @@
   },
   "python": {
     "label": "Python 3",
-    "detect": ["requirements.txt", "setup.py", "pyproject.toml", "Pipfile"],
+    "detect": ["requirements.txt", "setup.py", "pyproject.toml", "Pipfile", "*.py"],
     "default_version": "system",
     "version_detect": [
       {"file": ".python-version", "regex": "([0-9]+\\.[0-9]+)"},
@@ -212,7 +212,7 @@
   },
   "ruby": {
     "label": "Ruby",
-    "detect": ["Gemfile", "Gemfile.lock", "Rakefile", "*.gemspec"],
+    "detect": ["Gemfile", "Gemfile.lock", "Rakefile", "*.gemspec", "*.rb"],
     "default_version": "system",
     "version_detect": [
       {"file": ".ruby-version", "regex": "([0-9]+\\.[0-9]+)"},
@@ -238,7 +238,7 @@
   },
   "rust": {
     "label": "Rust",
-    "detect": ["Cargo.toml", "Cargo.lock"],
+    "detect": ["Cargo.toml", "Cargo.lock", "*.rs"],
     "default_version": "stable",
     "version_detect": [
       {"file": "rust-toolchain", "regex": "([a-z0-9]+\\.?[0-9]*\\.?[0-9]*)"},

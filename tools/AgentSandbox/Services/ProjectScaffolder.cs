@@ -22,10 +22,10 @@ public static class ProjectScaffolder
         var compose = composeTpl
             .Replace("{{PROJECT_NAME}}", projectName)
             .Replace("{{WORKSPACE_PATH}}", dockerPath);
-        File.WriteAllText(Path.Combine(projectDir, "docker-compose.yml"), compose);
+        ResourceManager.WriteLf(Path.Combine(projectDir, "docker-compose.yml"), compose);
 
         var baseImage = $"agent-sandbox-{profileName}:latest";
-        File.WriteAllText(Path.Combine(projectDir, "Dockerfile"), $"FROM {baseImage}\n");
+        ResourceManager.WriteLf(Path.Combine(projectDir, "Dockerfile"), $"FROM {baseImage}\n");
 
         Directory.CreateDirectory(Path.Combine(projectDir, "sandbox_data"));
         File.WriteAllText(Path.Combine(projectDir, "sandbox_data", "changes.txt"), "");
@@ -61,7 +61,7 @@ public static class ProjectScaffolder
             LAST_STARTED={DateTime.Now:O}
             {versionLines}
             """;
-        File.WriteAllText(Path.Combine(projectDir, "config.env"), configEnv.TrimEnd() + "\n");
+        ResourceManager.WriteLf(Path.Combine(projectDir, "config.env"), configEnv.TrimEnd() + "\n");
     }
 
     public static void UpdateLastStarted(string projectName)
@@ -76,7 +76,7 @@ public static class ProjectScaffolder
             lines[idx] = newLine;
         else
             lines.Add(newLine);
-        File.WriteAllLines(configPath, lines);
+        ResourceManager.WriteLf(configPath, string.Join("\n", lines) + "\n");
     }
 
     public static bool HasDockerfileExtension(string projectName)
@@ -96,9 +96,9 @@ public static class ProjectScaffolder
             .Select(l => l.Trim())
             .Where(l => !string.IsNullOrEmpty(l));
 
-        using var sw = File.AppendText(dockerfilePath);
-        foreach (var cmd in commands)
-            sw.WriteLine($"RUN {cmd}");
+        var existing = File.ReadAllText(dockerfilePath);
+        var appended = string.Join("\n", commands.Select(cmd => $"RUN {cmd}"));
+        ResourceManager.WriteLf(dockerfilePath, existing.TrimEnd() + "\n" + appended + "\n");
 
         File.Delete(extPath);
     }

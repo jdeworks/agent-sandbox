@@ -66,7 +66,7 @@ public static class ProfileGenerator
             .Replace("{{NODE_VERSION}}", nodeVersion)
             .Replace("# {{LANGUAGE_LAYERS}}", layers.ToString().TrimEnd());
 
-        File.WriteAllText(Path.Combine(profileDir, "Dockerfile.base"), output);
+        ResourceManager.WriteLf(Path.Combine(profileDir, "Dockerfile.base"), output);
     }
 
     private static void GenerateCompose(string profileDir, ProfileSpec spec,
@@ -137,7 +137,7 @@ public static class ProfileGenerator
             sb.AppendLine(vd);
         sb.Append("  opencode_cache_{{PROJECT_NAME}}:");
 
-        File.WriteAllText(Path.Combine(profileDir, "docker-compose.yml.tpl"), sb.ToString());
+        ResourceManager.WriteLf(Path.Combine(profileDir, "docker-compose.yml.tpl"), sb.ToString());
     }
 
     private static void GenerateInstallSh(string profileDir, ProfileSpec spec)
@@ -170,7 +170,7 @@ public static class ProfileGenerator
         sb.AppendLine("echo \"[sandbox] Ready.\"");
         sb.AppendLine("exec opencode");
 
-        File.WriteAllText(Path.Combine(profileDir, "install.sh"), sb.ToString());
+        ResourceManager.WriteLf(Path.Combine(profileDir, "install.sh"), sb.ToString());
     }
 
     private static void GenerateAgentsMd(string profileDir, ProfileSpec spec)
@@ -199,7 +199,7 @@ public static class ProfileGenerator
                           "`http://localhost:<port>` on the host.");
         }
 
-        File.WriteAllText(Path.Combine(profileDir, "AGENTS.md"), sb.ToString());
+        ResourceManager.WriteLf(Path.Combine(profileDir, "AGENTS.md"), sb.ToString());
     }
 
     private static void GenerateVersionsEnv(string profileDir, ProfileSpec spec, string nodeVersion)
@@ -214,6 +214,6 @@ public static class ProfileGenerator
                 sb.AppendLine($"{lang.ToUpperInvariant()}_VERSION={ver}");
         }
 
-        File.WriteAllText(Path.Combine(profileDir, "versions.env"), sb.ToString());
+        ResourceManager.WriteLf(Path.Combine(profileDir, "versions.env"), sb.ToString());
     }
 }

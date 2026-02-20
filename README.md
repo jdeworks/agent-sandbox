@@ -264,28 +264,40 @@ From WSL or any Linux/macOS host with Docker:
 ./tools/build-windows.sh
 ```
 
-This spins up the .NET 8.0 SDK Docker image, compiles and publishes a self-contained single-file exe, and drops it into `tools/dist/agent-sandbox.exe`. No local .NET installation required.
+This cross-compiles from the Linux .NET 8.0 SDK image (the Windows Desktop targeting pack for WinForms is pulled from NuGet automatically). The output is a single `tools/dist/agent-sandbox.exe`.
 
-Alternatively, if you have the .NET 8.0 SDK installed natively:
+Alternatively, on Windows with the .NET 8.0 SDK installed:
 
-```bash
-cd tools/AgentSandbox
-dotnet publish -c Release -r win-x64 --self-contained true -o ../dist
+```powershell
+cd tools\AgentSandbox
+dotnet publish -c Release -o ..\dist
 ```
 
 ### Usage
 
+**Double-click** the exe (or run without arguments) to open the GUI wizard:
+
+1. **Folder picker** -- Browse button opens a native Windows folder dialog (handles paths with spaces correctly)
+2. **Scan** -- auto-detects languages, versions, frameworks, and ports
+3. **Review** -- checkboxes for languages, editable version fields, editable port list, profile name
+4. **Launch** -- generates the profile, builds the Docker image, scaffolds the project, and attaches to the container
+
+The wizard can also be pre-filled with a path:
+
 ```
-agent-sandbox                        Interactive wizard (prompts for folder)
-agent-sandbox C:\path\to\project     Auto-detect, prepare, and launch
+agent-sandbox C:\path\to\project
+```
+
+**CLI mode** (for terminal / scripting) is available via explicit subcommands:
+
+```
 agent-sandbox prepare C:\project     Prepare a profile without launching
 agent-sandbox sandbox C:\project     Launch using an existing profile
 agent-sandbox list                   List all projects
 agent-sandbox stats                  Show disk usage
 agent-sandbox cleanup [<project>]    Remove a project (or --all)
+agent-sandbox help                   Show this help
 ```
-
-The wizard flow mirrors the unix `prepare` + `sandbox` commands: auto-detect languages, detect versions and ports, generate a profile, build the Docker image, scaffold the project, and attach to the container.
 
 ### Data location
 
