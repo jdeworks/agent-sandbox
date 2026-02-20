@@ -1,0 +1,258 @@
+{
+  "cpp": {
+    "label": "C/C++",
+    "detect": ["CMakeLists.txt", "meson.build", "configure.ac", "conanfile.txt", "vcpkg.json"],
+    "default_version": "",
+    "version_detect": [],
+    "dockerfile": [
+      "# C/C++ tooling",
+      "RUN apt update && apt install -y cmake ninja-build gdb pkg-config && rm -rf /var/lib/apt/lists/*"
+    ],
+    "volumes": {},
+    "path_prepend": ""
+  },
+  "dart": {
+    "label": "Dart",
+    "detect": ["pubspec.yaml", "pubspec.lock"],
+    "default_version": "latest",
+    "version_detect": [
+      {"file": "pubspec.yaml", "regex": "sdk:\\s*['\"]?>=?\\s*([0-9]+\\.[0-9]+)"},
+      {"file": ".tool-versions", "regex": "dart\\s+([0-9]+\\.[0-9]+)"},
+      {"file": "Dockerfile", "regex": "FROM.*dart:([0-9]+\\.[0-9]+)"}
+    ],
+    "dockerfile": [
+      "# Dart SDK {{VERSION}}",
+      "RUN curl -fsSL https://storage.googleapis.com/dart-archive/channels/stable/release/{{VERSION}}/sdk/dartsdk-linux-x64-release.zip -o /tmp/dart.zip \\",
+      "    && unzip -q /tmp/dart.zip -d /opt \\",
+      "    && rm /tmp/dart.zip"
+    ],
+    "volumes": {
+      "pub_cache_{{PROJECT_NAME}}": "/workspace/.pub-cache"
+    },
+    "path_prepend": "/opt/dart-sdk/bin:/workspace/.pub-cache/bin"
+  },
+  "dotnet": {
+    "label": "C# / .NET",
+    "detect": ["*.csproj", "*.sln", "*.fsproj", "global.json"],
+    "default_version": "8.0",
+    "version_detect": [
+      {"file": "global.json", "regex": "\"version\":\\s*\"([0-9]+\\.[0-9]+)"},
+      {"file": "*.csproj", "regex": "<TargetFramework>net([0-9]+\\.[0-9]+)"},
+      {"file": "Dockerfile", "regex": "FROM.*dotnet.*:([0-9]+\\.[0-9]+)"}
+    ],
+    "dockerfile": [
+      "# C# / .NET SDK {{VERSION}}",
+      "RUN apt update && apt install -y wget \\",
+      "    && wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb -O /tmp/ms-prod.deb \\",
+      "    && dpkg -i /tmp/ms-prod.deb && rm /tmp/ms-prod.deb \\",
+      "    && apt update && apt install -y dotnet-sdk-{{VERSION}} \\",
+      "    && rm -rf /var/lib/apt/lists/*"
+    ],
+    "volumes": {
+      "nuget_cache_{{PROJECT_NAME}}": "/workspace/.nuget"
+    },
+    "path_prepend": ""
+  },
+  "go": {
+    "label": "Go",
+    "detect": ["go.mod", "go.sum"],
+    "default_version": "system",
+    "version_detect": [
+      {"file": "go.mod", "regex": "^go\\s+([0-9]+\\.[0-9]+)"},
+      {"file": ".tool-versions", "regex": "golang\\s+([0-9]+\\.[0-9]+)"},
+      {"file": "Dockerfile", "regex": "FROM.*golang:([0-9]+\\.[0-9]+)"}
+    ],
+    "dockerfile": [
+      "# Go (system)",
+      "RUN apt update && apt install -y golang-go && rm -rf /var/lib/apt/lists/*"
+    ],
+    "version_dockerfile": [
+      "# Go {{VERSION}}",
+      "RUN curl -fsSL https://go.dev/dl/go{{VERSION}}.linux-amd64.tar.gz -o /tmp/go.tar.gz \\",
+      "    && tar -C /usr/local -xzf /tmp/go.tar.gz \\",
+      "    && rm /tmp/go.tar.gz \\",
+      "    && ln -sf /usr/local/go/bin/go /usr/local/bin/go"
+    ],
+    "volumes": {
+      "gopath_{{PROJECT_NAME}}": "/workspace/go"
+    },
+    "path_prepend": "/workspace/go/bin"
+  },
+  "java": {
+    "label": "Java",
+    "detect": ["pom.xml", "build.gradle", "build.gradle.kts", "gradlew", "mvnw"],
+    "default_version": "21",
+    "version_detect": [
+      {"file": ".java-version", "regex": "([0-9]+)"},
+      {"file": "pom.xml", "regex": "<java\\.version>([0-9]+)</java\\.version>"},
+      {"file": "pom.xml", "regex": "<maven\\.compiler\\.source>([0-9]+)"},
+      {"file": "pom.xml", "regex": "<release>([0-9]+)</release>"},
+      {"file": "build.gradle", "regex": "sourceCompatibility.*['\"]?([0-9]+)"},
+      {"file": "build.gradle.kts", "regex": "jvmTarget.*['\"]([0-9]+)"},
+      {"file": ".tool-versions", "regex": "java.*openjdk-([0-9]+)"},
+      {"file": "Dockerfile", "regex": "FROM.*(openjdk|eclipse-temurin):([0-9]+)"}
+    ],
+    "dockerfile": [
+      "# Java (OpenJDK {{VERSION}} + Maven)",
+      "RUN apt update && apt install -y openjdk-{{VERSION}}-jdk maven && rm -rf /var/lib/apt/lists/*",
+      "ENV JAVA_HOME=/usr/lib/jvm/java-{{VERSION}}-openjdk-amd64"
+    ],
+    "volumes": {
+      "maven_cache_{{PROJECT_NAME}}": "/workspace/.m2",
+      "gradle_cache_{{PROJECT_NAME}}": "/workspace/.gradle"
+    },
+    "path_prepend": ""
+  },
+  "kotlin": {
+    "label": "Kotlin",
+    "detect": ["*.kt"],
+    "default_version": "21",
+    "version_detect": [
+      {"file": ".java-version", "regex": "([0-9]+)"},
+      {"file": "build.gradle.kts", "regex": "jvmTarget.*['\"]([0-9]+)"},
+      {"file": ".tool-versions", "regex": "java.*openjdk-([0-9]+)"},
+      {"file": "Dockerfile", "regex": "FROM.*(openjdk|eclipse-temurin):([0-9]+)"}
+    ],
+    "dockerfile": [
+      "# Kotlin (JDK {{VERSION}} — Gradle wrapper handles the Kotlin compiler)",
+      "RUN apt update && apt install -y openjdk-{{VERSION}}-jdk && rm -rf /var/lib/apt/lists/*",
+      "ENV JAVA_HOME=/usr/lib/jvm/java-{{VERSION}}-openjdk-amd64"
+    ],
+    "volumes": {
+      "gradle_cache_{{PROJECT_NAME}}": "/workspace/.gradle"
+    },
+    "path_prepend": ""
+  },
+  "node": {
+    "label": "Node.js (project deps)",
+    "detect": ["package.json"],
+    "default_version": "20",
+    "version_detect": [
+      {"file": ".nvmrc", "regex": "v?([0-9]+)"},
+      {"file": ".node-version", "regex": "v?([0-9]+)"},
+      {"file": "package.json", "regex": "\"node\":\\s*\"[><=~^]*v?([0-9]+)"},
+      {"file": ".tool-versions", "regex": "nodejs\\s+([0-9]+)"},
+      {"file": "Dockerfile", "regex": "FROM.*node:([0-9]+)"}
+    ],
+    "dockerfile": [],
+    "volumes": {
+      "npm_cache_{{PROJECT_NAME}}": "/workspace/.npm"
+    },
+    "path_prepend": ""
+  },
+  "php": {
+    "label": "PHP",
+    "detect": ["composer.json", "composer.lock", "artisan"],
+    "default_version": "system",
+    "version_detect": [
+      {"file": ".php-version", "regex": "([0-9]+\\.[0-9]+)"},
+      {"file": "composer.json", "regex": "\"php\":\\s*\"[><=~^]*([0-9]+\\.[0-9]+)"},
+      {"file": ".tool-versions", "regex": "php\\s+([0-9]+\\.[0-9]+)"},
+      {"file": "Dockerfile", "regex": "FROM.*php:([0-9]+\\.[0-9]+)"}
+    ],
+    "dockerfile": [
+      "# PHP (system)",
+      "RUN apt update && apt install -y \\",
+      "    php php-cli php-mbstring php-xml php-curl php-zip \\",
+      "    php-mysql php-pgsql php-sqlite3 php-bcmath php-gd \\",
+      "    && rm -rf /var/lib/apt/lists/*",
+      "RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer"
+    ],
+    "version_dockerfile": [
+      "# PHP {{VERSION}} (ondrej PPA)",
+      "RUN apt update && apt install -y software-properties-common \\",
+      "    && add-apt-repository -y ppa:ondrej/php \\",
+      "    && apt update && apt install -y \\",
+      "    php{{VERSION}} php{{VERSION}}-cli php{{VERSION}}-mbstring php{{VERSION}}-xml php{{VERSION}}-curl php{{VERSION}}-zip \\",
+      "    php{{VERSION}}-mysql php{{VERSION}}-pgsql php{{VERSION}}-sqlite3 php{{VERSION}}-bcmath php{{VERSION}}-gd \\",
+      "    && update-alternatives --set php /usr/bin/php{{VERSION}} \\",
+      "    && rm -rf /var/lib/apt/lists/*",
+      "RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer"
+    ],
+    "volumes": {
+      "composer_cache_{{PROJECT_NAME}}": "/workspace/.composer"
+    },
+    "path_prepend": "/workspace/src/vendor/bin"
+  },
+  "python": {
+    "label": "Python 3",
+    "detect": ["requirements.txt", "setup.py", "pyproject.toml", "Pipfile"],
+    "default_version": "system",
+    "version_detect": [
+      {"file": ".python-version", "regex": "([0-9]+\\.[0-9]+)"},
+      {"file": "Pipfile", "regex": "python_version.*\"([0-9]+\\.[0-9]+)\""},
+      {"file": "pyproject.toml", "regex": "requires-python.*([0-9]+\\.[0-9]+)"},
+      {"file": "runtime.txt", "regex": "python-([0-9]+\\.[0-9]+)"},
+      {"file": ".tool-versions", "regex": "python\\s+([0-9]+\\.[0-9]+)"},
+      {"file": "Dockerfile", "regex": "FROM.*python:([0-9]+\\.[0-9]+)"}
+    ],
+    "dockerfile": [
+      "# Python (system)",
+      "RUN apt update && apt install -y \\",
+      "    python3 \\",
+      "    python3-venv \\",
+      "    python3-pip \\",
+      "    && ln -sf /usr/bin/python3 /usr/bin/python \\",
+      "    && rm -rf /var/lib/apt/lists/*"
+    ],
+    "version_dockerfile": [
+      "# Python {{VERSION}} (deadsnakes PPA)",
+      "RUN apt update && apt install -y software-properties-common \\",
+      "    && add-apt-repository -y ppa:deadsnakes/ppa \\",
+      "    && apt update && apt install -y python{{VERSION}} python{{VERSION}}-venv python{{VERSION}}-dev \\",
+      "    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python{{VERSION}} 1 \\",
+      "    && ln -sf /usr/bin/python{{VERSION}} /usr/bin/python \\",
+      "    && rm -rf /var/lib/apt/lists/*"
+    ],
+    "volumes": {
+      "venv_{{PROJECT_NAME}}": "/workspace/.venv",
+      "pip_cache_{{PROJECT_NAME}}": "/workspace/.cache/pip"
+    },
+    "path_prepend": "/workspace/.venv/bin"
+  },
+  "ruby": {
+    "label": "Ruby",
+    "detect": ["Gemfile", "Gemfile.lock", "Rakefile", "*.gemspec"],
+    "default_version": "system",
+    "version_detect": [
+      {"file": ".ruby-version", "regex": "([0-9]+\\.[0-9]+)"},
+      {"file": "Gemfile", "regex": "^ruby\\s+['\"]~?>?\\s*([0-9]+\\.[0-9]+)"},
+      {"file": ".tool-versions", "regex": "ruby\\s+([0-9]+\\.[0-9]+)"},
+      {"file": "Dockerfile", "regex": "FROM.*ruby:([0-9]+\\.[0-9]+)"}
+    ],
+    "dockerfile": [
+      "# Ruby (system)",
+      "RUN apt update && apt install -y ruby ruby-dev && rm -rf /var/lib/apt/lists/*"
+    ],
+    "version_dockerfile": [
+      "# Ruby {{VERSION}}",
+      "RUN apt update && apt install -y ruby-build autoconf bison rustc libssl-dev libyaml-dev libreadline-dev zlib1g-dev libncurses-dev libffi-dev libgdbm-dev \\",
+      "    && ruby-build {{VERSION}} /usr/local/ruby \\",
+      "    && rm -rf /var/lib/apt/lists/*",
+      "ENV PATH=\"/usr/local/ruby/bin:${PATH}\""
+    ],
+    "volumes": {
+      "gem_cache_{{PROJECT_NAME}}": "/workspace/.gems"
+    },
+    "path_prepend": "/workspace/.gems/bin"
+  },
+  "rust": {
+    "label": "Rust",
+    "detect": ["Cargo.toml", "Cargo.lock"],
+    "default_version": "stable",
+    "version_detect": [
+      {"file": "rust-toolchain", "regex": "([a-z0-9]+\\.?[0-9]*\\.?[0-9]*)"},
+      {"file": "rust-toolchain.toml", "regex": "channel\\s*=\\s*\"([a-z0-9]+\\.?[0-9]*\\.?[0-9]*)\""}
+    ],
+    "dockerfile": [
+      "# Rust ({{VERSION}})",
+      "ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo",
+      "RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --default-toolchain {{VERSION}}",
+      "ENV PATH=\"/opt/cargo/bin:${PATH}\""
+    ],
+    "volumes": {
+      "cargo_registry_{{PROJECT_NAME}}": "/opt/cargo/registry"
+    },
+    "path_prepend": "/opt/cargo/bin"
+  }
+}

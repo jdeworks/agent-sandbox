@@ -6,13 +6,17 @@ The sandbox environment is tailored to your project -- you pick the languages yo
 
 ## Prerequisites
 
+**Linux / macOS / WSL:**
 - **Docker** and **Docker Compose** (setup script can install Docker for you)
 - **jq** -- install with `sudo apt install -y jq`
+
+**Windows:**
+- **Docker Desktop** -- that's it. The self-contained exe handles everything else (see [Windows Support](#windows-support)).
 
 ## Setup
 
 ```bash
-./agent-worker/scripts/host/setup.sh
+./agent-worker/scripts/unix/setup.sh
 ```
 
 Checks for Docker, Docker Compose, and jq. Offers to install Docker if missing. Adds a `prepare` alias to your shell.
@@ -26,17 +30,18 @@ Before you can sandbox a project, you need to prepare a profile that matches you
 prepare
 
 # Or run the prepare script directly:
-./agent-worker/scripts/host/prepare.sh
+./agent-worker/scripts/unix/prepare.sh
 ```
 
 The prepare command will:
 
-1. Ask if you want to **auto-detect** languages (scans for `requirements.txt`, `package.json`, `go.mod`, etc.) or **manually pick** from the list
-2. **Detect ports** -- scans dependency manifests for known frameworks (Flask, Next.js, FastAPI, Vite, etc.) and selects the right ports automatically
-3. Let you review detected ports and add extras
-4. Let you name the profile (defaults to the language combo, e.g. `python-node`)
-5. Generate a tailored Docker environment in `agent-worker/prepared/<profile>/`
-6. Create a `sandbox-<profile>` alias
+1. Ask if you want to **auto-detect** languages (scans for `requirements.txt`, `package.json`, `go.mod`, etc. up to 3 levels deep) or **manually pick** from the list
+2. **Detect versions** -- scans project files (`.python-version`, `.nvmrc`, `go.mod`, `pom.xml`, etc.) for pinned language versions, with an option to override
+3. **Detect ports** -- scans dependency manifests for known frameworks (Flask, Next.js, FastAPI, Vite, etc.) and selects the right ports automatically
+4. Let you review detected ports and add extras
+5. Let you name the profile (defaults to the language combo, e.g. `python-node`)
+6. Generate a tailored Docker environment in `agent-worker/prepared/<profile>/`
+7. Create a `sandbox-<profile>` alias
 
 ### Available Languages
 
@@ -72,11 +77,16 @@ On **first run** for a project the script will:
 2. Scaffold a project folder under `agent-worker/projects/<name>/` with all config
 3. Start the container and launch OpenCode
 
-On **subsequent runs** it reuses the existing project config and starts immediately.
+On **subsequent runs** it reuses the existing project config. If the container is already running, you'll be asked to **reattach** (open a new OpenCode session in the existing container) or **rebuild** from scratch.
 
 ## Project Structure
 
 ```
+tools/
+  build-windows.sh                   # Build the Windows exe via Docker (no local .NET needed)
+  dist/                              # Build output (agent-sandbox.exe) -- gitignored
+  AgentSandbox/                      # Windows EXE (C# .NET 8.0, self-contained)
+
 agent-worker/
   sandbox/                           # Language registry, port lookup, templates
     Dockerfile.base.tpl              #   Minimal base: Ubuntu + Node + OpenCode
@@ -86,10 +96,8 @@ agent-worker/
     generate_profile.sh              #   Assembles profile from templates + selections
     fragments/                       #   Container startup snippets per language
       README.md                      #     How fragments work and how to add new ones
-      python.sh / python.agents.md   #     Venv creation, pip install + agent instructions
-      node.sh / node.agents.md       #     npm install + agent instructions
-      go.sh / go.agents.md           #     go mod download + agent instructions
-      rust.sh / rust.agents.md       #     cargo fetch + agent instructions
+      <lang>.sh                      #     Container startup (dep install, PATH, etc.)
+      <lang>.agents.md               #     AI agent instructions for the language
   prepared/                          # Generated profiles (one per language combo)
     <profile>/
       Dockerfile.base                #   Assembled base image
@@ -97,11 +105,12 @@ agent-worker/
       install.sh                     #   Container entrypoint (assembled from fragments)
       AGENTS.md                      #   Agent instructions (assembled from base + fragments)
       sandbox.sh                     #   Thin wrapper that calls the core sandbox.sh
+      versions.env                   #   Resolved language version pins
   templates/                         # Shared config templates (language-independent)
     opencode.json                    #   OpenCode configuration
     oh-my-opencode.json              #   oh-my-opencode agent model overrides
   scripts/
-    host/                            # Scripts that run on the host
+    unix/                            # Scripts that run on the host (Linux / macOS / WSL)
       setup.sh                       #   First-time setup (Docker, jq, prepare alias)
       prepare.sh                     #   Interactive profile builder (language + port selection)
       sandbox.sh                     #   Core sandbox logic (called by profile wrappers)
@@ -162,7 +171,7 @@ Ports are **dynamically selected** during `prepare` based on the languages and f
 
 ### How port detection works
 
-1. **Base ports** (8080, 9229) are always included
+1. **Base ports** (8080) are always included
 2. **Language defaults** are added for each selected language (e.g. Python adds 5000 and 8000)
 3. **Framework detection** scans dependency manifests (`requirements.txt`, `package.json`, `go.mod`, `Cargo.toml`) for known frameworks and adds their ports -- for example, detecting `vite` in `package.json` adds 5173 and 24678
 4. You can **add extra ports** at the prompt or accept the defaults
@@ -229,12 +238,85 @@ All dependency installs are fingerprinted with md5 checksums so they are skipped
 
 The sandbox ships with 11 languages. To add more:
 
-1. Add an entry to `agent-worker/sandbox/languages.json` with the language key, label, detection files, Dockerfile commands, volume definitions, and PATH additions.
+1. Add an entry to `agent-worker/sandbox/languages.json` with the language key, label, detection files, `default_version`, `version_detect` rules, Dockerfile commands, volume definitions, and PATH additions.
 2. Create a matching install fragment at `agent-worker/sandbox/fragments/<key>.sh` with the container startup logic (dependency installation, PATH setup, etc.).
 3. Create `agent-worker/sandbox/fragments/<key>.agents.md` with agent instructions for the new language.
 4. Add default ports and any framework entries to `agent-worker/sandbox/ports.json`.
-5. See `agent-worker/sandbox/fragments/README.md` for conventions and examples.
-6. Run `prepare` to generate a new profile that includes the language.
+5. Copy the new/changed files to the Windows embedded resources under `tools/AgentSandbox/Resources/` (languages.json, ports.json, fragments).
+6. Bump the `VersionStamp` in `tools/AgentSandbox/Services/ResourceManager.cs`.
+7. Update this README (languages table, frameworks table, dependencies list).
+8. See `agent-worker/sandbox/fragments/README.md` for conventions and the [`.cursorrules`](.cursorrules) file for the full cross-platform sync checklist.
+9. Run `prepare` (unix) or `agent-sandbox prepare` (Windows) to generate a new profile that includes the language.
+
+## Windows Support
+
+Windows users get a single self-contained EXE (`agent-sandbox.exe`) that packages everything -- no git clone, no bash, no jq required. Only Docker Desktop needs to be installed.
+
+### How it works
+
+The exe embeds all sandbox data (language definitions, Dockerfile templates, fragment scripts, port lookups, OpenCode config). On first run it extracts them to `%APPDATA%\AgentSandbox\` and creates the same `prepared/` and `projects/` structure that the unix scripts use.
+
+### Building the EXE
+
+From WSL or any Linux/macOS host with Docker:
+
+```bash
+./tools/build-windows.sh
+```
+
+This spins up the .NET 8.0 SDK Docker image, compiles and publishes a self-contained single-file exe, and drops it into `tools/dist/agent-sandbox.exe`. No local .NET installation required.
+
+Alternatively, if you have the .NET 8.0 SDK installed natively:
+
+```bash
+cd tools/AgentSandbox
+dotnet publish -c Release -r win-x64 --self-contained true -o ../dist
+```
+
+### Usage
+
+```
+agent-sandbox                        Interactive wizard (prompts for folder)
+agent-sandbox C:\path\to\project     Auto-detect, prepare, and launch
+agent-sandbox prepare C:\project     Prepare a profile without launching
+agent-sandbox sandbox C:\project     Launch using an existing profile
+agent-sandbox list                   List all projects
+agent-sandbox stats                  Show disk usage
+agent-sandbox cleanup [<project>]    Remove a project (or --all)
+```
+
+The wizard flow mirrors the unix `prepare` + `sandbox` commands: auto-detect languages, detect versions and ports, generate a profile, build the Docker image, scaffold the project, and attach to the container.
+
+### Data location
+
+All data is stored under `%APPDATA%\AgentSandbox\`:
+
+```
+%APPDATA%\AgentSandbox\
+  .version                   # Tracks embedded resource version
+  sandbox/                   # Extracted from exe: languages.json, ports.json, templates
+    fragments/               # Shell fragments and agent instruction fragments
+  templates/                 # opencode.json, oh-my-opencode.json
+  prepared/                  # Generated profiles (same as unix)
+  projects/                  # Per-project data (compose files, config, logs)
+```
+
+### Project structure (tools)
+
+```
+tools/
+  build-windows.sh                   # Build the exe via Docker (no local .NET needed)
+  dist/                              # Build output (gitignored)
+  AgentSandbox/                      # C# .NET 8.0 project
+    AgentSandbox.csproj              #   Self-contained single-file publish config
+    Program.cs                       #   CLI entry point with subcommands + wizard
+    Models/                          #   DTOs for languages.json, ports.json
+    Services/                        #   Detection, generation, Docker, scaffolding
+    Resources/                       #   Embedded data files (copied from sandbox/)
+      languages.json, ports.json, Dockerfile.base.tpl, AGENTS.md.base
+      fragments/                     #   *.sh and *.agents.md
+      templates/                     #   opencode.json, oh-my-opencode.json
+```
 
 ## Security
 

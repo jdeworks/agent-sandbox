@@ -7,7 +7,7 @@ set -e
 if [ -z "$SANDBOX_PROFILE_DIR" ]; then
     echo "[sandbox] Error: No profile configured."
     echo "  Run 'prepare' first to create a sandbox environment."
-    echo "  See: agent-worker/scripts/host/prepare.sh"
+    echo "  See: agent-worker/scripts/unix/prepare.sh"
     exit 1
 fi
 

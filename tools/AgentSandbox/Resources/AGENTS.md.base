@@ -35,15 +35,3 @@ the file is then removed automatically.
 ## Dev Servers
 
 When starting dev servers (backend, frontend, API, etc.), bind to `0.0.0.0` (not only `127.0.0.1`) so they are reachable from the host.
-
-## Node.js Environment
-
-Node.js and npm are available globally. Project dependencies from `package.json` are auto-installed in `/workspace/src/node_modules` on container startup.
-
-## Python Environment
-
-A virtual environment is always active at `/workspace/.venv`. Use `pip install` directly -- it goes into the venv automatically. Never use `--break-system-packages`.
-
-## Available Ports
-
-The following ports are published to the host: 3000, 5000, 5173, 8000, 8080, 9229, 24678. Use one of these for your dev server so it is reachable at `http://localhost:<port>` on the host.

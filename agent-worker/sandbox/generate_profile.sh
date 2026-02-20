@@ -240,7 +240,7 @@ generate_wrapper() {
 SCRIPT_DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
 export SANDBOX_PROFILE_DIR="\$SCRIPT_DIR"
 export SANDBOX_PROFILE_NAME="$PROFILE_NAME"
-exec "\$(cd "\$SCRIPT_DIR/../../scripts/host" && pwd)/sandbox.sh" "\$@"
+exec "\$(cd "\$SCRIPT_DIR/../../scripts/unix" && pwd)/sandbox.sh" "\$@"
 WRAPPER
 
     chmod +x "$PROFILE_DIR/sandbox.sh"

@@ -57,6 +57,15 @@ Each `.agents.md` fragment should:
 
 1. Create `<key>.sh` in this directory matching the key in `languages.json`
 2. Create `<key>.agents.md` with environment instructions for the AI agent
-3. Add the corresponding entry in `../languages.json` with `label`, `detect`, `dockerfile`, `volumes`, and `path_prepend`
+3. Add the corresponding entry in `../languages.json` with `label`, `detect`, `default_version`, `version_detect`, `dockerfile` (and optionally `version_dockerfile`), `volumes`, and `path_prepend`
 4. Add default ports and any framework entries in `../ports.json`
-5. Run `prepare` and select the new language to generate a profile
+5. Copy the new/changed files to the Windows embedded resources:
+   - `<key>.sh` -> `tools/AgentSandbox/Resources/fragments/<key>.sh`
+   - `<key>.agents.md` -> `tools/AgentSandbox/Resources/fragments/<key>.agents.md`
+   - `languages.json` -> `tools/AgentSandbox/Resources/languages.json`
+   - `ports.json` -> `tools/AgentSandbox/Resources/ports.json`
+6. Bump the `VersionStamp` in `tools/AgentSandbox/Services/ResourceManager.cs`
+7. Update `README.md` (languages table, frameworks table, dependencies list)
+8. Run `prepare` and select the new language to generate a profile
+
+See `.cursorrules` in the repo root for the full cross-platform sync checklist.

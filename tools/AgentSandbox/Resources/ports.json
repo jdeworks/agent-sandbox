@@ -1,0 +1,250 @@
+{
+  "base": {
+    "ports": [8080],
+    "label": "Generic HTTP"
+  },
+  "cpp": {
+    "default": [],
+    "frameworks": {}
+  },
+  "dart": {
+    "default": [8080],
+    "frameworks": {
+      "shelf": {
+        "ports": [8080],
+        "detect_in": "pubspec.yaml",
+        "patterns": ["shelf"]
+      },
+      "dart_frog": {
+        "ports": [8080],
+        "detect_in": "pubspec.yaml",
+        "patterns": ["dart_frog"]
+      },
+      "serverpod": {
+        "ports": [8080, 8081],
+        "detect_in": "pubspec.yaml",
+        "patterns": ["serverpod"]
+      }
+    }
+  },
+  "dotnet": {
+    "default": [5000],
+    "frameworks": {
+      "aspnet": {
+        "ports": [5000, 5001],
+        "detect_in": "*.csproj",
+        "patterns": ["Microsoft.AspNetCore"]
+      },
+      "blazor": {
+        "ports": [5000],
+        "detect_in": "*.csproj",
+        "patterns": ["Microsoft.AspNetCore.Components.WebAssembly"]
+      }
+    }
+  },
+  "go": {
+    "default": [8080],
+    "frameworks": {
+      "gin": {
+        "ports": [8080],
+        "detect_in": "go.mod",
+        "patterns": ["github.com/gin-gonic/gin"]
+      },
+      "fiber": {
+        "ports": [3000],
+        "detect_in": "go.mod",
+        "patterns": ["github.com/gofiber/fiber"]
+      },
+      "echo": {
+        "ports": [1323],
+        "detect_in": "go.mod",
+        "patterns": ["github.com/labstack/echo"]
+      }
+    }
+  },
+  "java": {
+    "default": [8080],
+    "frameworks": {
+      "spring-boot": {
+        "ports": [8080],
+        "detect_in": "pom.xml",
+        "patterns": ["spring-boot-starter-web", "spring-boot-starter-webflux"]
+      },
+      "spring-boot-gradle": {
+        "ports": [8080],
+        "detect_in": "build.gradle",
+        "patterns": ["spring-boot"]
+      },
+      "quarkus": {
+        "ports": [8080],
+        "detect_in": "pom.xml",
+        "patterns": ["quarkus"]
+      },
+      "micronaut": {
+        "ports": [8080],
+        "detect_in": "pom.xml",
+        "patterns": ["micronaut"]
+      }
+    }
+  },
+  "kotlin": {
+    "default": [8080],
+    "frameworks": {
+      "ktor": {
+        "ports": [8080],
+        "detect_in": "build.gradle.kts",
+        "patterns": ["io.ktor"]
+      },
+      "spring-boot-kotlin": {
+        "ports": [8080],
+        "detect_in": "build.gradle.kts",
+        "patterns": ["spring-boot"]
+      }
+    }
+  },
+  "node": {
+    "default": [3000],
+    "frameworks": {
+      "next": {
+        "ports": [3000],
+        "detect_in": "package.json",
+        "patterns": ["next"]
+      },
+      "vite": {
+        "ports": [5173, 24678],
+        "detect_in": "package.json",
+        "patterns": ["vite"]
+      },
+      "angular": {
+        "ports": [4200],
+        "detect_in": "package.json",
+        "patterns": ["@angular/core"]
+      },
+      "create-react-app": {
+        "ports": [3000],
+        "detect_in": "package.json",
+        "patterns": ["react-scripts"]
+      },
+      "express": {
+        "ports": [3000],
+        "detect_in": "package.json",
+        "patterns": ["express"]
+      },
+      "nuxt": {
+        "ports": [3000],
+        "detect_in": "package.json",
+        "patterns": ["nuxt"]
+      },
+      "svelte": {
+        "ports": [5173],
+        "detect_in": "package.json",
+        "patterns": ["svelte"]
+      },
+      "remix": {
+        "ports": [5173],
+        "detect_in": "package.json",
+        "patterns": ["@remix-run/dev"]
+      },
+      "astro": {
+        "ports": [4321],
+        "detect_in": "package.json",
+        "patterns": ["astro"]
+      }
+    }
+  },
+  "php": {
+    "default": [8000],
+    "frameworks": {
+      "laravel": {
+        "ports": [8000],
+        "detect_in": "composer.json",
+        "patterns": ["laravel/framework"]
+      },
+      "symfony": {
+        "ports": [8000],
+        "detect_in": "composer.json",
+        "patterns": ["symfony/framework-bundle"]
+      },
+      "slim": {
+        "ports": [8080],
+        "detect_in": "composer.json",
+        "patterns": ["slim/slim"]
+      }
+    }
+  },
+  "python": {
+    "default": [5000, 8000],
+    "frameworks": {
+      "flask": {
+        "ports": [5000],
+        "detect_in": "requirements.txt",
+        "patterns": ["flask", "Flask"]
+      },
+      "django": {
+        "ports": [8000],
+        "detect_in": "requirements.txt",
+        "patterns": ["django", "Django"]
+      },
+      "fastapi": {
+        "ports": [8000],
+        "detect_in": "requirements.txt",
+        "patterns": ["fastapi", "uvicorn"]
+      },
+      "streamlit": {
+        "ports": [8501],
+        "detect_in": "requirements.txt",
+        "patterns": ["streamlit"]
+      },
+      "gradio": {
+        "ports": [7860],
+        "detect_in": "requirements.txt",
+        "patterns": ["gradio"]
+      },
+      "jupyter": {
+        "ports": [8888],
+        "detect_in": "requirements.txt",
+        "patterns": ["jupyter", "notebook"]
+      }
+    }
+  },
+  "ruby": {
+    "default": [3000],
+    "frameworks": {
+      "rails": {
+        "ports": [3000],
+        "detect_in": "Gemfile",
+        "patterns": ["rails"]
+      },
+      "sinatra": {
+        "ports": [4567],
+        "detect_in": "Gemfile",
+        "patterns": ["sinatra"]
+      },
+      "hanami": {
+        "ports": [2300],
+        "detect_in": "Gemfile",
+        "patterns": ["hanami"]
+      }
+    }
+  },
+  "rust": {
+    "default": [8080],
+    "frameworks": {
+      "actix": {
+        "ports": [8080],
+        "detect_in": "Cargo.toml",
+        "patterns": ["actix-web"]
+      },
+      "axum": {
+        "ports": [3000],
+        "detect_in": "Cargo.toml",
+        "patterns": ["axum"]
+      },
+      "rocket": {
+        "ports": [8000],
+        "detect_in": "Cargo.toml",
+        "patterns": ["rocket"]
+      }
+    }
+  }
+}
