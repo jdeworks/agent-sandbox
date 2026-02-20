@@ -22,47 +22,75 @@ public static class DockerRunner
             .Any(l => l.Trim() == containerName);
     }
 
-    public static int Build(string dockerfilePath, string tag, string context)
+    public static int Build(string dockerfilePath, string tag, string context, Action<string>? onOutput = null)
     {
-        return RunInteractive("docker", $"build -f \"{dockerfilePath}\" -t \"{tag}\" \"{context}\"");
+        return Run("docker", $"build -f \"{dockerfilePath}\" -t \"{tag}\" \"{context}\"", onOutput);
     }
 
-    public static int ComposeUp(string composeFile, string projectDir)
+    public static int ComposeUp(string composeFile, string projectDir, Action<string>? onOutput = null)
     {
-        return RunInteractive("docker", $"compose -f \"{composeFile}\" --project-directory \"{projectDir}\" up -d --build");
+        return Run("docker", $"compose -f \"{composeFile}\" --project-directory \"{projectDir}\" up -d --build", onOutput);
     }
 
     public static int ComposeDown(string composeFile, string projectDir)
     {
-        return RunInteractive("docker", $"compose -f \"{composeFile}\" --project-directory \"{projectDir}\" down");
+        return Run("docker", $"compose -f \"{composeFile}\" --project-directory \"{projectDir}\" down", null);
     }
 
     public static int ComposeDownVolumes(string composeFile, string projectDir)
     {
-        return RunInteractive("docker", $"compose -f \"{composeFile}\" --project-directory \"{projectDir}\" down -v");
+        return Run("docker", $"compose -f \"{composeFile}\" --project-directory \"{projectDir}\" down -v", null);
     }
 
     public static int ExecInteractive(string containerName, string command)
     {
-        return RunInteractive("docker", $"exec -it \"{containerName}\" {command}");
-    }
-
-    public static int StopContainer(string containerName)
-    {
-        return RunInteractive("docker", $"stop \"{containerName}\"");
-    }
-
-    private static int RunInteractive(string exe, string args)
-    {
         var psi = new ProcessStartInfo
         {
-            FileName = exe,
-            Arguments = args,
+            FileName = "docker",
+            Arguments = $"exec -it \"{containerName}\" {command}",
             UseShellExecute = false
         };
         using var proc = Process.Start(psi);
         proc?.WaitForExit();
         return proc?.ExitCode ?? 1;
+    }
+
+    public static int StopContainer(string containerName)
+    {
+        return Run("docker", $"stop \"{containerName}\"", null);
+    }
+
+    /// <summary>
+    /// Run a docker command. When <paramref name="onOutput"/> is provided,
+    /// stdout+stderr are captured and streamed line-by-line to the callback
+    /// (used by the GUI log panel). When null, the process inherits stdio
+    /// (used by the CLI).
+    /// </summary>
+    private static int Run(string exe, string args, Action<string>? onOutput)
+    {
+        var redirect = onOutput != null;
+        var psi = new ProcessStartInfo
+        {
+            FileName = exe,
+            Arguments = args,
+            UseShellExecute = false,
+            RedirectStandardOutput = redirect,
+            RedirectStandardError = redirect,
+            CreateNoWindow = redirect
+        };
+
+        using var proc = Process.Start(psi)!;
+
+        if (onOutput != null)
+        {
+            proc.OutputDataReceived += (_, e) => { if (e.Data != null) onOutput(e.Data); };
+            proc.ErrorDataReceived += (_, e) => { if (e.Data != null) onOutput(e.Data); };
+            proc.BeginOutputReadLine();
+            proc.BeginErrorReadLine();
+        }
+
+        proc.WaitForExit();
+        return proc.ExitCode;
     }
 
     private static (int exitCode, string output) RunCapture(string exe, string args)

@@ -101,6 +101,27 @@ public static class ProjectScaffolder
         ResourceManager.WriteLf(Path.Combine(projectDir, "config.env"), configEnv.TrimEnd() + "\n");
     }
 
+    /// <summary>
+    /// Regenerate docker-compose.yml and AGENTS.md from the current profile
+    /// template so that port/volume/instruction changes from re-prepare are
+    /// picked up automatically on existing projects.
+    /// </summary>
+    public static void RefreshFromProfile(string projectName, string workspacePath, string profileDir)
+    {
+        var projectDir = GetProjectDir(projectName);
+
+        var composeTpl = File.ReadAllText(Path.Combine(profileDir, "docker-compose.yml.tpl"));
+        var dockerPath = workspacePath.Replace('\\', '/');
+        var compose = composeTpl
+            .Replace("{{PROJECT_NAME}}", projectName)
+            .Replace("{{WORKSPACE_PATH}}", dockerPath);
+        ResourceManager.WriteLf(Path.Combine(projectDir, "docker-compose.yml"), compose);
+
+        var agentsMd = Path.Combine(profileDir, "AGENTS.md");
+        if (File.Exists(agentsMd))
+            File.Copy(agentsMd, Path.Combine(projectDir, "opencode_data", "AGENTS.md"), true);
+    }
+
     public static void UpdateLastStarted(string projectName)
     {
         var configPath = Path.Combine(GetProjectDir(projectName), "config.env");

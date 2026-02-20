@@ -550,10 +550,10 @@ public sealed class WizardForm : Form
 
             Log($"[sandbox] Building base image {baseImage}...");
             var buildResult = DockerRunner.Build(
-                Path.Combine(profileDir, "Dockerfile.base"), baseImage, profileDir);
+                Path.Combine(profileDir, "Dockerfile.base"), baseImage, profileDir, Log);
             if (buildResult != 0)
             {
-                Log("ERROR: Docker build failed.");
+                Log("ERROR: Docker build failed. See output above.");
                 ShowDoneButton("Build failed");
                 return;
             }
@@ -567,7 +567,8 @@ public sealed class WizardForm : Form
             }
             else
             {
-                Log("[sandbox] Existing project found.");
+                Log("[sandbox] Existing project found. Refreshing config from profile...");
+                ProjectScaffolder.RefreshFromProfile(projectName, _projectPath, profileDir);
             }
 
             ProjectScaffolder.UpdateLastStarted(projectName);
@@ -586,10 +587,10 @@ public sealed class WizardForm : Form
 
             var composePath = Path.Combine(projectDir, "docker-compose.yml");
             Log($"[sandbox] Starting container {containerName}...");
-            var upResult = DockerRunner.ComposeUp(composePath, projectDir);
+            var upResult = DockerRunner.ComposeUp(composePath, projectDir, Log);
             if (upResult != 0)
             {
-                Log("ERROR: docker compose up failed.");
+                Log("ERROR: docker compose up failed. See output above.");
                 ShowDoneButton("Container start failed");
                 return;
             }

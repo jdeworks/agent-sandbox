@@ -2,6 +2,18 @@
 
 You are running inside an isolated container sandbox. The project root is the current directory at `/workspace/src`.
 
+## Pre-installed Tools
+
+The following are **always available** in the base image regardless of which
+languages were selected during setup. **Do NOT reinstall them** via apt or
+Dockerfile.extension:
+
+- **Node.js** and **npm** (used by OpenCode and plugins)
+- **git**, **curl**, **wget**, **build-essential** (gcc, g++, make)
+
+If you need to run `npm install` or `npx`, just use them directly -- they
+are already on the PATH.
+
 ## Dependency Changes
 
 When you install, remove, or update any dependency:

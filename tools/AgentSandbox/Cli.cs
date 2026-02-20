@@ -272,7 +272,8 @@ internal static class Cli
         }
         else
         {
-            Console.WriteLine("[sandbox] Existing project found.");
+            Console.WriteLine("[sandbox] Existing project found. Refreshing config from profile...");
+            ProjectScaffolder.RefreshFromProfile(projectName, projectPath, profileDir);
         }
 
         ProjectScaffolder.UpdateLastStarted(projectName);

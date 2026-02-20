@@ -232,6 +232,14 @@ if [ ! -d "$PROJECT_DIR" ]; then
     echo "[sandbox] Project scaffolded."
 else
     echo "[sandbox] Existing project found."
+
+    # Regenerate compose and AGENTS.md from current profile template
+    # so port/volume changes from re-prepare are picked up automatically.
+    sed \
+        -e "s|{{PROJECT_NAME}}|${PROJECT_NAME}|g" \
+        -e "s|{{WORKSPACE_PATH}}|${WORKSPACE_PATH}|g" \
+        "$SANDBOX_PROFILE_DIR/docker-compose.yml.tpl" > "$PROJECT_DIR/docker-compose.yml"
+    cp "$SANDBOX_PROFILE_DIR/AGENTS.md" "$PROJECT_DIR/opencode_data/AGENTS.md"
 fi
 
 # Update LAST_STARTED on every run
