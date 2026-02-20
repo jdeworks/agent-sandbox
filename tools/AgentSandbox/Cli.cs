@@ -105,24 +105,66 @@ internal static class Cli
 
     public static int RunSandbox(string[] args)
     {
-        if (args.Length < 1)
+        string? projectPath = null;
+        string? profileName = null;
+
+        for (int i = 0; i < args.Length; i++)
         {
-            Console.WriteLine("Usage: agent-sandbox sandbox <path> [--profile <name>]");
-            return 1;
+            if (args[i] == "--profile" && i + 1 < args.Length)
+                profileName = args[++i];
+            else if (projectPath == null)
+                projectPath = args[i];
         }
 
-        var projectPath = Path.GetFullPath(args[0]);
+        if (projectPath == null)
+        {
+            // Show recent projects picker
+            var recent = ProjectScaffolder.GetRecentProjects();
+            if (recent.Count == 0)
+            {
+                Console.WriteLine("No recent projects. Usage: agent-sandbox sandbox <path>");
+                return 1;
+            }
+
+            Console.WriteLine("[sandbox] Recent projects:");
+            Console.WriteLine();
+            for (var i = 0; i < recent.Count; i++)
+            {
+                Console.WriteLine($"  {i + 1}) {recent[i].Name,-25} {recent[i].Profile,-18} {recent[i].WorkspacePath}");
+                Console.WriteLine($"     Last used: {recent[i].LastStarted}");
+            }
+            Console.WriteLine();
+            Console.Write($"Select [1-{recent.Count}], enter a path, or 'q' to quit: ");
+            var input = Console.ReadLine()?.Trim();
+
+            if (string.IsNullOrEmpty(input) || input.ToLower() == "q")
+                return 0;
+
+            if (int.TryParse(input, out var idx) && idx > 0 && idx <= recent.Count)
+            {
+                var picked = recent[idx - 1];
+                projectPath = picked.WorkspacePath;
+                profileName ??= picked.Profile;
+            }
+            else if (Directory.Exists(input))
+            {
+                projectPath = Path.GetFullPath(input);
+            }
+            else
+            {
+                Console.WriteLine($"Error: '{input}' is not a valid selection or directory.");
+                return 1;
+            }
+        }
+        else
+        {
+            projectPath = Path.GetFullPath(projectPath);
+        }
+
         if (!Directory.Exists(projectPath))
         {
             Console.WriteLine($"Error: folder not found: {projectPath}");
             return 1;
-        }
-
-        string? profileName = null;
-        for (int i = 1; i < args.Length; i++)
-        {
-            if (args[i] == "--profile" && i + 1 < args.Length)
-                profileName = args[++i];
         }
 
         if (profileName == null)

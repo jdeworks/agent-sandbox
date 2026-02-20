@@ -6,11 +6,48 @@ namespace AgentSandbox.Services;
 /// </summary>
 public static class ProjectScaffolder
 {
+    public record RecentProject(string Name, string Profile, string WorkspacePath, string LastStarted);
+
     public static string GetProjectDir(string projectName) =>
         Path.Combine(ResourceManager.ProjectsDir, projectName);
 
     public static bool Exists(string projectName) =>
         Directory.Exists(GetProjectDir(projectName));
+
+    public static List<RecentProject> GetRecentProjects()
+    {
+        var result = new List<RecentProject>();
+        if (!Directory.Exists(ResourceManager.ProjectsDir))
+            return result;
+
+        foreach (var dir in Directory.GetDirectories(ResourceManager.ProjectsDir))
+        {
+            var configPath = Path.Combine(dir, "config.env");
+            if (!File.Exists(configPath)) continue;
+
+            var config = ParseConfigEnv(configPath);
+            result.Add(new RecentProject(
+                Path.GetFileName(dir)!,
+                config.GetValueOrDefault("PROFILE", ""),
+                config.GetValueOrDefault("WORKSPACE_PATH", ""),
+                config.GetValueOrDefault("LAST_STARTED", "")
+            ));
+        }
+
+        return result.OrderByDescending(p => p.LastStarted).ToList();
+    }
+
+    private static Dictionary<string, string> ParseConfigEnv(string path)
+    {
+        var dict = new Dictionary<string, string>();
+        foreach (var line in File.ReadAllLines(path))
+        {
+            var eq = line.IndexOf('=');
+            if (eq > 0)
+                dict[line[..eq]] = line[(eq + 1)..];
+        }
+        return dict;
+    }
 
     public static void Scaffold(string projectName, string workspacePath, string profileName, string profileDir)
     {

@@ -80,9 +80,10 @@ post_session_check() {
 }
 
 usage() {
-    echo "Usage: sandbox-$PROFILE_NAME <folder_path>"
+    echo "Usage: sandbox-$PROFILE_NAME [folder_path]"
     echo ""
     echo "  <folder_path>  Path to the workspace folder (use '.' for current directory)"
+    echo "                 Omit to pick from recent projects."
     echo ""
     echo "Examples:"
     echo "  sandbox-$PROFILE_NAME ."
@@ -91,11 +92,68 @@ usage() {
     exit 1
 }
 
-if [ -z "$1" ]; then
-    usage
+########################################
+# Resolve workspace path
+########################################
+if [ -n "$1" ]; then
+    WORKSPACE_PATH="$(cd "$1" && pwd)"
+else
+    # Scan projects dir for recent projects matching this profile
+    declare -a _rp_names=() _rp_paths=() _rp_times=()
+
+    if [ -d "$PROJECTS_DIR" ]; then
+        while IFS='|' read -r _ts _name _path; do
+            _rp_names+=("$_name")
+            _rp_paths+=("$_path")
+            _rp_times+=("$_ts")
+        done < <(
+            for _cfg in "$PROJECTS_DIR"/*/config.env; do
+                [ -f "$_cfg" ] || continue
+                _p=$(grep '^PROFILE=' "$_cfg" | cut -d= -f2-)
+                [ "$_p" = "$PROFILE_NAME" ] || continue
+                _n=$(grep '^PROJECT_NAME=' "$_cfg" | cut -d= -f2-)
+                _w=$(grep '^WORKSPACE_PATH=' "$_cfg" | cut -d= -f2-)
+                _t=$(grep '^LAST_STARTED=' "$_cfg" | cut -d= -f2-)
+                echo "${_t}|${_n}|${_w}"
+            done | sort -r
+        )
+    fi
+
+    if [ ${#_rp_names[@]} -eq 0 ]; then
+        usage
+    fi
+
+    echo "[sandbox] Recent projects (profile: $PROFILE_NAME):"
+    echo ""
+    for _i in "${!_rp_names[@]}"; do
+        printf "  %d) %-25s %s\n" "$((_i + 1))" "${_rp_names[$_i]}" "${_rp_paths[$_i]}"
+        printf "     Last used: %s\n" "${_rp_times[$_i]}"
+    done
+    echo ""
+    read -rp "Select [1-${#_rp_names[@]}], enter a path, or 'q' to quit: " _choice
+
+    case "$_choice" in
+        q|Q) exit 0 ;;
+        [0-9]*)
+            _idx=$((_choice - 1))
+            if [ "$_idx" -ge 0 ] && [ "$_idx" -lt "${#_rp_names[@]}" ]; then
+                WORKSPACE_PATH="${_rp_paths[$_idx]}"
+            else
+                echo "[sandbox] Invalid selection."
+                exit 1
+            fi
+            ;;
+        *)
+            if [ -d "$_choice" ]; then
+                WORKSPACE_PATH="$(cd "$_choice" && pwd)"
+            else
+                echo "[sandbox] Error: '$_choice' is not a valid directory."
+                exit 1
+            fi
+            ;;
+    esac
 fi
 
-WORKSPACE_PATH="$(cd "$1" && pwd)"
 PROJECT_NAME="$(basename "$WORKSPACE_PATH")"
 PROJECT_DIR="$PROJECTS_DIR/$PROJECT_NAME"
 

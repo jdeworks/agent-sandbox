@@ -10,7 +10,7 @@ public static class ResourceManager
 {
     private static readonly Assembly Asm = Assembly.GetExecutingAssembly();
     private const string Prefix = "AgentSandbox.Resources.";
-    private const string VersionStamp = "1.0.2";
+    private const string VersionStamp = "1.0.3";
 
     public static string AppDataRoot { get; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AgentSandbox");
