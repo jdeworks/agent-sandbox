@@ -47,17 +47,17 @@ The prepare command will:
 
 | Language | Detection files | What it adds |
 |---|---|---|
-| C/C++ | `CMakeLists.txt`, `meson.build`, `configure.ac`, `conanfile.txt`, `vcpkg.json` | CMake, Ninja, GDB, pkg-config (gcc/g++/make already in base) |
-| C# / .NET | `*.csproj`, `*.sln`, `*.fsproj`, `global.json` | .NET SDK 8.0; auto-runs `dotnet restore` |
-| Dart | `pubspec.yaml`, `pubspec.lock` | Dart SDK; auto-runs `dart pub get` |
-| Go | `go.mod`, `go.sum` | golang-go; auto-runs `go mod download` |
-| Java | `pom.xml`, `build.gradle`, `build.gradle.kts`, `gradlew`, `mvnw` | OpenJDK 21, Maven; auto-resolves Maven/Gradle deps |
-| Kotlin | `*.kt` | OpenJDK 21 (Gradle wrapper handles Kotlin compiler); auto-resolves Gradle deps |
-| Node.js | `package.json` | npm project dependency auto-install (Node runtime always included for plugins) |
-| PHP | `composer.json`, `composer.lock`, `artisan` | PHP + common extensions, Composer; auto-runs `composer install` |
-| Python 3 | `requirements.txt`, `setup.py`, `pyproject.toml`, `Pipfile` | python3, venv, pip; auto-installs from requirements.txt |
-| Ruby | `Gemfile`, `Gemfile.lock`, `Rakefile`, `*.gemspec` | Ruby, Bundler; auto-runs `bundle install` |
-| Rust | `Cargo.toml`, `Cargo.lock` | rustup toolchain; auto-runs `cargo fetch` |
+| C/C++ | `CMakeLists.txt`, `meson.build`, `configure.ac`, `conanfile.txt`, `vcpkg.json`, `*.c`, `*.cpp`, `*.h`, `*.hpp` | CMake, Ninja, GDB, pkg-config (gcc/g++/make already in base) |
+| C# / .NET | `*.csproj`, `*.sln`, `*.fsproj`, `global.json`, `*.cs`, `*.fs` | .NET SDK 8.0; auto-runs `dotnet restore` |
+| Dart | `pubspec.yaml`, `pubspec.lock`, `*.dart` | Dart SDK; auto-runs `dart pub get` |
+| Go | `go.mod`, `go.sum`, `*.go` | golang-go; auto-runs `go mod download` |
+| Java | `pom.xml`, `build.gradle`, `build.gradle.kts`, `gradlew`, `mvnw`, `*.java` | OpenJDK 21, Maven; auto-resolves Maven/Gradle deps |
+| Kotlin | `*.kt`, `*.kts` | OpenJDK 21 (Gradle wrapper handles Kotlin compiler); auto-resolves Gradle deps |
+| Node.js | `package.json`, `*.js`, `*.ts`, `*.jsx`, `*.tsx` | npm project dependency auto-install (Node runtime always included for plugins) |
+| PHP | `composer.json`, `composer.lock`, `artisan`, `*.php` | PHP + common extensions, Composer; auto-runs `composer install` |
+| Python 3 | `requirements.txt`, `setup.py`, `pyproject.toml`, `Pipfile`, `*.py` | python3, venv, pip; auto-installs from requirements.txt |
+| Ruby | `Gemfile`, `Gemfile.lock`, `Rakefile`, `*.gemspec`, `*.rb` | Ruby, Bundler; auto-runs `bundle install` |
+| Rust | `Cargo.toml`, `Cargo.lock`, `*.rs` | rustup toolchain; auto-runs `cargo fetch` |
 
 New languages can be added by editing `agent-worker/sandbox/languages.json` and adding matching fragments in `agent-worker/sandbox/fragments/` (see the [fragments README](agent-worker/sandbox/fragments/README.md) for details).
 
@@ -69,6 +69,9 @@ sandbox-python-node /path/to/my-project
 
 # Or from inside the project directory:
 cd ~/my-project && sandbox-python-node .
+
+# Run without arguments to pick from recent projects:
+sandbox-python-node
 ```
 
 On **first run** for a project the script will:
@@ -78,6 +81,8 @@ On **first run** for a project the script will:
 3. Start the container and launch OpenCode
 
 On **subsequent runs** it reuses the existing project config. If the container is already running, you'll be asked to **reattach** (open a new OpenCode session in the existing container) or **rebuild** from scratch.
+
+Running `sandbox-<profile>` **without a path** shows a list of recent projects for that profile, sorted by last used. Pick a number to continue where you left off, or type a new path.
 
 ## Project Structure
 
@@ -171,11 +176,13 @@ Ports are **dynamically selected** during `prepare` based on the languages and f
 
 ### How port detection works
 
-1. **Base ports** (8080) are always included
+1. **Base ports** (3000, 8080) are always included -- 3000 covers the most common dev server default and Node.js is always available in the base image
 2. **Language defaults** are added for each selected language (e.g. Python adds 5000 and 8000)
-3. **Framework detection** scans dependency manifests (`requirements.txt`, `package.json`, `go.mod`, `Cargo.toml`) for known frameworks and adds their ports -- for example, detecting `vite` in `package.json` adds 5173 and 24678
+3. **Framework detection** scans dependency manifests (`requirements.txt`, `package.json`, `go.mod`, `Cargo.toml`) for known frameworks and adds their ports -- for example, detecting `vite` in `package.json` adds 5173 and 24678. **Node.js framework detection always runs** (even if Node wasn't explicitly selected) because Node is part of the base image and frontend tooling can appear in any project
 4. You can **add extra ports** at the prompt or accept the defaults
 5. Only the needed ports end up in the generated `docker-compose.yml.tpl`
+
+> **Note:** If you add a new framework or language to a project after the initial `prepare` (e.g. adding a React frontend to a Python-only sandbox), re-run `prepare` to update port forwarding and language tooling. The agent is instructed to remind you of this via `AGENTS.md`.
 
 ### Supported frameworks
 
@@ -278,9 +285,10 @@ dotnet publish -c Release -o ..\dist
 **Double-click** the exe (or run without arguments) to open the GUI wizard:
 
 1. **Folder picker** -- Browse button opens a native Windows folder dialog (handles paths with spaces correctly)
-2. **Scan** -- auto-detects languages, versions, frameworks, and ports
-3. **Review** -- checkboxes for languages, editable version fields, editable port list, profile name
-4. **Launch** -- generates the profile, builds the Docker image, scaffolds the project, and attaches to the container
+2. **Recent Projects** -- previously launched projects are listed below the folder picker, sorted by last used. Select one and click "Continue with Selected" to quick-launch without re-running detection
+3. **Scan** -- for new projects, auto-detects languages, versions, frameworks, and ports
+4. **Review** -- checkboxes for languages, editable version fields, editable port list, profile name
+5. **Launch** -- generates the profile, builds the Docker image, scaffolds the project, and attaches to the container
 
 The wizard can also be pre-filled with a path:
 
@@ -293,6 +301,7 @@ agent-sandbox C:\path\to\project
 ```
 agent-sandbox prepare C:\project     Prepare a profile without launching
 agent-sandbox sandbox C:\project     Launch using an existing profile
+agent-sandbox sandbox                Pick from recent projects
 agent-sandbox list                   List all projects
 agent-sandbox stats                  Show disk usage
 agent-sandbox cleanup [<project>]    Remove a project (or --all)
@@ -321,9 +330,12 @@ tools/
   dist/                              # Build output (gitignored)
   AgentSandbox/                      # C# .NET 8.0 project
     AgentSandbox.csproj              #   Self-contained single-file publish config
-    Program.cs                       #   CLI entry point with subcommands + wizard
-    Models/                          #   DTOs for languages.json, ports.json
-    Services/                        #   Detection, generation, Docker, scaffolding
+    Program.cs                       #   Entry point: routes to GUI wizard or CLI mode
+    Cli.cs                           #   CLI subcommands (prepare, sandbox, list, stats, cleanup)
+    Models/                          #   DTOs for languages.json, ports.json, ProfileSpec
+    Services/                        #   Detection, generation, Docker, scaffolding, resources
+    UI/
+      WizardForm.cs                  #   WinForms wizard (folder picker, recent projects, detection, launch)
     Resources/                       #   Embedded data files (copied from sandbox/)
       languages.json, ports.json, Dockerfile.base.tpl, AGENTS.md.base
       fragments/                     #   *.sh and *.agents.md

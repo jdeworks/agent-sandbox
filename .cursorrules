@@ -59,13 +59,31 @@ Changes to how languages, versions, or frameworks are detected must be mirrored 
 
 ### Modifying sandbox orchestration
 
-- `agent-worker/scripts/unix/sandbox.sh` (bash) -- container lifecycle, project scaffolding, Dockerfile.extension handling
-- `tools/AgentSandbox/Services/DockerRunner.cs`, `ProjectScaffolder.cs` and `Program.cs` (C#)
+- `agent-worker/scripts/unix/sandbox.sh` (bash) -- container lifecycle, project scaffolding, Dockerfile.extension handling, recent-projects picker
+- `tools/AgentSandbox/UI/WizardForm.cs` (C# GUI) -- wizard steps, recent-projects panel, `RunCoreLaunch()`
+- `tools/AgentSandbox/Cli.cs` (C# CLI) -- `RunSandbox()` with recent-projects picker
+- `tools/AgentSandbox/Services/DockerRunner.cs`, `ProjectScaffolder.cs` (C#)
 
 ### Modifying helper commands (list, stats, cleanup)
 
 - `agent-worker/scripts/unix/sandbox-list.sh`, `sandbox-stats.sh`, `sandbox-cleanup.sh` (bash)
-- `tools/AgentSandbox/Program.cs` -- `RunList()`, `RunStats()`, `RunCleanup()` methods (C#)
+- `tools/AgentSandbox/Cli.cs` -- `RunList()`, `RunStats()`, `RunCleanup()` methods (C#)
+
+### Modifying port detection
+
+Port detection always runs Node.js framework detection (since Node is in the base image). This is implemented in:
+
+- `agent-worker/scripts/unix/prepare.sh` (bash) -- `fw_detect_langs` always includes `node`
+- `tools/AgentSandbox/Services/PortDetector.cs` (C#) -- `fwDetectLangs` always includes `node`
+
+### Modifying recent-projects / project memory
+
+Recent projects are discovered by scanning `projects/*/config.env` files (no separate registry). Implemented in:
+
+- `agent-worker/scripts/unix/sandbox.sh` (bash) -- scans when no path argument given, filters by current profile
+- `tools/AgentSandbox/Services/ProjectScaffolder.cs` (C#) -- `GetRecentProjects()` returns all projects sorted by `LAST_STARTED`
+- `tools/AgentSandbox/UI/WizardForm.cs` (C#) -- `PopulateRecentProjects()` fills the ListView; `OnContinueClicked()` quick-launches
+- `tools/AgentSandbox/Cli.cs` (C#) -- `RunSandbox()` shows picker when no path given
 
 ## File Relationships
 
