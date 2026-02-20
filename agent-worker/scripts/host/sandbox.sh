@@ -49,13 +49,14 @@ if [ ! -d "$PROJECT_DIR" ]; then
         "$TEMPLATES_DIR/docker-compose.yml.tpl" > "$PROJECT_DIR/docker-compose.yml"
 
     cp "$TEMPLATES_DIR/Dockerfile.tpl" "$PROJECT_DIR/Dockerfile"
-    cp "$TEMPLATES_DIR/Agents.md" "$PROJECT_DIR/Agents.md"
-    cp "$TEMPLATES_DIR/opencode.json" "$PROJECT_DIR/opencode.json"
-    cp "$TEMPLATES_DIR/oh-my-opencode.json" "$PROJECT_DIR/oh-my-opencode.json"
 
     touch "$PROJECT_DIR/changes.txt"
     mkdir -p "$PROJECT_DIR/opencode_data"
+    cp "$TEMPLATES_DIR/opencode.json" "$PROJECT_DIR/opencode_data/opencode.json"
+    cp "$TEMPLATES_DIR/oh-my-opencode.json" "$PROJECT_DIR/opencode_data/oh-my-opencode.json"
+    cp "$TEMPLATES_DIR/AGENTS.md" "$PROJECT_DIR/opencode_data/AGENTS.md"
     mkdir -p "$PROJECT_DIR/opencode_sessions"
+    mkdir -p "$PROJECT_DIR/logs"
     mkdir -p "$PROJECT_DIR/tmp"
 
     cat > "$PROJECT_DIR/config.env" <<EOF
@@ -74,6 +75,7 @@ fi
 ########################################
 mkdir -p "$PROJECT_DIR/opencode_data"
 mkdir -p "$PROJECT_DIR/opencode_sessions"
+mkdir -p "$PROJECT_DIR/logs"
 mkdir -p "$PROJECT_DIR/tmp"
 
 ########################################

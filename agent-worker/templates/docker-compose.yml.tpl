@@ -15,11 +15,8 @@ services:
       - pip_cache_{{PROJECT_NAME}}:/workspace/.cache/pip
       - ./opencode_data:/workspace/.config/opencode
       - ./opencode_sessions:/workspace/.local/share/opencode
+      - ./logs:/workspace/.local/share/opencode/log
       - opencode_cache_{{PROJECT_NAME}}:/workspace/.cache/opencode
-      # Config files (in this repo)
-      - ./Agents.md:/workspace/Agents.md:ro
-      - ./opencode.json:/workspace/opencode.json
-      - ./oh-my-opencode.json:/workspace/.opencode/oh-my-opencode.json
       - ./changes.txt:/workspace/.sandbox/changes.txt
       - ./tmp:/tmp
     # Common dev server ports (add more in project docker-compose.yml if needed)

@@ -4,6 +4,5 @@
   "autoupdate": false,
   "share": "disabled",
   "compaction": { "auto": true, "prune": true },
-  "plugin": ["oh-my-opencode"],
-  "instructions": ["/workspace/Agents.md"]
+  "plugin": ["oh-my-opencode"]
 }
