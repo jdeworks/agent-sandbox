@@ -1,7 +1,7 @@
 {
   "base": {
-    "ports": [8080],
-    "label": "Generic HTTP"
+    "ports": [3000, 8080],
+    "label": "Generic HTTP + Node dev server (Node always available via base image)"
   },
   "cpp": {
     "default": [],

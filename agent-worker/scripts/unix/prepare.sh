@@ -206,9 +206,14 @@ for lang in "${selected_keys[@]}"; do
 done
 
 # Framework detection: scan project files recursively if we have a path
+# Always include "node" in framework detection since the base image ships Node.
 detected_frameworks=()
 if [ -n "$scan_path" ] && [ -d "$scan_path" ]; then
-    for lang in "${selected_keys[@]}"; do
+    fw_detect_langs=("${selected_keys[@]}")
+    if ! printf '%s\n' "${fw_detect_langs[@]}" | grep -qx "node"; then
+        fw_detect_langs+=("node")
+    fi
+    for lang in "${fw_detect_langs[@]}"; do
         fw_names=$(jq -r ".\"$lang\".frameworks // {} | keys[]" "$PORTS_JSON" 2>/dev/null)
         while IFS= read -r fw; do
             [ -z "$fw" ] && continue

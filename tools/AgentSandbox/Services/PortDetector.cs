@@ -21,6 +21,9 @@ public static class PortDetector
                 portSet.Add(p);
         }
 
+        // Always include "node" in framework detection since the base image ships Node.
+        var fwDetectLangs = new HashSet<string>(selectedLanguages) { "node" };
+
         foreach (var lang in selectedLanguages)
         {
             if (!portConfigs.TryGetValue(lang, out var config))
@@ -28,6 +31,12 @@ public static class PortDetector
 
             foreach (var p in config.Default)
                 portSet.Add(p);
+        }
+
+        foreach (var lang in fwDetectLangs)
+        {
+            if (!portConfigs.TryGetValue(lang, out var config))
+                continue;
 
             foreach (var (fwName, fw) in config.Frameworks)
             {

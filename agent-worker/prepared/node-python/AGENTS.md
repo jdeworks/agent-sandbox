@@ -36,6 +36,20 @@ the file is then removed automatically.
 
 When starting dev servers (backend, frontend, API, etc.), bind to `0.0.0.0` (not only `127.0.0.1`) so they are reachable from the host.
 
+## Adding New Languages or Frameworks
+
+If you introduce a new language or framework that was **not part of the
+original sandbox setup** (e.g. adding a React frontend to a Python-only
+project, or adding a Go microservice), **tell the user** they need to
+re-run the sandbox preparation step (`prepare`) so that:
+
+- additional port-forwarding rules are applied (e.g. Vite 5173, Angular 4200),
+- the required language runtimes are installed in the container, and
+- the AGENTS.md is updated with language-specific guidance.
+
+The sandbox will keep working for the already-configured stack, but the
+new tooling won't be available until the environment is re-prepared.
+
 ## Node.js Environment
 
 Node.js and npm are available globally. Project dependencies from `package.json` are auto-installed in `/workspace/src/node_modules` on container startup.
