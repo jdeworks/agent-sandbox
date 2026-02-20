@@ -16,7 +16,6 @@ services:
       - ./logs:/workspace/.local/share/opencode/log
       - opencode_cache_{{PROJECT_NAME}}:/workspace/.cache/opencode
       - ./changes.txt:/workspace/.sandbox/changes.txt
-      - ./tmp:/tmp
     ports:
       - "3000:3000"
       - "5000:5000"

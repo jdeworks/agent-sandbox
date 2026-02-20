@@ -115,6 +115,77 @@ if [ ${#selected_keys[@]} -eq 0 ]; then
 fi
 
 ########################################
+# Version detection
+########################################
+echo ""
+echo "[prepare] Detecting versions..."
+
+declare -A detected_versions
+
+detect_version_from_file() {
+    local file_path="$1" regex="$2"
+    [ -f "$file_path" ] || return 1
+    local match
+    match=$(grep -oP "$regex" "$file_path" 2>/dev/null | head -1)
+    # grep -oP returns the full match; if there's a capture group we need the last group
+    # Use a secondary extraction for the actual version number
+    if [ -n "$match" ]; then
+        local ver
+        ver=$(echo "$match" | grep -oP '[0-9]+(\.[0-9]+)*' | head -1)
+        [ -n "$ver" ] && echo "$ver" && return 0
+    fi
+    return 1
+}
+
+for lang in "${selected_keys[@]}"; do
+    local_version=""
+    detect_count=$(jq -r ".\"$lang\".version_detect | length" "$LANGUAGES_JSON")
+
+    if [ "$detect_count" -gt 0 ] && [ -n "$scan_path" ] && [ -d "$scan_path" ]; then
+        for idx in $(seq 0 $((detect_count - 1))); do
+            vd_file=$(jq -r ".\"$lang\".version_detect[$idx].file" "$LANGUAGES_JSON")
+            vd_regex=$(jq -r ".\"$lang\".version_detect[$idx].regex" "$LANGUAGES_JSON")
+
+            # Search recursively for the file
+            targets=$(find "$scan_path" -maxdepth 3 -name "$vd_file" \
+                -not -path '*/node_modules/*' -not -path '*/.venv/*' -not -path '*/target/*' 2>/dev/null)
+
+            while IFS= read -r target; do
+                [ -z "$target" ] && continue
+                local_version=$(detect_version_from_file "$target" "$vd_regex") && break 2
+            done <<< "$targets"
+        done
+    fi
+
+    default_ver=$(jq -r ".\"$lang\".default_version // \"\"" "$LANGUAGES_JSON")
+
+    if [ -n "$local_version" ]; then
+        detected_versions["$lang"]="$local_version"
+        echo "  $lang: $local_version (detected)"
+    elif [ -n "$default_ver" ] && [ "$default_ver" != "system" ]; then
+        detected_versions["$lang"]="$default_ver"
+        echo "  $lang: $default_ver (default)"
+    else
+        echo "  $lang: system default"
+    fi
+done
+
+echo ""
+read -rp "Override any versions? (e.g. python:3.11,java:17) or Enter to accept: " ver_override
+if [ -n "$ver_override" ]; then
+    IFS=',' read -ra overrides <<< "$ver_override"
+    for pair in "${overrides[@]}"; do
+        pair=$(echo "$pair" | tr -d ' ')
+        o_lang="${pair%%:*}"
+        o_ver="${pair#*:}"
+        if [ -n "$o_lang" ] && [ -n "$o_ver" ]; then
+            detected_versions["$o_lang"]="$o_ver"
+            echo "  $o_lang: $o_ver (manual override)"
+        fi
+    done
+fi
+
+########################################
 # Smart port detection
 ########################################
 echo ""
@@ -220,13 +291,25 @@ echo "[prepare] Generating profile '$profile_name'..."
 
 selected_csv=$(IFS=','; echo "${selected_keys[*]}")
 ports_csv=$(IFS=','; echo "${sorted_ports[*]}")
-"$SANDBOX_DIR/generate_profile.sh" "$SANDBOX_DIR" "$profile_dir" "$profile_name" "$selected_csv" "$ports_csv"
+
+# Build versions CSV (lang:ver,lang:ver,...)
+versions_csv=""
+for lang in "${selected_keys[@]}"; do
+    ver="${detected_versions[$lang]:-}"
+    if [ -n "$ver" ]; then
+        [ -n "$versions_csv" ] && versions_csv+=","
+        versions_csv+="${lang}:${ver}"
+    fi
+done
+
+"$SANDBOX_DIR/generate_profile.sh" "$SANDBOX_DIR" "$profile_dir" "$profile_name" "$selected_csv" "$ports_csv" "$versions_csv"
 
 echo "  Dockerfile.base"
 echo "  docker-compose.yml.tpl"
 echo "  install.sh"
 echo "  AGENTS.md"
 echo "  sandbox.sh"
+echo "  versions.env"
 
 ########################################
 # Create alias

@@ -42,9 +42,16 @@ The prepare command will:
 
 | Language | Detection files | What it adds |
 |---|---|---|
-| Python 3 | `requirements.txt`, `setup.py`, `pyproject.toml`, `Pipfile` | python3, venv, pip; auto-installs from requirements.txt |
-| Node.js | `package.json` | npm project dependency auto-install (Node runtime is always included for plugins) |
+| C/C++ | `CMakeLists.txt`, `meson.build`, `configure.ac`, `conanfile.txt`, `vcpkg.json` | CMake, Ninja, GDB, pkg-config (gcc/g++/make already in base) |
+| C# / .NET | `*.csproj`, `*.sln`, `*.fsproj`, `global.json` | .NET SDK 8.0; auto-runs `dotnet restore` |
+| Dart | `pubspec.yaml`, `pubspec.lock` | Dart SDK; auto-runs `dart pub get` |
 | Go | `go.mod`, `go.sum` | golang-go; auto-runs `go mod download` |
+| Java | `pom.xml`, `build.gradle`, `build.gradle.kts`, `gradlew`, `mvnw` | OpenJDK 21, Maven; auto-resolves Maven/Gradle deps |
+| Kotlin | `*.kt` | OpenJDK 21 (Gradle wrapper handles Kotlin compiler); auto-resolves Gradle deps |
+| Node.js | `package.json` | npm project dependency auto-install (Node runtime always included for plugins) |
+| PHP | `composer.json`, `composer.lock`, `artisan` | PHP + common extensions, Composer; auto-runs `composer install` |
+| Python 3 | `requirements.txt`, `setup.py`, `pyproject.toml`, `Pipfile` | python3, venv, pip; auto-installs from requirements.txt |
+| Ruby | `Gemfile`, `Gemfile.lock`, `Rakefile`, `*.gemspec` | Ruby, Bundler; auto-runs `bundle install` |
 | Rust | `Cargo.toml`, `Cargo.lock` | rustup toolchain; auto-runs `cargo fetch` |
 
 New languages can be added by editing `agent-worker/sandbox/languages.json` and adding matching fragments in `agent-worker/sandbox/fragments/` (see the [fragments README](agent-worker/sandbox/fragments/README.md) for details).
@@ -111,7 +118,6 @@ agent-worker/
         opencode.json, oh-my-opencode.json, AGENTS.md
       opencode_sessions/             #   → ~/.local/share/opencode
       logs/                          #   → ~/.local/share/opencode/log
-      tmp/                           #   → /tmp
 ```
 
 ## Container Layout
@@ -123,7 +129,6 @@ agent-worker/
 | `opencode_sessions/` | `/workspace/.local/share/opencode` | Session data, auth |
 | `logs/` | `/workspace/.local/share/opencode/log` | OpenCode log files |
 | `sandbox_data/` | `/workspace/.sandbox` | Dependency log, Dockerfile.extension |
-| `tmp/` | `/tmp` | Temporary files |
 
 Additional named Docker volumes are created per-profile for caches (venv, pip, npm, cargo, etc.).
 
@@ -167,9 +172,15 @@ Ports are **dynamically selected** during `prepare` based on the languages and f
 
 | Language | Frameworks | Default ports |
 |---|---|---|
-| Python | Flask, Django, FastAPI/uvicorn, Streamlit, Gradio, Jupyter | 5000, 8000, 8501, 7860, 8888 |
-| Node.js | Next.js, Vite, Angular, CRA, Express, Nuxt, Svelte, Remix, Astro | 3000, 5173, 4200, 4321, 24678 |
+| C# / .NET | ASP.NET, Blazor | 5000, 5001 |
+| Dart | shelf, dart_frog, Serverpod | 8080, 8081 |
 | Go | Gin, Fiber, Echo | 8080, 3000, 1323 |
+| Java | Spring Boot, Quarkus, Micronaut | 8080 |
+| Kotlin | Ktor, Spring Boot | 8080 |
+| Node.js | Next.js, Vite, Angular, CRA, Express, Nuxt, Svelte, Remix, Astro | 3000, 5173, 4200, 4321, 24678 |
+| PHP | Laravel, Symfony, Slim | 8000, 8080 |
+| Python | Flask, Django, FastAPI/uvicorn, Streamlit, Gradio, Jupyter | 5000, 8000, 8501, 7860, 8888 |
+| Ruby | Rails, Sinatra, Hanami | 3000, 4567, 2300 |
 | Rust | Actix, Axum, Rocket | 8080, 3000, 8000 |
 
 To add framework entries, edit `agent-worker/sandbox/ports.json`.
@@ -200,13 +211,23 @@ The helper scripts discover volumes dynamically from each project's `docker-comp
 
 ## How Dependencies Work
 
-- **Python**: A venv is created at `/workspace/.venv` (named volume). `requirements.txt` from the workspace is auto-installed on startup when it changes.
-- **Node**: `npm install` runs in `/workspace/src` when `package.json` changes.
+- **C/C++**: CMake projects are detected; build tools are ready. No auto-install (no standard package manager).
+- **C# / .NET**: `dotnet restore` runs when `.csproj` / `.fsproj` files change.
+- **Dart**: `dart pub get` runs when `pubspec.yaml` changes.
 - **Go**: `go mod download` runs when `go.sum` changes.
+- **Java**: `mvn dependency:resolve` runs when `pom.xml` changes. Gradle wrapper projects resolve via `./gradlew dependencies`.
+- **Kotlin**: Gradle wrapper resolves dependencies when `build.gradle(.kts)` changes.
+- **Node**: `npm install` runs in `/workspace/src` when `package.json` changes.
+- **PHP**: `composer install` runs when `composer.json` changes.
+- **Python**: A venv is created at `/workspace/.venv` (named volume). `requirements.txt` from the workspace is auto-installed on startup when it changes.
+- **Ruby**: `bundle install` runs when `Gemfile` / `Gemfile.lock` changes. Gems go to `/workspace/.gems`.
 - **Rust**: `cargo fetch` runs when `Cargo.lock` changes.
-- Dependencies are fingerprinted with md5 checksums so installs are skipped when nothing changed.
+
+All dependency installs are fingerprinted with md5 checksums so they are skipped when nothing changed.
 
 ## Adding Languages
+
+The sandbox ships with 11 languages. To add more:
 
 1. Add an entry to `agent-worker/sandbox/languages.json` with the language key, label, detection files, Dockerfile commands, volume definitions, and PATH additions.
 2. Create a matching install fragment at `agent-worker/sandbox/fragments/<key>.sh` with the container startup logic (dependency installation, PATH setup, etc.).

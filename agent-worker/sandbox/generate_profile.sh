@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -e
 
-# Usage: generate_profile.sh <sandbox_dir> <profile_dir> <profile_name> <lang1,lang2,...> <port1,port2,...>
+# Usage: generate_profile.sh <sandbox_dir> <profile_dir> <profile_name> <lang1,lang2,...> [ports] [versions]
+# versions format: python:3.11,node:20,java:17
 
 if [ $# -lt 4 ]; then
-    echo "Usage: $0 <sandbox_dir> <profile_dir> <profile_name> <languages> [ports]"
+    echo "Usage: $0 <sandbox_dir> <profile_dir> <profile_name> <languages> [ports] [versions]"
     exit 1
 fi
 
@@ -17,6 +18,17 @@ IFS=',' read -ra PORTS <<< "${5:-}"
 LANGUAGES_JSON="$SANDBOX_DIR/languages.json"
 FRAGMENTS_DIR="$SANDBOX_DIR/fragments"
 
+# Parse version overrides into an associative array
+declare -A VERSIONS
+if [ -n "${6:-}" ]; then
+    IFS=',' read -ra ver_pairs <<< "$6"
+    for pair in "${ver_pairs[@]}"; do
+        lang_key="${pair%%:*}"
+        lang_ver="${pair#*:}"
+        VERSIONS["$lang_key"]="$lang_ver"
+    done
+fi
+
 for lang in "${SELECTED[@]}"; do
     if ! jq -e ".\"$lang\"" "$LANGUAGES_JSON" >/dev/null 2>&1; then
         available=$(jq -r 'keys | join(", ")' "$LANGUAGES_JSON")
@@ -24,6 +36,19 @@ for lang in "${SELECTED[@]}"; do
         exit 1
     fi
 done
+
+# Resolve version for a language: override > default
+resolve_version() {
+    local lang="$1"
+    if [ -n "${VERSIONS[$lang]:-}" ]; then
+        echo "${VERSIONS[$lang]}"
+    else
+        jq -r ".\"$lang\".default_version // \"\"" "$LANGUAGES_JSON"
+    fi
+}
+
+# Get the Node version (from overrides or default)
+NODE_VERSION="${VERSIONS[node]:-$(jq -r '.node.default_version // "20"' "$LANGUAGES_JSON")}"
 
 mkdir -p "$PROFILE_DIR"
 
@@ -33,9 +58,29 @@ mkdir -p "$PROFILE_DIR"
 generate_dockerfile() {
     local layers=""
     for lang in "${SELECTED[@]}"; do
+        local version
+        version=$(resolve_version "$lang")
+        local use_versioned=false
+
+        # Use version_dockerfile if: version is set, != "system", != default, and version_dockerfile exists
+        if [ -n "$version" ] && [ "$version" != "system" ]; then
+            local default_ver
+            default_ver=$(jq -r ".\"$lang\".default_version // \"\"" "$LANGUAGES_JSON")
+            if [ "$version" != "$default_ver" ] && jq -e ".\"$lang\".version_dockerfile" "$LANGUAGES_JSON" >/dev/null 2>&1; then
+                use_versioned=true
+            fi
+        fi
+
         local lines
-        lines=$(jq -r ".\"$lang\".dockerfile[]? // empty" "$LANGUAGES_JSON")
+        if $use_versioned; then
+            lines=$(jq -r ".\"$lang\".version_dockerfile[]? // empty" "$LANGUAGES_JSON")
+        else
+            lines=$(jq -r ".\"$lang\".dockerfile[]? // empty" "$LANGUAGES_JSON")
+        fi
+
         if [ -n "$lines" ]; then
+            # Substitute {{VERSION}} with the resolved version
+            lines="${lines//\{\{VERSION\}\}/$version}"
             [ -n "$layers" ] && layers+=$'\n\n'
             layers+="$lines"
         fi
@@ -44,6 +89,7 @@ generate_dockerfile() {
     local marker="# {{LANGUAGE_LAYERS}}"
     local template
     template=$(<"$SANDBOX_DIR/Dockerfile.base.tpl")
+    template="${template//\{\{NODE_VERSION\}\}/$NODE_VERSION}"
     echo "${template//"$marker"/$layers}" > "$PROFILE_DIR/Dockerfile.base"
 }
 
@@ -54,6 +100,7 @@ generate_compose() {
     local path_parts=()
     local vol_mounts=""
     local vol_defs=""
+    local env_lines=""
 
     for lang in "${SELECTED[@]}"; do
         local pp
@@ -69,19 +116,30 @@ generate_compose() {
             vol_mounts+=$'\n'"      - ${vname}:${mpath}"
             vol_defs+="  ${vname}:"$'\n'
         done <<< "$vol_keys"
+
+        # Add version env vars (skip node — handled separately as base image version)
+        if [ "$lang" != "node" ]; then
+            local version
+            version=$(resolve_version "$lang")
+            if [ -n "$version" ] && [ "$version" != "system" ] && [ "$version" != "" ]; then
+                local upper_lang
+                upper_lang=$(echo "$lang" | tr '[:lower:]' '[:upper:]')
+                env_lines+="      - ${upper_lang}_VERSION=${version}"$'\n'
+            fi
+        fi
     done
+
+    env_lines+="      - NODE_VERSION=${NODE_VERSION}"
 
     path_parts+=("/opt/opencode/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
     local path_env
     path_env=$(IFS=':'; echo "${path_parts[*]}")
 
-    # Build port lines
     local port_lines=""
     for port in "${PORTS[@]}"; do
         [ -z "$port" ] && continue
         port_lines+="      - \"${port}:${port}\""$'\n'
     done
-    # Remove trailing newline
     port_lines="${port_lines%$'\n'}"
 
     cat > "$PROFILE_DIR/docker-compose.yml.tpl" <<YAML
@@ -93,14 +151,13 @@ services:
     environment:
       - HOME=/workspace
       - PATH=${path_env}
-    volumes:
+${env_lines}    volumes:
       - {{WORKSPACE_PATH}}:/workspace/src${vol_mounts}
       - ./opencode_data:/workspace/.config/opencode
       - ./opencode_sessions:/workspace/.local/share/opencode
       - ./logs:/workspace/.local/share/opencode/log
       - opencode_cache_{{PROJECT_NAME}}:/workspace/.cache/opencode
       - ./sandbox_data:/workspace/.sandbox
-      - ./tmp:/tmp
     ports:
 ${port_lines}
     stdin_open: true
@@ -161,7 +218,6 @@ generate_agents_md() {
         fi
     done
 
-    # Append available ports section
     if [ ${#PORTS[@]} -gt 0 ]; then
         local port_list
         port_list=$(printf '%s' "${PORTS[0]}"; printf ', %s' "${PORTS[@]:1}")
@@ -191,6 +247,21 @@ WRAPPER
 }
 
 ########################################
+# Write versions.env for reference
+########################################
+generate_versions_env() {
+    {
+        echo "# Auto-generated version pins for profile: $PROFILE_NAME"
+        echo "NODE_VERSION=$NODE_VERSION"
+        for lang in "${SELECTED[@]}"; do
+            local version
+            version=$(resolve_version "$lang")
+            [ -n "$version" ] && echo "${lang^^}_VERSION=$version"
+        done
+    } > "$PROFILE_DIR/versions.env"
+}
+
+########################################
 # Run
 ########################################
 generate_dockerfile
@@ -198,5 +269,6 @@ generate_compose
 generate_install
 generate_agents_md
 generate_wrapper
+generate_versions_env
 
 echo "Profile '$PROFILE_NAME' generated in $PROFILE_DIR"

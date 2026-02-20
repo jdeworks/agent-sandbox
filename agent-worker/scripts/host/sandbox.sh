@@ -158,18 +158,31 @@ if [ ! -d "$PROJECT_DIR" ]; then
     cp "$SANDBOX_PROFILE_DIR/AGENTS.md" "$PROJECT_DIR/opencode_data/AGENTS.md"
     mkdir -p "$PROJECT_DIR/opencode_sessions"
     mkdir -p "$PROJECT_DIR/logs"
-    mkdir -p "$PROJECT_DIR/tmp"
 
-    cat > "$PROJECT_DIR/config.env" <<EOF
-WORKSPACE_PATH=$WORKSPACE_PATH
-PROJECT_NAME=$PROJECT_NAME
-PROFILE=$PROFILE_NAME
-CREATED=$(date -Iseconds)
-EOF
+    {
+        echo "WORKSPACE_PATH=$WORKSPACE_PATH"
+        echo "PROJECT_NAME=$PROJECT_NAME"
+        echo "PROFILE=$PROFILE_NAME"
+        echo "CREATED=$(date -Iseconds)"
+        echo "LAST_STARTED=$(date -Iseconds)"
+        # Append version pins from profile
+        if [ -f "$SANDBOX_PROFILE_DIR/versions.env" ]; then
+            grep -v '^#' "$SANDBOX_PROFILE_DIR/versions.env" | grep -v '^$'
+        fi
+    } > "$PROJECT_DIR/config.env"
 
     echo "[sandbox] Project scaffolded."
 else
     echo "[sandbox] Existing project found."
+fi
+
+# Update LAST_STARTED on every run
+if [ -f "$PROJECT_DIR/config.env" ]; then
+    if grep -q '^LAST_STARTED=' "$PROJECT_DIR/config.env"; then
+        sed -i "s|^LAST_STARTED=.*|LAST_STARTED=$(date -Iseconds)|" "$PROJECT_DIR/config.env"
+    else
+        echo "LAST_STARTED=$(date -Iseconds)" >> "$PROJECT_DIR/config.env"
+    fi
 fi
 
 ########################################
@@ -179,7 +192,6 @@ mkdir -p "$PROJECT_DIR/opencode_data"
 mkdir -p "$PROJECT_DIR/opencode_sessions"
 mkdir -p "$PROJECT_DIR/logs"
 mkdir -p "$PROJECT_DIR/sandbox_data"
-mkdir -p "$PROJECT_DIR/tmp"
 
 ########################################
 # Dockerfile.extension: offer to merge before starting

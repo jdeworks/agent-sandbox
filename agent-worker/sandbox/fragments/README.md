@@ -16,10 +16,26 @@ prepare (host)
 
 ## File types
 
-| Pattern          | Purpose                                               |
-|------------------|-------------------------------------------------------|
-| `<lang>.sh`      | Container startup script (venv setup, dep install)    |
-| `<lang>.agents.md` | Agent instructions appended to the profile's AGENTS.md |
+| Pattern             | Purpose                                                  |
+|---------------------|----------------------------------------------------------|
+| `<lang>.sh`         | Container startup script (venv setup, dep install, etc.) |
+| `<lang>.agents.md`  | Agent instructions appended to the profile's AGENTS.md   |
+
+## Available languages
+
+| Key      | Label            | Auto-installs from         |
+|----------|------------------|----------------------------|
+| `cpp`    | C/C++            | _(CMake hint only)_        |
+| `dart`   | Dart             | `pubspec.yaml`             |
+| `dotnet` | C# / .NET        | `*.csproj` / `*.fsproj`    |
+| `go`     | Go               | `go.sum`                   |
+| `java`   | Java             | `pom.xml` / `build.gradle` |
+| `kotlin` | Kotlin           | `build.gradle(.kts)`       |
+| `node`   | Node.js          | `package.json`             |
+| `php`    | PHP              | `composer.json`            |
+| `python` | Python 3         | `requirements.txt`         |
+| `ruby`   | Ruby             | `Gemfile`                  |
+| `rust`   | Rust             | `Cargo.lock`               |
 
 ## Conventions
 
@@ -29,7 +45,7 @@ Each `.sh` fragment should:
 - Be idempotent -- safe to run on every container startup
 - Use md5 checksums to skip redundant installs (see existing fragments for the pattern)
 - Export any PATH additions needed at runtime
-- Handle the case where the manifest file (e.g. `requirements.txt`) does not exist
+- Handle the case where the manifest file does not exist
 
 Each `.agents.md` fragment should:
 

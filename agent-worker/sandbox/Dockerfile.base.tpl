@@ -16,7 +16,7 @@ RUN apt update && apt install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Node (always included — required for OpenCode plugin runtime)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+RUN curl -fsSL https://deb.nodesource.com/setup_{{NODE_VERSION}}.x | bash - \
     && apt install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 

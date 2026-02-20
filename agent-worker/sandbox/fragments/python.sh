@@ -1,9 +1,14 @@
 ########################################
 # Python: create and use venv
 ########################################
+PYTHON_BIN="python3"
+if [ -n "${PYTHON_VERSION:-}" ] && command -v "python${PYTHON_VERSION}" &>/dev/null; then
+    PYTHON_BIN="python${PYTHON_VERSION}"
+fi
+
 if [ ! -d "/workspace/.venv/bin" ]; then
-    echo "[sandbox] Creating Python venv..."
-    python3 -m venv /workspace/.venv
+    echo "[sandbox] Creating Python venv (${PYTHON_BIN})..."
+    $PYTHON_BIN -m venv /workspace/.venv
 fi
 
 [ -d /workspace/.venv ] && chmod -R a+rwX /workspace/.venv
