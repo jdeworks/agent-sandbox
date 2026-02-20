@@ -1,0 +1,2 @@
+agent-worker/projects/*
+!agent-worker/projects/.gitkeep

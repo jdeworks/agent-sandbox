@@ -1,0 +1,10 @@
+{
+  "agents": {
+    "sisyphus": { "model": "opencode/kimi-k2.5-free" },
+    "oracle": { "model": "opencode/glm-5-free" },
+    "explore": { "model": "opencode/gpt-5-nano" },
+    "librarian": { "model": "opencode/big-pickle" },
+    "frontend-engineer": { "model": "opencode/kimi-k2.5-free" },
+    "multimodal-looker": { "model": "opencode/kimi-k2.5-free" }
+  }
+}
