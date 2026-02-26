@@ -1,2 +1,4 @@
 agent-worker/projects/*
 !agent-worker/projects/.gitkeep
+agent-worker/prepared/*
+!agent-worker/prepared/.gitkeep
