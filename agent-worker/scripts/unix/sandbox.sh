@@ -136,18 +136,45 @@ remap_compose_ports() {
     mv "$tmpfile" "$compose_file"
 }
 
+# Consider container ready if (1) ready file exists, or (2) logs show "[sandbox] Ready."
+# Log-based check avoids relying on docker exec, which can be flaky (e.g. WSL2).
+container_ready() {
+    local container="$1"
+    # Prefer log check: no exec into container needed (avoids flaky exec on WSL2 etc.)
+    if docker logs --tail 50 "$container" 2>/dev/null | grep -q '\[sandbox\] Ready\.'; then
+        return 0
+    fi
+    local retries=3
+    while [ "$retries" -gt 0 ]; do
+        if docker exec "$container" test -f /tmp/.sandbox-ready 2>/dev/null; then
+            return 0
+        fi
+        retries=$((retries - 1))
+        [ "$retries" -gt 0 ] && sleep 1
+    done
+    return 1
+}
+
 wait_for_ready() {
     local container="$1"
     local timeout="${2:-120}"
     local elapsed=0
+    local last_reported=0
+
+    if [ -n "${SANDBOX_SKIP_READY:-}" ]; then
+        echo "[sandbox] Skipping ready wait (SANDBOX_SKIP_READY is set)."
+        return 0
+    fi
 
     echo -n "[sandbox] Waiting for container to be ready"
+    sleep 3
+    elapsed=3
     while [ "$elapsed" -lt "$timeout" ]; do
-        if docker exec "$container" test -f /tmp/.sandbox-ready 2>/dev/null; then
+        if container_ready "$container"; then
             echo " done."
             return 0
         fi
-        if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$container"; then
+        if [ "$(docker inspect --format '{{.State.Running}}' "$container" 2>/dev/null)" != "true" ]; then
             echo " failed."
             echo "[sandbox] Container stopped unexpectedly. Check logs with:"
             echo "  docker logs $container"
@@ -156,10 +183,17 @@ wait_for_ready() {
         echo -n "."
         sleep 2
         elapsed=$((elapsed + 2))
+        if [ "$elapsed" -ge "$((last_reported + 20))" ]; then
+            echo -n " (${elapsed}s)"
+            last_reported=$elapsed
+        fi
     done
 
     echo " timeout."
-    echo "[sandbox] Warning: container did not become ready within ${timeout}s. Proceeding anyway."
+    echo "[sandbox] Container did not become ready within ${timeout}s (install.sh may still be running or stuck)."
+    echo "[sandbox] Proceeding anyway. To debug:"
+    echo "  docker logs $container"
+    echo "  docker exec -it $container bash   # then check: ps aux, cat /tmp/.sandbox-ready"
     return 0
 }
 
@@ -403,13 +437,20 @@ check_dockerfile_extension
 echo "[sandbox] Starting container $CONTAINER_NAME..."
 docker compose -f "$PROJECT_DIR/docker-compose.yml" --project-directory "$PROJECT_DIR" up -d --build
 
+# Use the container compose actually started (by ID or name) so we never check the wrong one
+RUNNING_CONTAINER="$CONTAINER_NAME"
+_comp_id=$(docker compose -f "$PROJECT_DIR/docker-compose.yml" --project-directory "$PROJECT_DIR" ps -q agent 2>/dev/null)
+if [ -n "$_comp_id" ]; then
+    RUNNING_CONTAINER="$_comp_id"
+fi
+
 ########################################
 # Wait for container to finish init
 ########################################
-wait_for_ready "$CONTAINER_NAME" || true
+wait_for_ready "$RUNNING_CONTAINER" || true
 
 echo "[sandbox] Attaching to $CONTAINER_NAME..."
-docker exec -it "$CONTAINER_NAME" opencode
+docker exec -it "$RUNNING_CONTAINER" opencode
 
 ########################################
 # Post-session: check if container needs rebuilding
