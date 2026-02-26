@@ -67,7 +67,29 @@ internal static class Cli
                     Console.WriteLine($"  Detected: {languages[l].Label}");
             }
 
-            versions = VersionDetector.Detect(projectPath, selected, languages);
+            var versionInfos = VersionDetector.DetectWithSources(projectPath, selected, languages);
+            Console.WriteLine();
+            Console.WriteLine("[prepare] Detecting versions...");
+            foreach (var lang in selected)
+            {
+                if (versionInfos.TryGetValue(lang, out var info))
+                {
+                    var tag = info.Source switch
+                    {
+                        VersionSource.Detected => "detected",
+                        VersionSource.Default => "default",
+                        VersionSource.System => "system",
+                        _ => "system default"
+                    };
+                    Console.WriteLine(info.Source == VersionSource.Unknown
+                        ? $"  {lang}: system default"
+                        : $"  {lang}: {info.Version} ({tag})");
+                    versions[lang] = info.Source is VersionSource.Detected or VersionSource.Default
+                        ? info.Version
+                        : (languages.TryGetValue(lang, out var cfg) ? cfg.DefaultVersion : "");
+                }
+            }
+
             (ports, frameworks) = PortDetector.Detect(projectPath, selected, portConfigs);
         }
         else

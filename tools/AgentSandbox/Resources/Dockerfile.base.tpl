@@ -28,7 +28,7 @@ RUN curl -fsSL https://opencode.ai/install | bash \
 ENV PATH="/opt/opencode/bin:${PATH}"
 
 # Oh My OpenCode
-RUN npm install -g oh-my-opencode
+RUN npm install -g oh-my-opencode @code-yeongyu/comment-checker
 
 # {{LANGUAGE_LAYERS}}
 

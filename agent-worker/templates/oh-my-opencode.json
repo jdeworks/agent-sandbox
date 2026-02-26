@@ -1,10 +1,11 @@
 {
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/master/assets/oh-my-opencode.schema.json",
   "agents": {
-    "sisyphus": { "model": "opencode/kimi-k2.5-free" },
-    "oracle": { "model": "opencode/glm-5-free" },
+    "sisyphus": { "model": "opencode/big-pickle" },
+    "sisyphus-junior": { "model": "opencode/big-pickle" },
+    "oracle": { "model": "opencode/trinity-large-preview-free" },
     "explore": { "model": "opencode/gpt-5-nano" },
     "librarian": { "model": "opencode/big-pickle" },
-    "frontend-engineer": { "model": "opencode/kimi-k2.5-free" },
-    "multimodal-looker": { "model": "opencode/kimi-k2.5-free" }
+    "multimodal-looker": { "model": "opencode/minimax-m2.5-free" }
   }
 }

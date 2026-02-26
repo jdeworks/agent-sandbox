@@ -217,6 +217,13 @@ if [ ! -d "$PROJECT_DIR" ]; then
     mkdir -p "$PROJECT_DIR/opencode_sessions"
     mkdir -p "$PROJECT_DIR/logs"
 
+    # Copy host OpenCode auth so Zen credentials are available inside the container
+    HOST_AUTH="$HOME/.local/share/opencode/auth.json"
+    if [ -f "$HOST_AUTH" ] && [ "$(stat -c%s "$HOST_AUTH" 2>/dev/null || echo 0)" -gt 2 ]; then
+        cp "$HOST_AUTH" "$PROJECT_DIR/opencode_sessions/auth.json"
+        echo "[sandbox] Copied host OpenCode auth into project."
+    fi
+
     {
         echo "WORKSPACE_PATH=$WORKSPACE_PATH"
         echo "PROJECT_NAME=$PROJECT_NAME"
@@ -233,13 +240,15 @@ if [ ! -d "$PROJECT_DIR" ]; then
 else
     echo "[sandbox] Existing project found."
 
-    # Regenerate compose and AGENTS.md from current profile template
-    # so port/volume changes from re-prepare are picked up automatically.
+    # Regenerate compose, AGENTS.md, and config templates from current profile
+    # so port/volume/model changes from re-prepare are picked up automatically.
     sed \
         -e "s|{{PROJECT_NAME}}|${PROJECT_NAME}|g" \
         -e "s|{{WORKSPACE_PATH}}|${WORKSPACE_PATH}|g" \
         "$SANDBOX_PROFILE_DIR/docker-compose.yml.tpl" > "$PROJECT_DIR/docker-compose.yml"
     cp "$SANDBOX_PROFILE_DIR/AGENTS.md" "$PROJECT_DIR/opencode_data/AGENTS.md"
+    cp "$TEMPLATES_DIR/opencode.json" "$PROJECT_DIR/opencode_data/opencode.json"
+    cp "$TEMPLATES_DIR/oh-my-opencode.json" "$PROJECT_DIR/opencode_data/oh-my-opencode.json"
 fi
 
 # Update LAST_STARTED on every run

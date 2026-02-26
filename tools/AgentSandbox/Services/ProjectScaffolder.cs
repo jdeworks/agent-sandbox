@@ -81,6 +81,8 @@ public static class ProjectScaffolder
         Directory.CreateDirectory(Path.Combine(projectDir, "opencode_sessions"));
         Directory.CreateDirectory(Path.Combine(projectDir, "logs"));
 
+        CopyHostAuth(Path.Combine(projectDir, "opencode_sessions"));
+
         var versionsEnvPath = Path.Combine(profileDir, "versions.env");
         var versionLines = "";
         if (File.Exists(versionsEnvPath))
@@ -120,6 +122,14 @@ public static class ProjectScaffolder
         var agentsMd = Path.Combine(profileDir, "AGENTS.md");
         if (File.Exists(agentsMd))
             File.Copy(agentsMd, Path.Combine(projectDir, "opencode_data", "AGENTS.md"), true);
+
+        var opencodeJson = Path.Combine(ResourceManager.TemplatesDir, "opencode.json");
+        if (File.Exists(opencodeJson))
+            File.Copy(opencodeJson, Path.Combine(projectDir, "opencode_data", "opencode.json"), true);
+
+        var ohMyJson = Path.Combine(ResourceManager.TemplatesDir, "oh-my-opencode.json");
+        if (File.Exists(ohMyJson))
+            File.Copy(ohMyJson, Path.Combine(projectDir, "opencode_data", "oh-my-opencode.json"), true);
     }
 
     public static void UpdateLastStarted(string projectName)
@@ -135,6 +145,27 @@ public static class ProjectScaffolder
         else
             lines.Add(newLine);
         ResourceManager.WriteLf(configPath, string.Join("\n", lines) + "\n");
+    }
+
+    private static void CopyHostAuth(string sessionsDir)
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var hostAuth = Path.Combine(home, ".local", "share", "opencode", "auth.json");
+
+        if (!File.Exists(hostAuth))
+        {
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            hostAuth = Path.Combine(appData, "opencode", "auth.json");
+        }
+
+        if (!File.Exists(hostAuth)) return;
+
+        var info = new FileInfo(hostAuth);
+        if (info.Length <= 2) return;
+
+        var dest = Path.Combine(sessionsDir, "auth.json");
+        File.Copy(hostAuth, dest, true);
+        Console.WriteLine("[sandbox] Copied host OpenCode auth into project.");
     }
 
     public static bool HasDockerfileExtension(string projectName)

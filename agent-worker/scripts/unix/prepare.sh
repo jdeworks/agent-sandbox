@@ -122,6 +122,25 @@ echo "[prepare] Detecting versions..."
 
 declare -A detected_versions
 
+probe_system_version() {
+    local lang="$1"
+    local ver=""
+    case "$lang" in
+        python)  ver=$(python3 --version 2>/dev/null | grep -oP '[0-9]+\.[0-9]+' | head -1) ;;
+        node)    ver=$(node --version 2>/dev/null | grep -oP '[0-9]+' | head -1) ;;
+        go)      ver=$(go version 2>/dev/null | grep -oP '[0-9]+\.[0-9]+' | head -1) ;;
+        ruby)    ver=$(ruby --version 2>/dev/null | grep -oP '[0-9]+\.[0-9]+' | head -1) ;;
+        php)     ver=$(php --version 2>/dev/null | grep -oP '[0-9]+\.[0-9]+' | head -1) ;;
+        rust)    ver=$(rustc --version 2>/dev/null | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' | head -1) ;;
+        java)    ver=$(java --version 2>&1 | grep -oP '[0-9]+(\.[0-9]+)*' | head -1) ;;
+        kotlin)  ver=$(java --version 2>&1 | grep -oP '[0-9]+(\.[0-9]+)*' | head -1) ;;
+        dotnet)  ver=$(dotnet --version 2>/dev/null | grep -oP '[0-9]+\.[0-9]+' | head -1) ;;
+        dart)    ver=$(dart --version 2>/dev/null | grep -oP '[0-9]+\.[0-9]+' | head -1) ;;
+        cpp)     ver=$(gcc --version 2>/dev/null | head -1 | grep -oP '[0-9]+\.[0-9]+' | tail -1) ;;
+    esac
+    [ -n "$ver" ] && echo "$ver"
+}
+
 detect_version_from_file() {
     local file_path="$1" regex="$2"
     [ -f "$file_path" ] || return 1
@@ -166,7 +185,12 @@ for lang in "${selected_keys[@]}"; do
         detected_versions["$lang"]="$default_ver"
         echo "  $lang: $default_ver (default)"
     else
-        echo "  $lang: system default"
+        sys_ver=$(probe_system_version "$lang")
+        if [ -n "$sys_ver" ]; then
+            echo "  $lang: $sys_ver (system)"
+        else
+            echo "  $lang: system default"
+        fi
     fi
 done
 

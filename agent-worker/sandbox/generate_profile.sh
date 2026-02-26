@@ -129,7 +129,7 @@ generate_compose() {
         fi
     done
 
-    env_lines+="      - NODE_VERSION=${NODE_VERSION}"
+    env_lines+="      - NODE_VERSION=${NODE_VERSION}"$'\n'
 
     path_parts+=("/opt/opencode/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
     local path_env
