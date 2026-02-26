@@ -127,6 +127,8 @@ public static class ProfileGenerator
         sb.AppendLine("    ports:");
         foreach (var port in spec.Ports)
             sb.AppendLine($"      - \"{port}:{port}\"");
+        sb.AppendLine("    env_file:");
+        sb.AppendLine("      - ./runtime.env");
         sb.AppendLine("    stdin_open: true");
         sb.AppendLine("    tty: true");
         sb.AppendLine("    security_opt:");
@@ -168,6 +170,7 @@ public static class ProfileGenerator
         }
 
         sb.AppendLine("echo \"[sandbox] Ready.\"");
+        sb.AppendLine("touch /tmp/.sandbox-ready");
         sb.AppendLine("exec opencode");
 
         ResourceManager.WriteLf(Path.Combine(profileDir, "install.sh"), sb.ToString());

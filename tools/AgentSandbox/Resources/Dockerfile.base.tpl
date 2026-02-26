@@ -37,4 +37,7 @@ WORKDIR /workspace
 COPY install.sh /install.sh
 RUN chmod +x /install.sh
 
+HEALTHCHECK --interval=2s --timeout=3s --start-period=120s --retries=1 \
+  CMD [ -f /tmp/.sandbox-ready ] || exit 1
+
 ENTRYPOINT ["/install.sh"]

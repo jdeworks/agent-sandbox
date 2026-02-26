@@ -93,6 +93,52 @@ public static class DockerRunner
         return proc.ExitCode;
     }
 
+    public static bool WaitForReady(string containerName, int timeoutSeconds = 120, Action<string>? onOutput = null)
+    {
+        var elapsed = 0;
+        while (elapsed < timeoutSeconds)
+        {
+            var (exit, _) = RunCapture("docker", $"exec \"{containerName}\" test -f /tmp/.sandbox-ready");
+            if (exit == 0)
+                return true;
+
+            if (!IsContainerRunning(containerName))
+            {
+                onOutput?.Invoke("[sandbox] Container stopped unexpectedly.");
+                return false;
+            }
+
+            Thread.Sleep(2000);
+            elapsed += 2;
+        }
+
+        onOutput?.Invoke($"[sandbox] Warning: container not ready within {timeoutSeconds}s. Proceeding anyway.");
+        return true;
+    }
+
+    public static bool IsPortInUse(int port)
+    {
+        try
+        {
+            using var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, port);
+            listener.Start();
+            listener.Stop();
+            return false;
+        }
+        catch (System.Net.Sockets.SocketException)
+        {
+            return true;
+        }
+    }
+
+    public static int FindFreePort(int startPort)
+    {
+        var port = startPort;
+        while (IsPortInUse(port) && port < startPort + 100)
+            port++;
+        return port;
+    }
+
     private static (int exitCode, string output) RunCapture(string exe, string args)
     {
         var psi = new ProcessStartInfo

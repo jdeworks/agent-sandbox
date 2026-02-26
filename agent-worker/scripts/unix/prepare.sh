@@ -8,6 +8,51 @@ PREPARED_DIR="$REPO_DIR/prepared"
 LANGUAGES_JSON="$SANDBOX_DIR/languages.json"
 PORTS_JSON="$SANDBOX_DIR/ports.json"
 
+########################################
+# Subcommands: --list, --delete
+########################################
+if [ "${1:-}" = "--list" ]; then
+    echo "Prepared profiles:"
+    if [ -d "$PREPARED_DIR" ]; then
+        for d in "$PREPARED_DIR"/*/; do
+            [ -d "$d" ] || continue
+            name="$(basename "$d")"
+            vers=""
+            if [ -f "$d/versions.env" ]; then
+                vers=$(grep -v '^#' "$d/versions.env" | grep -v '^$' | tr '\n' ' ')
+            fi
+            printf "  %-30s %s\n" "$name" "$vers"
+        done
+    else
+        echo "  (none)"
+    fi
+    exit 0
+fi
+
+if [ "${1:-}" = "--delete" ]; then
+    profile="${2:-}"
+    if [ -z "$profile" ]; then
+        echo "Usage: prepare --delete <profile-name>"
+        exit 1
+    fi
+    target_dir="$PREPARED_DIR/$profile"
+    if [ ! -d "$target_dir" ]; then
+        echo "[prepare] Profile '$profile' not found."
+        exit 1
+    fi
+    read -rp "Delete profile '$profile'? [y/N]: " confirm
+    if [[ "$confirm" =~ ^[yY]$ ]]; then
+        rm -rf "$target_dir"
+        echo "[prepare] Profile '$profile' deleted."
+        # Remove alias if it exists
+        alias_file="$HOME/.bash_aliases"
+        if [ -f "$alias_file" ]; then
+            sed -i "/^alias sandbox-${profile}=/d" "$alias_file"
+        fi
+    fi
+    exit 0
+fi
+
 echo "=== Sandbox Environment Preparation ==="
 echo ""
 

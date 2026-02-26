@@ -160,6 +160,8 @@ ${env_lines}    volumes:
       - ./sandbox_data:/workspace/.sandbox
     ports:
 ${port_lines}
+    env_file:
+      - ./runtime.env
     stdin_open: true
     tty: true
     security_opt:
@@ -199,6 +201,7 @@ HEADER
 
     cat >> "$PROFILE_DIR/install.sh" <<'FOOTER'
 echo "[sandbox] Ready."
+touch /tmp/.sandbox-ready
 exec opencode
 FOOTER
 

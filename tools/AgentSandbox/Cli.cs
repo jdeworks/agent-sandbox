@@ -15,17 +15,105 @@ internal static class Cli
             Agent Sandbox - Windows Launcher
 
             Usage:
-              agent-sandbox                      GUI wizard (folder picker + detection)
-              agent-sandbox <path>               GUI wizard pre-filled with path
-              agent-sandbox prepare [<path>]     CLI: prepare a profile for a project
-              agent-sandbox sandbox <path>       CLI: launch sandbox for a project
-              agent-sandbox list                 CLI: list all projects
-              agent-sandbox stats                CLI: show disk usage
-              agent-sandbox cleanup [<project>]  CLI: remove a project (or --all)
-              agent-sandbox help                 Show this help
+              agent-sandbox                          GUI wizard (folder picker + detection)
+              agent-sandbox <path>                   GUI wizard pre-filled with path
+              agent-sandbox setup                    CLI: guided first-time setup (create default profiles)
+              agent-sandbox prepare [<path>]         CLI: prepare a profile for a project
+              agent-sandbox sandbox <path>           CLI: launch sandbox for a project
+              agent-sandbox sandbox --profile <name> <path>  Launch with a specific profile
+              agent-sandbox list                     CLI: list all projects
+              agent-sandbox stats                    CLI: show disk usage
+              agent-sandbox cleanup [<project>]      CLI: remove a project (or --all)
+              agent-sandbox profiles                 CLI: list prepared profiles
+              agent-sandbox profiles delete <name>   CLI: delete a profile
+              agent-sandbox help                     Show this help
 
             Data stored in: %APPDATA%\AgentSandbox
             """);
+        return 0;
+    }
+
+    // ─── Setup ─────────────────────────────────────────────────────────
+
+    public static int RunSetup(string[] args)
+    {
+        Console.WriteLine("=== Agent Sandbox Setup ===");
+        Console.WriteLine();
+
+        Console.WriteLine("[setup] Checking Docker...");
+        if (!DockerRunner.IsDockerAvailable())
+        {
+            Console.WriteLine("[setup] Error: Docker is not available. Is Docker Desktop running?");
+            return 1;
+        }
+        Console.WriteLine($"[setup] Docker is ready.");
+        Console.WriteLine();
+
+        var languages = ConfigLoader.LoadLanguages();
+        var portConfigs = ConfigLoader.LoadPorts();
+        var sorted = languages.OrderBy(kv => kv.Key).ToList();
+
+        Console.WriteLine("[setup] Default profiles let you sandbox projects immediately without");
+        Console.WriteLine("  running 'prepare' first.");
+        Console.WriteLine();
+        Console.WriteLine("  Available:");
+
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            var key = sorted[i].Key;
+            var existing = Directory.Exists(Path.Combine(ResourceManager.PreparedDir, key))
+                ? " [already exists]"
+                : "";
+            Console.WriteLine($"    {i + 1,2}) {sorted[i].Value.Label,-20} -> sandbox {key}{existing}");
+        }
+
+        Console.WriteLine();
+        Console.Write("  Create profiles (comma-separated, e.g. 1,2,3) or Enter to skip: ");
+        var input = Console.ReadLine()?.Trim();
+
+        if (!string.IsNullOrEmpty(input))
+        {
+            foreach (var part in input.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!int.TryParse(part.Trim(), out var idx) || idx < 1 || idx > sorted.Count)
+                {
+                    Console.WriteLine($"  [setup] Warning: invalid selection '{part.Trim()}', skipping.");
+                    continue;
+                }
+
+                var lang = sorted[idx - 1];
+                var profileDir = Path.Combine(ResourceManager.PreparedDir, lang.Key);
+                if (Directory.Exists(profileDir))
+                {
+                    Console.WriteLine($"  [setup] Profile '{lang.Key}' already exists, skipping.");
+                    continue;
+                }
+
+                var basePorts = portConfigs.TryGetValue("base", out var baseCfg) ? baseCfg.Ports.ToList() : new List<int>();
+                var langPorts = portConfigs.TryGetValue(lang.Key, out var langCfg) ? langCfg.Default.ToList() : new List<int>();
+                var allPorts = basePorts.Union(langPorts).Distinct().OrderBy(p => p).ToList();
+
+                var spec = new ProfileSpec
+                {
+                    Name = lang.Key,
+                    Languages = [lang.Key],
+                    Versions = new Dictionary<string, string>(),
+                    Ports = allPorts
+                };
+
+                Console.WriteLine($"  [setup] Creating profile '{lang.Key}' ({lang.Value.Label})...");
+                ProfileGenerator.Generate(spec, languages);
+                Console.WriteLine($"    -> ready. Use: agent-sandbox sandbox --profile {lang.Key} <path>");
+            }
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("[setup] Done.");
+        Console.WriteLine();
+        Console.WriteLine("  Quick start:");
+        Console.WriteLine("    agent-sandbox sandbox C:\\path\\to\\project");
+        Console.WriteLine();
+        Console.WriteLine("  Or run 'agent-sandbox prepare C:\\path' for a custom multi-language profile.");
         return 0;
     }
 
@@ -152,7 +240,8 @@ internal static class Cli
             Console.WriteLine();
             for (var i = 0; i < recent.Count; i++)
             {
-                Console.WriteLine($"  {i + 1}) {recent[i].Name,-25} {recent[i].Profile,-18} {recent[i].WorkspacePath}");
+                var marker = Directory.Exists(recent[i].WorkspacePath) ? "" : " [PATH MISSING]";
+                Console.WriteLine($"  {i + 1}) {recent[i].Name,-25} {recent[i].Profile,-18} {recent[i].WorkspacePath}{marker}");
                 Console.WriteLine($"     Last used: {recent[i].LastStarted}");
             }
             Console.WriteLine();
@@ -165,6 +254,11 @@ internal static class Cli
             if (int.TryParse(input, out var idx) && idx > 0 && idx <= recent.Count)
             {
                 var picked = recent[idx - 1];
+                if (!Directory.Exists(picked.WorkspacePath))
+                {
+                    Console.WriteLine($"Error: workspace path no longer exists: {picked.WorkspacePath}");
+                    return 1;
+                }
                 projectPath = picked.WorkspacePath;
                 profileName ??= picked.Profile;
             }
@@ -245,7 +339,7 @@ internal static class Cli
             return 1;
         }
 
-        var projectName = Path.GetFileName(projectPath)!;
+        var projectName = ProjectScaffolder.ResolveProjectName(projectPath);
         var containerName = $"sandbox-{projectName}";
         var baseImage = $"agent-sandbox-{profileName}:latest";
         var projectDir = ProjectScaffolder.GetProjectDir(projectName);
@@ -299,6 +393,10 @@ internal static class Cli
         }
 
         ProjectScaffolder.UpdateLastStarted(projectName);
+        ProjectScaffolder.UpdateWorkspacePath(projectName, projectPath);
+        ProjectScaffolder.SyncHostAuth(projectName, Console.WriteLine);
+        ProjectScaffolder.WriteRuntimeEnv(projectName);
+        ProjectScaffolder.RemapPorts(projectName, Console.WriteLine);
 
         if (ProjectScaffolder.HasDockerfileExtension(projectName))
         {
@@ -318,6 +416,10 @@ internal static class Cli
             Console.WriteLine("Error: docker compose up failed.");
             return 1;
         }
+
+        Console.Write("[sandbox] Waiting for container to be ready");
+        DockerRunner.WaitForReady(containerName, 120, msg => Console.Write("."));
+        Console.WriteLine();
 
         Console.WriteLine($"[sandbox] Attaching to {containerName}...");
         DockerRunner.ExecInteractive(containerName, "opencode");
@@ -459,6 +561,58 @@ internal static class Cli
 
         Directory.Delete(projectDir, true);
         Console.WriteLine($"  Removed: {name}");
+    }
+
+    // ─── Profiles ──────────────────────────────────────────────────────
+
+    public static int RunProfiles(string[] args)
+    {
+        if (args.Length > 0 && args[0].ToLower() == "delete")
+        {
+            var name = args.Length > 1 ? args[1] : null;
+            if (string.IsNullOrEmpty(name))
+            {
+                Console.WriteLine("Usage: agent-sandbox profiles delete <profile-name>");
+                return 1;
+            }
+
+            var dir = Path.Combine(ResourceManager.PreparedDir, name);
+            if (!Directory.Exists(dir))
+            {
+                Console.WriteLine($"Profile '{name}' not found.");
+                return 1;
+            }
+
+            Console.Write($"Delete profile '{name}'? [y/N]: ");
+            if (Console.ReadLine()?.Trim().ToLower() != "y")
+                return 0;
+
+            Directory.Delete(dir, true);
+            Console.WriteLine($"Profile '{name}' deleted.");
+            return 0;
+        }
+
+        Console.WriteLine("Prepared profiles:");
+        if (!Directory.Exists(ResourceManager.PreparedDir))
+        {
+            Console.WriteLine("  (none)");
+            return 0;
+        }
+
+        foreach (var dir in Directory.GetDirectories(ResourceManager.PreparedDir))
+        {
+            var name = Path.GetFileName(dir)!;
+            var versionsPath = Path.Combine(dir, "versions.env");
+            var versions = "";
+            if (File.Exists(versionsPath))
+            {
+                versions = string.Join(", ", File.ReadAllLines(versionsPath)
+                    .Where(l => !l.StartsWith("#") && !string.IsNullOrWhiteSpace(l)));
+            }
+            Console.WriteLine($"  {name,-30} {versions}");
+        }
+
+        return 0;
     }
 
     // ─── Helpers ────────────────────────────────────────────────────────

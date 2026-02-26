@@ -1,3 +1,7 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
+
 namespace AgentSandbox.Services;
 
 /// <summary>
@@ -8,8 +12,35 @@ public static class ProjectScaffolder
 {
     public record RecentProject(string Name, string Profile, string WorkspacePath, string LastStarted);
 
+    private static readonly string[] ApiKeyVars =
+        ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "OPENCODE_API_KEY", "GEMINI_API_KEY"];
+
     public static string GetProjectDir(string projectName) =>
         Path.Combine(ResourceManager.ProjectsDir, projectName);
+
+    public static string ResolveProjectName(string workspacePath)
+    {
+        var baseName = Path.GetFileName(workspacePath)!;
+        var projectDir = GetProjectDir(baseName);
+
+        if (!Directory.Exists(projectDir))
+            return baseName;
+
+        var config = ParseConfigEnv(Path.Combine(projectDir, "config.env"));
+        if (config.TryGetValue("WORKSPACE_PATH", out var existingPath))
+        {
+            var normalizedExisting = existingPath.Replace('\\', '/').TrimEnd('/');
+            var normalizedNew = workspacePath.Replace('\\', '/').TrimEnd('/');
+            if (normalizedExisting != normalizedNew)
+            {
+                var hash = Convert.ToHexString(
+                    MD5.HashData(Encoding.UTF8.GetBytes(workspacePath)))[..6].ToLower();
+                return $"{baseName}-{hash}";
+            }
+        }
+
+        return baseName;
+    }
 
     public static bool Exists(string projectName) =>
         Directory.Exists(GetProjectDir(projectName));
@@ -81,8 +112,6 @@ public static class ProjectScaffolder
         Directory.CreateDirectory(Path.Combine(projectDir, "opencode_sessions"));
         Directory.CreateDirectory(Path.Combine(projectDir, "logs"));
 
-        CopyHostAuth(Path.Combine(projectDir, "opencode_sessions"));
-
         var versionsEnvPath = Path.Combine(profileDir, "versions.env");
         var versionLines = "";
         if (File.Exists(versionsEnvPath))
@@ -106,7 +135,8 @@ public static class ProjectScaffolder
     /// <summary>
     /// Regenerate docker-compose.yml and AGENTS.md from the current profile
     /// template so that port/volume/instruction changes from re-prepare are
-    /// picked up automatically on existing projects.
+    /// picked up automatically on existing projects. User-editable configs
+    /// (opencode.json, oh-my-opencode.json) are NOT overwritten.
     /// </summary>
     public static void RefreshFromProfile(string projectName, string workspacePath, string profileDir)
     {
@@ -122,14 +152,6 @@ public static class ProjectScaffolder
         var agentsMd = Path.Combine(profileDir, "AGENTS.md");
         if (File.Exists(agentsMd))
             File.Copy(agentsMd, Path.Combine(projectDir, "opencode_data", "AGENTS.md"), true);
-
-        var opencodeJson = Path.Combine(ResourceManager.TemplatesDir, "opencode.json");
-        if (File.Exists(opencodeJson))
-            File.Copy(opencodeJson, Path.Combine(projectDir, "opencode_data", "opencode.json"), true);
-
-        var ohMyJson = Path.Combine(ResourceManager.TemplatesDir, "oh-my-opencode.json");
-        if (File.Exists(ohMyJson))
-            File.Copy(ohMyJson, Path.Combine(projectDir, "opencode_data", "oh-my-opencode.json"), true);
     }
 
     public static void UpdateLastStarted(string projectName)
@@ -147,8 +169,23 @@ public static class ProjectScaffolder
         ResourceManager.WriteLf(configPath, string.Join("\n", lines) + "\n");
     }
 
-    private static void CopyHostAuth(string sessionsDir)
+    public static void UpdateWorkspacePath(string projectName, string workspacePath)
     {
+        var configPath = Path.Combine(GetProjectDir(projectName), "config.env");
+        if (!File.Exists(configPath)) return;
+
+        var lines = File.ReadAllLines(configPath).ToList();
+        var idx = lines.FindIndex(l => l.StartsWith("WORKSPACE_PATH="));
+        if (idx >= 0)
+            lines[idx] = $"WORKSPACE_PATH={workspacePath}";
+        ResourceManager.WriteLf(configPath, string.Join("\n", lines) + "\n");
+    }
+
+    public static void SyncHostAuth(string projectName, Action<string>? log = null)
+    {
+        var sessionsDir = Path.Combine(GetProjectDir(projectName), "opencode_sessions");
+        Directory.CreateDirectory(sessionsDir);
+
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var hostAuth = Path.Combine(home, ".local", "share", "opencode", "auth.json");
 
@@ -164,8 +201,65 @@ public static class ProjectScaffolder
         if (info.Length <= 2) return;
 
         var dest = Path.Combine(sessionsDir, "auth.json");
-        File.Copy(hostAuth, dest, true);
-        Console.WriteLine("[sandbox] Copied host OpenCode auth into project.");
+        if (!File.Exists(dest) || File.GetLastWriteTimeUtc(hostAuth) > File.GetLastWriteTimeUtc(dest))
+        {
+            File.Copy(hostAuth, dest, true);
+            log?.Invoke("[sandbox] Synced host OpenCode auth.");
+        }
+    }
+
+    public static void WriteRuntimeEnv(string projectName)
+    {
+        var envPath = Path.Combine(GetProjectDir(projectName), "runtime.env");
+        var sb = new StringBuilder();
+        foreach (var key in ApiKeyVars)
+        {
+            var val = Environment.GetEnvironmentVariable(key);
+            if (!string.IsNullOrEmpty(val))
+                sb.AppendLine($"{key}={val}");
+        }
+        ResourceManager.WriteLf(envPath, sb.ToString());
+    }
+
+    public static void RemapPorts(string projectName, Action<string>? log = null)
+    {
+        var composePath = Path.Combine(GetProjectDir(projectName), "docker-compose.yml");
+        if (!File.Exists(composePath)) return;
+
+        var lines = File.ReadAllLines(composePath);
+        var changed = false;
+        var regex = new Regex(@"^(\s*-\s*"")(\d+):(\d+)("".*)$");
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var match = regex.Match(lines[i]);
+            if (!match.Success) continue;
+
+            var hostPort = int.Parse(match.Groups[2].Value);
+            var containerPort = int.Parse(match.Groups[3].Value);
+            var freePort = DockerRunner.FindFreePort(hostPort);
+
+            if (freePort != hostPort)
+            {
+                lines[i] = $"{match.Groups[1].Value}{freePort}:{containerPort}{match.Groups[4].Value}";
+                log?.Invoke($"[sandbox] Port {hostPort} in use -> remapped to {freePort}:{containerPort}");
+                changed = true;
+            }
+        }
+
+        if (changed)
+            ResourceManager.WriteLf(composePath, string.Join("\n", lines) + "\n");
+    }
+
+    public static void RemoveProject(string projectName)
+    {
+        var projectDir = GetProjectDir(projectName);
+        var composeFile = Path.Combine(projectDir, "docker-compose.yml");
+        if (File.Exists(composeFile))
+            DockerRunner.ComposeDownVolumes(composeFile, projectDir);
+
+        if (Directory.Exists(projectDir))
+            Directory.Delete(projectDir, true);
     }
 
     public static bool HasDockerfileExtension(string projectName)

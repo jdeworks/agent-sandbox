@@ -13,37 +13,121 @@ The sandbox environment is tailored to your project -- you pick the languages yo
 **Windows:**
 - **Docker Desktop** -- that's it. The self-contained exe handles everything else (see [Windows Support](#windows-support)).
 
-## Setup
+## Quick Start
+
+### Linux / macOS / WSL
 
 ```bash
+# 1. One-time setup (installs aliases, optionally creates default profiles)
 ./agent-worker/scripts/unix/setup.sh
+source ~/.bash_aliases
+
+# 2. Sandbox any project
+sandbox-python ~/my-project
 ```
 
-Checks for Docker, Docker Compose, and jq. Offers to install Docker if missing. Adds a `prepare` alias to your shell.
+The setup script checks for Docker/jq, installs helper aliases (`sandbox-list`, `sandbox-stats`, `sandbox-cleanup`), and offers to create **default single-language profiles**. If you pick Python during setup, `sandbox-python` is ready to use immediately -- no `prepare` step needed.
 
-## Prepare an Environment
-
-Before you can sandbox a project, you need to prepare a profile that matches your tech stack.
+For multi-language projects (e.g. Python + Node), use `prepare` to create a combined profile:
 
 ```bash
-# Auto-detect languages from a project directory:
-prepare
-
-# Or run the prepare script directly:
-./agent-worker/scripts/unix/prepare.sh
+prepare                     # interactive: auto-detects or manual pick
+sandbox-python-node .       # use the new profile
 ```
 
-The prepare command will:
+### Windows
 
-1. Ask if you want to **auto-detect** languages (scans for `requirements.txt`, `package.json`, `go.mod`, etc. up to 3 levels deep) or **manually pick** from the list
-2. **Detect versions** -- scans project files (`.python-version`, `.nvmrc`, `go.mod`, `pom.xml`, etc.) for pinned language versions, with an option to override
-3. **Detect ports** -- scans dependency manifests for known frameworks (Flask, Next.js, FastAPI, Vite, etc.) and selects the right ports automatically
-4. Let you review detected ports and add extras
-5. Let you name the profile (defaults to the language combo, e.g. `python-node`)
-6. Generate a tailored Docker environment in `agent-worker/prepared/<profile>/`
-7. Create a `sandbox-<profile>` alias
+**GUI:** Double-click `agent-sandbox.exe`. On first launch, a **Quick Setup** screen lets you create default profiles by checking the languages you want. Then pick a folder, Scan, and Launch.
 
-### Available Languages
+**CLI:**
+```
+agent-sandbox setup                            One-time: create default profiles
+agent-sandbox sandbox C:\path\to\project       Launch a sandbox
+```
+
+## How It Works
+
+1. **Setup** creates profiles -- pre-built Docker environments tailored to specific languages
+2. **Sandbox** launches a container from a profile, mounts your project, and starts OpenCode inside it
+3. Your source code is bind-mounted; config, sessions, and caches are persisted on the host
+
+Each profile generates:
+- A `Dockerfile.base` with the selected language runtimes
+- A `docker-compose.yml.tpl` with the right volumes, ports, and environment
+- An `install.sh` entrypoint that auto-installs dependencies on startup
+- An `AGENTS.md` with tailored instructions for the AI agent
+
+## Profiles
+
+A profile defines the language runtimes and ports for a sandbox. There are two ways to create profiles:
+
+### Default profiles (single-language)
+
+Created during setup. Each gives you a `sandbox-<lang>` alias (Unix) or can be referenced with `--profile <lang>` (Windows CLI):
+
+```bash
+# Unix: created automatically during setup
+sandbox-python /path/to/project
+sandbox-node /path/to/project
+sandbox-go /path/to/project
+
+# Windows CLI
+agent-sandbox sandbox --profile python C:\project
+```
+
+### Custom profiles (multi-language)
+
+Created with `prepare`. Auto-detects languages and frameworks, lets you pick versions and ports:
+
+```bash
+# Unix
+prepare
+# → scans your project, detects python + node + go
+# → creates sandbox-python-go-node alias
+
+# Windows CLI
+agent-sandbox prepare C:\project
+
+# Windows GUI
+# Just click "Scan & Continue" -- it handles everything
+```
+
+### Profile management
+
+```bash
+# Unix
+prepare --list                  # show all profiles
+prepare --delete python-node    # remove a profile
+
+# Windows CLI
+agent-sandbox profiles                   # list all
+agent-sandbox profiles delete python     # remove one
+```
+
+## Running a Sandbox
+
+```bash
+# Launch with a project path:
+sandbox-python-node /path/to/my-project
+
+# Or from inside the project directory:
+cd ~/my-project && sandbox-python-node .
+
+# Run without arguments to pick from recent projects:
+sandbox-python-node
+```
+
+On **first run** for a project:
+
+1. Builds the profile's base image (cached if unchanged)
+2. Scaffolds a project folder under `agent-worker/projects/<name>/` with all config
+3. Starts the container, waits for it to be ready, and launches OpenCode
+
+On **subsequent runs** it reuses the existing project config. If the container is already running, you can **reattach** (open a new OpenCode session in the existing container) or **rebuild** from scratch.
+
+Running without a path shows **recent projects** for that profile, sorted by last used. Projects whose workspace path no longer exists are marked `[PATH MISSING]`.
+
+## Available Languages
 
 | Language | Detection files | What it adds |
 |---|---|---|
@@ -61,37 +145,145 @@ The prepare command will:
 
 New languages can be added by editing `agent-worker/sandbox/languages.json` and adding matching fragments in `agent-worker/sandbox/fragments/` (see the [fragments README](agent-worker/sandbox/fragments/README.md) for details).
 
-## Quick Start
+## Ports
 
-```bash
-# After preparing a profile, sandbox any project:
-sandbox-python-node /path/to/my-project
+Ports are **dynamically selected** during profile creation based on the languages and frameworks detected in your project.
 
-# Or from inside the project directory:
-cd ~/my-project && sandbox-python-node .
+### How port detection works
 
-# Run without arguments to pick from recent projects:
-sandbox-python-node
+1. **Base ports** (3000, 8080) are always included -- 3000 covers the most common dev server default and Node.js is always available in the base image
+2. **Language defaults** are added for each selected language (e.g. Python adds 5000 and 8000)
+3. **Framework detection** scans dependency manifests (`requirements.txt`, `package.json`, `go.mod`, `Cargo.toml`) for known frameworks and adds their ports -- for example, detecting `vite` in `package.json` adds 5173 and 24678. **Node.js framework detection always runs** (even if Node wasn't explicitly selected) because Node is part of the base image and frontend tooling can appear in any project
+4. You can **add extra ports** at the prompt or accept the defaults
+5. Only the needed ports end up in the generated `docker-compose.yml.tpl`
+
+> **Note:** If you add a new framework or language to a project after the initial profile creation, re-run `prepare` to update port forwarding and language tooling. The agent is instructed to remind you of this via `AGENTS.md`.
+
+### Supported frameworks
+
+| Language | Frameworks | Default ports |
+|---|---|---|
+| C# / .NET | ASP.NET, Blazor | 5000, 5001 |
+| Dart | shelf, dart_frog, Serverpod | 8080, 8081 |
+| Go | Gin, Fiber, Echo | 8080, 3000, 1323 |
+| Java | Spring Boot, Quarkus, Micronaut | 8080 |
+| Kotlin | Ktor, Spring Boot | 8080 |
+| Node.js | Next.js, Vite, Angular, CRA, Express, Nuxt, Svelte, Remix, Astro | 3000, 5173, 4200, 4321, 24678 |
+| PHP | Laravel, Symfony, Slim | 8000, 8080 |
+| Python | Flask, Django, FastAPI/uvicorn, Streamlit, Gradio, Jupyter | 5000, 8000, 8501, 7860, 8888 |
+| Ruby | Rails, Sinatra, Hanami | 3000, 4567, 2300 |
+| Rust | Actix, Axum, Rocket | 8080, 3000, 8000 |
+
+To add framework entries, edit `agent-worker/sandbox/ports.json`.
+
+## Multiple Sandboxes
+
+You can run multiple sandboxes simultaneously. When a port is already in use by another sandbox, the system automatically remaps it to the next available port and prints the mapping:
+
+```
+[sandbox] Port 3000 in use -> remapped to 3001:3000
 ```
 
-On **first run** for a project the script will:
+The container-side port stays the same; only the host-side mapping changes.
 
-1. Build the profile's base image (cached if unchanged)
-2. Scaffold a project folder under `agent-worker/projects/<name>/` with all config
-3. Start the container and launch OpenCode
+## Authentication & API Keys
 
-On **subsequent runs** it reuses the existing project config. If the container is already running, you'll be asked to **reattach** (open a new OpenCode session in the existing container) or **rebuild** from scratch.
+**Auth sync:** OpenCode authentication (`auth.json`) is synced from the host to the container on every startup. If you re-authenticate on the host, the next sandbox launch picks up the new credentials automatically.
 
-Running `sandbox-<profile>` **without a path** shows a list of recent projects for that profile, sorted by last used. Pick a number to continue where you left off, or type a new path.
+**API key passthrough:** If you have API keys set in your host environment, they are automatically forwarded into the container via a `runtime.env` file on every startup:
+
+- `ANTHROPIC_API_KEY`
+- `OPENAI_API_KEY`
+- `OPENROUTER_API_KEY`
+- `OPENCODE_API_KEY`
+- `GEMINI_API_KEY`
+
+## OpenCode Configuration
+
+All OpenCode config lives in the `opencode_data/` directory, which maps to `~/.config/opencode` inside the container (the global config location). This ensures config is always loaded regardless of the workspace's git structure.
+
+- **`opencode.json`** -- Main config (model, compaction, plugins). Loaded as global config. Not overwritten on subsequent runs to preserve your customizations.
+- **`AGENTS.md`** -- Agent instructions for the sandbox environment. Assembled from the base template plus language-specific fragments, so it only mentions the tools that are actually installed.
+- **`oh-my-opencode.json`** -- Model overrides for oh-my-opencode agents (Sisyphus, Oracle, Librarian, etc.). Not overwritten on subsequent runs to preserve your customizations.
+
+### oh-my-opencode
+
+The [oh-my-opencode](https://github.com/code-yeongyu/oh-my-opencode) plugin is enabled by default. It provides multi-model orchestration with specialized agents, background tasks, and the `ultrawork` / `ulw` prompt keyword for intensive autonomous coding sessions.
+
+To disable it for a project, remove `"oh-my-opencode"` from the `plugin` array in that project's `opencode_data/opencode.json`.
+
+## Dockerfile.extension
+
+When the agent needs system-level packages (e.g. `apt install`), it creates a `Dockerfile.extension` file at `/workspace/.sandbox/Dockerfile.extension` inside the container. This maps to `projects/<name>/sandbox_data/Dockerfile.extension` on the host -- never polluting your source code directory.
+
+When the OpenCode session ends, you'll be prompted to bake those changes into the project's Dockerfile. If you accept, the container is stopped so the next run triggers a rebuild with the new layers. The extension file is then removed automatically. You can also defer -- the prompt will reappear before the next startup.
+
+## Helper Commands
+
+### Unix
+
+```bash
+sandbox-list                    # List all projects with status, profile, and workspace
+sandbox-stats                   # Show disk usage: images, volumes, per-project
+sandbox-cleanup my-project      # Remove a specific project
+sandbox-cleanup --all           # Remove all projects, containers, and volumes
+prepare --list                  # List all prepared profiles
+prepare --delete python-node    # Delete a profile and its alias
+```
+
+### Windows
+
+```
+agent-sandbox list                       List all projects
+agent-sandbox stats                      Show disk usage
+agent-sandbox cleanup [<project>]        Remove a project (or --all)
+agent-sandbox profiles                   List prepared profiles
+agent-sandbox profiles delete <name>     Delete a profile
+```
+
+The Windows GUI also has **Remove** and **Re-scan** buttons in the recent projects list for managing and updating existing projects.
+
+## How Dependencies Work
+
+- **C/C++**: CMake projects are detected; build tools are ready. No auto-install (no standard package manager).
+- **C# / .NET**: `dotnet restore` runs when `.csproj` / `.fsproj` files change.
+- **Dart**: `dart pub get` runs when `pubspec.yaml` changes.
+- **Go**: `go mod download` runs when `go.sum` changes.
+- **Java**: `mvn dependency:resolve` runs when `pom.xml` changes. Gradle wrapper projects resolve via `./gradlew dependencies`.
+- **Kotlin**: Gradle wrapper resolves dependencies when `build.gradle(.kts)` changes.
+- **Node**: `npm install` runs in `/workspace/src` when `package.json` changes.
+- **PHP**: `composer install` runs when `composer.json` changes.
+- **Python**: A venv is created at `/workspace/.venv` (named volume). `requirements.txt` from the workspace is auto-installed on startup when it changes.
+- **Ruby**: `bundle install` runs when `Gemfile` / `Gemfile.lock` changes. Gems go to `/workspace/.gems`.
+- **Rust**: `cargo fetch` runs when `Cargo.lock` changes.
+
+All dependency installs are fingerprinted with md5 checksums so they are skipped when nothing changed.
+
+## Logs
+
+OpenCode log files are persisted in the project's `logs/` directory. After a session:
+
+```bash
+ls agent-worker/projects/<name>/logs/
+```
+
+For more verbose output, run OpenCode with `opencode --log-level DEBUG`.
+
+## Container Layout
+
+| Host path (relative to project) | Container path | Purpose |
+|---|---|---|
+| Your workspace folder | `/workspace/src` (workdir) | Source code only |
+| `opencode_data/` | `/workspace/.config/opencode` | Global OpenCode config, AGENTS.md, plugin config |
+| `opencode_sessions/` | `/workspace/.local/share/opencode` | Session data, auth |
+| `logs/` | `/workspace/.local/share/opencode/log` | OpenCode log files |
+| `sandbox_data/` | `/workspace/.sandbox` | Dependency log, Dockerfile.extension |
+
+Additional named Docker volumes are created per-profile for caches (venv, pip, npm, cargo, etc.).
 
 ## Project Structure
 
 ```
-tools/
-  build-windows.sh                   # Build the Windows exe via Docker (no local .NET needed)
-  dist/                              # Build output (agent-sandbox.exe) -- gitignored
-  AgentSandbox/                      # Windows EXE (C# .NET 8.0, self-contained)
-
 agent-worker/
   sandbox/                           # Language registry, port lookup, templates
     Dockerfile.base.tpl              #   Minimal base: Ubuntu + Node + OpenCode
@@ -116,7 +308,7 @@ agent-worker/
     oh-my-opencode.json              #   oh-my-opencode agent model overrides
   scripts/
     unix/                            # Scripts that run on the host (Linux / macOS / WSL)
-      setup.sh                       #   First-time setup (Docker, jq, prepare alias)
+      setup.sh                       #   First-time setup (Docker, jq, aliases, default profiles)
       prepare.sh                     #   Interactive profile builder (language + port selection)
       sandbox.sh                     #   Core sandbox logic (called by profile wrappers)
       sandbox-list.sh                #   List all projects with status and profile
@@ -124,7 +316,7 @@ agent-worker/
       sandbox-cleanup.sh             #   Remove projects, containers, volumes
   projects/                          # Auto-generated per-project data
     <name>/
-      docker-compose.yml, Dockerfile, config.env
+      docker-compose.yml, Dockerfile, config.env, runtime.env
       sandbox_data/                  #   → /workspace/.sandbox
         changes.txt                  #     Dependency change log
         Dockerfile.extension         #     Agent-created system changes (transient)
@@ -132,114 +324,12 @@ agent-worker/
         opencode.json, oh-my-opencode.json, AGENTS.md
       opencode_sessions/             #   → ~/.local/share/opencode
       logs/                          #   → ~/.local/share/opencode/log
+
+tools/
+  build-windows.sh                   # Build the Windows exe via Docker (no local .NET needed)
+  dist/                              # Build output (agent-sandbox.exe) -- gitignored
+  AgentSandbox/                      # Windows EXE (C# .NET 8.0, self-contained)
 ```
-
-## Container Layout
-
-| Host path (relative to project) | Container path | Purpose |
-|---|---|---|
-| Your workspace folder | `/workspace/src` (workdir) | Source code only |
-| `opencode_data/` | `/workspace/.config/opencode` | Global OpenCode config, AGENTS.md, plugin config |
-| `opencode_sessions/` | `/workspace/.local/share/opencode` | Session data, auth |
-| `logs/` | `/workspace/.local/share/opencode/log` | OpenCode log files |
-| `sandbox_data/` | `/workspace/.sandbox` | Dependency log, Dockerfile.extension |
-
-Additional named Docker volumes are created per-profile for caches (venv, pip, npm, cargo, etc.).
-
-## OpenCode Configuration
-
-All OpenCode config lives in the `opencode_data/` directory, which maps to `~/.config/opencode` inside the container (the global config location). This ensures config is always loaded regardless of the workspace's git structure.
-
-- **`opencode.json`** -- Main config (model, compaction, plugins). Loaded as global config.
-- **`AGENTS.md`** -- Agent instructions for the sandbox environment. Assembled from the base template plus language-specific fragments, so it only mentions the tools that are actually installed.
-- **`oh-my-opencode.json`** -- Model overrides for oh-my-opencode agents (Sisyphus, Oracle, Librarian, etc.).
-
-### oh-my-opencode
-
-The [oh-my-opencode](https://github.com/code-yeongyu/oh-my-opencode) plugin is enabled by default. It provides multi-model orchestration with specialized agents, background tasks, and the `ultrawork` / `ulw` prompt keyword for intensive autonomous coding sessions.
-
-To disable it for a project, remove `"oh-my-opencode"` from the `plugin` array in that project's `opencode_data/opencode.json`.
-
-## Logs
-
-OpenCode log files are persisted in the project's `logs/` directory. After a session:
-
-```bash
-ls agent-worker/projects/<name>/logs/
-```
-
-For more verbose output, run OpenCode with `opencode --log-level DEBUG`.
-
-## Ports
-
-Ports are **dynamically selected** during `prepare` based on the languages and frameworks detected in your project. The system uses `agent-worker/sandbox/ports.json` as a lookup table.
-
-### How port detection works
-
-1. **Base ports** (3000, 8080) are always included -- 3000 covers the most common dev server default and Node.js is always available in the base image
-2. **Language defaults** are added for each selected language (e.g. Python adds 5000 and 8000)
-3. **Framework detection** scans dependency manifests (`requirements.txt`, `package.json`, `go.mod`, `Cargo.toml`) for known frameworks and adds their ports -- for example, detecting `vite` in `package.json` adds 5173 and 24678. **Node.js framework detection always runs** (even if Node wasn't explicitly selected) because Node is part of the base image and frontend tooling can appear in any project
-4. You can **add extra ports** at the prompt or accept the defaults
-5. Only the needed ports end up in the generated `docker-compose.yml.tpl`
-
-> **Note:** If you add a new framework or language to a project after the initial `prepare` (e.g. adding a React frontend to a Python-only sandbox), re-run `prepare` to update port forwarding and language tooling. The agent is instructed to remind you of this via `AGENTS.md`.
-
-### Supported frameworks
-
-| Language | Frameworks | Default ports |
-|---|---|---|
-| C# / .NET | ASP.NET, Blazor | 5000, 5001 |
-| Dart | shelf, dart_frog, Serverpod | 8080, 8081 |
-| Go | Gin, Fiber, Echo | 8080, 3000, 1323 |
-| Java | Spring Boot, Quarkus, Micronaut | 8080 |
-| Kotlin | Ktor, Spring Boot | 8080 |
-| Node.js | Next.js, Vite, Angular, CRA, Express, Nuxt, Svelte, Remix, Astro | 3000, 5173, 4200, 4321, 24678 |
-| PHP | Laravel, Symfony, Slim | 8000, 8080 |
-| Python | Flask, Django, FastAPI/uvicorn, Streamlit, Gradio, Jupyter | 5000, 8000, 8501, 7860, 8888 |
-| Ruby | Rails, Sinatra, Hanami | 3000, 4567, 2300 |
-| Rust | Actix, Axum, Rocket | 8080, 3000, 8000 |
-
-To add framework entries, edit `agent-worker/sandbox/ports.json`.
-
-## Dockerfile.extension
-
-When the agent needs system-level packages (e.g. `apt install`), it creates a `Dockerfile.extension` file at `/workspace/.sandbox/Dockerfile.extension` inside the container. This maps to `projects/<name>/sandbox_data/Dockerfile.extension` on the host -- never polluting your source code directory.
-
-When the OpenCode session ends, you'll be prompted to bake those changes into the project's Dockerfile. If you accept, the container is stopped so the next run triggers a rebuild with the new layers. The extension file is then removed automatically. You can also defer -- the prompt will reappear before the next startup.
-
-## Helper Scripts
-
-```bash
-# List all sandboxed projects with status, profile, and workspace path
-sandbox-list
-
-# Show disk usage: base images, per-project volumes, Docker overview
-sandbox-stats
-
-# Remove all projects, containers, and volumes
-sandbox-cleanup
-
-# Also remove all agent-sandbox images
-sandbox-cleanup --all
-```
-
-The helper scripts discover volumes dynamically from each project's `docker-compose.yml`, so they work correctly regardless of which languages a profile includes.
-
-## How Dependencies Work
-
-- **C/C++**: CMake projects are detected; build tools are ready. No auto-install (no standard package manager).
-- **C# / .NET**: `dotnet restore` runs when `.csproj` / `.fsproj` files change.
-- **Dart**: `dart pub get` runs when `pubspec.yaml` changes.
-- **Go**: `go mod download` runs when `go.sum` changes.
-- **Java**: `mvn dependency:resolve` runs when `pom.xml` changes. Gradle wrapper projects resolve via `./gradlew dependencies`.
-- **Kotlin**: Gradle wrapper resolves dependencies when `build.gradle(.kts)` changes.
-- **Node**: `npm install` runs in `/workspace/src` when `package.json` changes.
-- **PHP**: `composer install` runs when `composer.json` changes.
-- **Python**: A venv is created at `/workspace/.venv` (named volume). `requirements.txt` from the workspace is auto-installed on startup when it changes.
-- **Ruby**: `bundle install` runs when `Gemfile` / `Gemfile.lock` changes. Gems go to `/workspace/.gems`.
-- **Rust**: `cargo fetch` runs when `Cargo.lock` changes.
-
-All dependency installs are fingerprinted with md5 checksums so they are skipped when nothing changed.
 
 ## Adding Languages
 
@@ -265,13 +355,17 @@ The exe embeds all sandbox data (language definitions, Dockerfile templates, fra
 
 ### Building the EXE
 
-From WSL or any Linux/macOS host with Docker:
+From WSL or any Linux/macOS host with Docker (no local .NET needed):
 
 ```bash
+# Full build -- produces tools/dist/agent-sandbox.exe
 ./tools/build-windows.sh
+
+# Compile check only -- fast, verifies code compiles without producing the exe
+./tools/build-windows.sh --check
 ```
 
-This cross-compiles from the Linux .NET 8.0 SDK image (the Windows Desktop targeting pack for WinForms is pulled from NuGet automatically). The output is a single `tools/dist/agent-sandbox.exe`.
+The build script cross-compiles from the Linux .NET 8.0 SDK image (the Windows Desktop targeting pack for WinForms is pulled from NuGet automatically). A persistent Docker volume caches NuGet packages so subsequent builds are fast.
 
 Alternatively, on Windows with the .NET 8.0 SDK installed:
 
@@ -280,15 +374,16 @@ cd tools\AgentSandbox
 dotnet publish -c Release -o ..\dist
 ```
 
-### Usage
+### GUI Usage
 
 **Double-click** the exe (or run without arguments) to open the GUI wizard:
 
-1. **Folder picker** -- Browse button opens a native Windows folder dialog (handles paths with spaces correctly)
-2. **Recent Projects** -- previously launched projects are listed below the folder picker, sorted by last used. Select one and click "Continue with Selected" to quick-launch without re-running detection
-3. **Scan** -- for new projects, auto-detects languages, versions, frameworks, and ports
-4. **Review** -- checkboxes for languages, editable version fields, editable port list, profile name
-5. **Launch** -- generates the profile, builds the Docker image, scaffolds the project, and attaches to the container
+1. **Quick Setup** -- shown on first launch (or via the "Manage Profiles..." button). Check the languages you want and click "Create Selected Profiles" to generate default single-language profiles. Existing profiles are marked. Click "Continue to Project Selection" when done.
+2. **Folder picker** -- Browse button opens a native Windows folder dialog (handles paths with spaces correctly)
+3. **Recent Projects** -- previously launched projects are listed below the folder picker, sorted by last used. Select one and click "Continue with Selected" to quick-launch without re-running detection. You can also **Remove** projects or **Re-scan** them to update languages/versions/ports.
+4. **Scan** -- for new projects, auto-detects languages, versions, frameworks, and ports
+5. **Review** -- checkboxes for languages, editable version fields, editable port list, profile name
+6. **Launch** -- generates the profile, builds the Docker image, scaffolds the project, and attaches to the container
 
 The wizard can also be pre-filled with a path:
 
@@ -296,16 +391,20 @@ The wizard can also be pre-filled with a path:
 agent-sandbox C:\path\to\project
 ```
 
-**CLI mode** (for terminal / scripting) is available via explicit subcommands:
+### CLI Usage
 
 ```
-agent-sandbox prepare C:\project     Prepare a profile without launching
-agent-sandbox sandbox C:\project     Launch using an existing profile
-agent-sandbox sandbox                Pick from recent projects
-agent-sandbox list                   List all projects
-agent-sandbox stats                  Show disk usage
-agent-sandbox cleanup [<project>]    Remove a project (or --all)
-agent-sandbox help                   Show this help
+agent-sandbox setup                            Guided first-time setup (create default profiles)
+agent-sandbox prepare C:\project               Prepare a profile without launching
+agent-sandbox sandbox C:\project               Launch using an existing profile
+agent-sandbox sandbox --profile python C:\proj  Launch with a specific profile
+agent-sandbox sandbox                          Pick from recent projects
+agent-sandbox list                             List all projects
+agent-sandbox stats                            Show disk usage
+agent-sandbox cleanup [<project>]              Remove a project (or --all)
+agent-sandbox profiles                         List prepared profiles
+agent-sandbox profiles delete <name>           Delete a profile
+agent-sandbox help                             Show this help
 ```
 
 ### Data location
@@ -322,7 +421,7 @@ All data is stored under `%APPDATA%\AgentSandbox\`:
   projects/                  # Per-project data (compose files, config, logs)
 ```
 
-### Project structure (tools)
+### Windows project structure
 
 ```
 tools/
@@ -331,7 +430,7 @@ tools/
   AgentSandbox/                      # C# .NET 8.0 project
     AgentSandbox.csproj              #   Self-contained single-file publish config
     Program.cs                       #   Entry point: routes to GUI wizard or CLI mode
-    Cli.cs                           #   CLI subcommands (prepare, sandbox, list, stats, cleanup)
+    Cli.cs                           #   CLI subcommands (setup, prepare, sandbox, list, stats, cleanup)
     Models/                          #   DTOs for languages.json, ports.json, ProfileSpec
     Services/                        #   Detection, generation, Docker, scaffolding, resources
     UI/

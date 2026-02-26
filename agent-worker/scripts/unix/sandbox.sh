@@ -92,6 +92,102 @@ usage() {
     exit 1
 }
 
+is_port_in_use() {
+    local port="$1"
+    ss -tlnH 2>/dev/null | grep -q ":${port} " && return 0
+    return 1
+}
+
+find_free_port() {
+    local port="$1"
+    local max=$((port + 100))
+    while is_port_in_use "$port" && [ "$port" -lt "$max" ]; do
+        port=$((port + 1))
+    done
+    echo "$port"
+}
+
+remap_compose_ports() {
+    local compose_file="$1"
+    local tmpfile
+    tmpfile=$(mktemp)
+    local any_remapped=false
+
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^([[:space:]]*-[[:space:]]*\")([0-9]+):([0-9]+)(\".*) ]]; then
+            local prefix="${BASH_REMATCH[1]}"
+            local host_port="${BASH_REMATCH[2]}"
+            local container_port="${BASH_REMATCH[3]}"
+            local suffix="${BASH_REMATCH[4]}"
+            local free_port
+            free_port=$(find_free_port "$host_port")
+            if [ "$free_port" != "$host_port" ]; then
+                echo "${prefix}${free_port}:${container_port}${suffix}" >> "$tmpfile"
+                echo "[sandbox] Port $host_port in use -> remapped to $free_port:$container_port"
+                any_remapped=true
+            else
+                echo "$line" >> "$tmpfile"
+            fi
+        else
+            echo "$line" >> "$tmpfile"
+        fi
+    done < "$compose_file"
+
+    mv "$tmpfile" "$compose_file"
+}
+
+wait_for_ready() {
+    local container="$1"
+    local timeout="${2:-120}"
+    local elapsed=0
+
+    echo -n "[sandbox] Waiting for container to be ready"
+    while [ "$elapsed" -lt "$timeout" ]; do
+        if docker exec "$container" test -f /tmp/.sandbox-ready 2>/dev/null; then
+            echo " done."
+            return 0
+        fi
+        if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$container"; then
+            echo " failed."
+            echo "[sandbox] Container stopped unexpectedly. Check logs with:"
+            echo "  docker logs $container"
+            return 1
+        fi
+        echo -n "."
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+
+    echo " timeout."
+    echo "[sandbox] Warning: container did not become ready within ${timeout}s. Proceeding anyway."
+    return 0
+}
+
+sync_host_auth() {
+    local sessions_dir="$1"
+    local host_auth="$HOME/.local/share/opencode/auth.json"
+    local dest="$sessions_dir/auth.json"
+
+    [ -f "$host_auth" ] || return 0
+    [ "$(stat -c%s "$host_auth" 2>/dev/null || echo 0)" -gt 2 ] || return 0
+
+    if [ ! -f "$dest" ] || [ "$host_auth" -nt "$dest" ]; then
+        cp "$host_auth" "$dest"
+        echo "[sandbox] Synced host OpenCode auth."
+    fi
+}
+
+write_runtime_env() {
+    local env_file="$1"
+    > "$env_file"
+    local vars=(ANTHROPIC_API_KEY OPENAI_API_KEY OPENROUTER_API_KEY OPENCODE_API_KEY GEMINI_API_KEY)
+    for var in "${vars[@]}"; do
+        if [ -n "${!var:-}" ]; then
+            echo "${var}=${!var}" >> "$env_file"
+        fi
+    done
+}
+
 ########################################
 # Resolve workspace path
 ########################################
@@ -126,7 +222,9 @@ else
     echo "[sandbox] Recent projects (profile: $PROFILE_NAME):"
     echo ""
     for _i in "${!_rp_names[@]}"; do
-        printf "  %d) %-25s %s\n" "$((_i + 1))" "${_rp_names[$_i]}" "${_rp_paths[$_i]}"
+        _marker=""
+        [ ! -d "${_rp_paths[$_i]}" ] && _marker=" [PATH MISSING]"
+        printf "  %d) %-25s %s%s\n" "$((_i + 1))" "${_rp_names[$_i]}" "${_rp_paths[$_i]}" "$_marker"
         printf "     Last used: %s\n" "${_rp_times[$_i]}"
     done
     echo ""
@@ -138,6 +236,10 @@ else
             _idx=$((_choice - 1))
             if [ "$_idx" -ge 0 ] && [ "$_idx" -lt "${#_rp_names[@]}" ]; then
                 WORKSPACE_PATH="${_rp_paths[$_idx]}"
+                if [ ! -d "$WORKSPACE_PATH" ]; then
+                    echo "[sandbox] Error: workspace path no longer exists: $WORKSPACE_PATH"
+                    exit 1
+                fi
             else
                 echo "[sandbox] Invalid selection."
                 exit 1
@@ -156,6 +258,17 @@ fi
 
 PROJECT_NAME="$(basename "$WORKSPACE_PATH")"
 PROJECT_DIR="$PROJECTS_DIR/$PROJECT_NAME"
+
+# Handle name collision: different workspace mapped to same project name
+if [ -d "$PROJECT_DIR" ] && [ -f "$PROJECT_DIR/config.env" ]; then
+    existing_ws=$(grep '^WORKSPACE_PATH=' "$PROJECT_DIR/config.env" | cut -d= -f2-)
+    if [ -n "$existing_ws" ] && [ "$existing_ws" != "$WORKSPACE_PATH" ]; then
+        suffix=$(echo "$WORKSPACE_PATH" | md5sum | cut -c1-6)
+        PROJECT_NAME="${PROJECT_NAME}-${suffix}"
+        PROJECT_DIR="$PROJECTS_DIR/$PROJECT_NAME"
+        echo "[sandbox] Name collision detected, using: $PROJECT_NAME"
+    fi
+fi
 
 CONTAINER_NAME="sandbox-$PROJECT_NAME"
 
@@ -217,13 +330,6 @@ if [ ! -d "$PROJECT_DIR" ]; then
     mkdir -p "$PROJECT_DIR/opencode_sessions"
     mkdir -p "$PROJECT_DIR/logs"
 
-    # Copy host OpenCode auth so Zen credentials are available inside the container
-    HOST_AUTH="$HOME/.local/share/opencode/auth.json"
-    if [ -f "$HOST_AUTH" ] && [ "$(stat -c%s "$HOST_AUTH" 2>/dev/null || echo 0)" -gt 2 ]; then
-        cp "$HOST_AUTH" "$PROJECT_DIR/opencode_sessions/auth.json"
-        echo "[sandbox] Copied host OpenCode auth into project."
-    fi
-
     {
         echo "WORKSPACE_PATH=$WORKSPACE_PATH"
         echo "PROJECT_NAME=$PROJECT_NAME"
@@ -240,23 +346,26 @@ if [ ! -d "$PROJECT_DIR" ]; then
 else
     echo "[sandbox] Existing project found."
 
-    # Regenerate compose, AGENTS.md, and config templates from current profile
-    # so port/volume/model changes from re-prepare are picked up automatically.
+    # Regenerate compose and AGENTS.md from current profile so port/volume
+    # changes from re-prepare are picked up. User-editable configs
+    # (opencode.json, oh-my-opencode.json) are NOT overwritten to preserve
+    # customizations made inside the project.
     sed \
         -e "s|{{PROJECT_NAME}}|${PROJECT_NAME}|g" \
         -e "s|{{WORKSPACE_PATH}}|${WORKSPACE_PATH}|g" \
         "$SANDBOX_PROFILE_DIR/docker-compose.yml.tpl" > "$PROJECT_DIR/docker-compose.yml"
     cp "$SANDBOX_PROFILE_DIR/AGENTS.md" "$PROJECT_DIR/opencode_data/AGENTS.md"
-    cp "$TEMPLATES_DIR/opencode.json" "$PROJECT_DIR/opencode_data/opencode.json"
-    cp "$TEMPLATES_DIR/oh-my-opencode.json" "$PROJECT_DIR/opencode_data/oh-my-opencode.json"
 fi
 
-# Update LAST_STARTED on every run
+# Update LAST_STARTED and WORKSPACE_PATH on every run
 if [ -f "$PROJECT_DIR/config.env" ]; then
     if grep -q '^LAST_STARTED=' "$PROJECT_DIR/config.env"; then
         sed -i "s|^LAST_STARTED=.*|LAST_STARTED=$(date -Iseconds)|" "$PROJECT_DIR/config.env"
     else
         echo "LAST_STARTED=$(date -Iseconds)" >> "$PROJECT_DIR/config.env"
+    fi
+    if grep -q '^WORKSPACE_PATH=' "$PROJECT_DIR/config.env"; then
+        sed -i "s|^WORKSPACE_PATH=.*|WORKSPACE_PATH=${WORKSPACE_PATH}|" "$PROJECT_DIR/config.env"
     fi
 fi
 
@@ -269,6 +378,21 @@ mkdir -p "$PROJECT_DIR/logs"
 mkdir -p "$PROJECT_DIR/sandbox_data"
 
 ########################################
+# Sync host auth (refreshed every run)
+########################################
+sync_host_auth "$PROJECT_DIR/opencode_sessions"
+
+########################################
+# Write runtime env (API keys from host)
+########################################
+write_runtime_env "$PROJECT_DIR/runtime.env"
+
+########################################
+# Port remapping: avoid conflicts with other running sandboxes
+########################################
+remap_compose_ports "$PROJECT_DIR/docker-compose.yml"
+
+########################################
 # Dockerfile.extension: offer to merge before starting
 ########################################
 check_dockerfile_extension
@@ -278,6 +402,11 @@ check_dockerfile_extension
 ########################################
 echo "[sandbox] Starting container $CONTAINER_NAME..."
 docker compose -f "$PROJECT_DIR/docker-compose.yml" --project-directory "$PROJECT_DIR" up -d --build
+
+########################################
+# Wait for container to finish init
+########################################
+wait_for_ready "$CONTAINER_NAME" || true
 
 echo "[sandbox] Attaching to $CONTAINER_NAME..."
 docker exec -it "$CONTAINER_NAME" opencode

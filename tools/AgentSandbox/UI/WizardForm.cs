@@ -10,9 +10,16 @@ public sealed class WizardForm : Form
     private readonly Dictionary<string, PortConfig> _portConfigs;
 
     // Step panels
+    private Panel _stepSetup = null!;
     private Panel _stepFolder = null!;
     private Panel _stepDetect = null!;
     private Panel _stepLaunch = null!;
+
+    // Step 0: setup / manage profiles
+    private CheckedListBox _lstSetupLangs = null!;
+    private Button _btnCreateProfiles = null!;
+    private Button _btnSkipSetup = null!;
+    private Label _lblSetupStatus = null!;
 
     // Step 1: folder + recent projects
     private TextBox _txtPath = null!;
@@ -20,6 +27,9 @@ public sealed class WizardForm : Form
     private Button _btnScan = null!;
     private ListView _lstRecent = null!;
     private Button _btnContinue = null!;
+    private Button _btnRescan = null!;
+    private Button _btnRemove = null!;
+    private Button _btnManageProfiles = null!;
 
     // Step 2: detection results
     private CheckedListBox _lstLanguages = null!;
@@ -53,16 +63,177 @@ public sealed class WizardForm : Form
         Font = new Font("Segoe UI", 9.5f);
         BackColor = Color.White;
 
+        BuildStepSetup();
         BuildStepFolder();
         BuildStepDetect();
         BuildStepLaunch();
 
-        ShowStep(1);
+        var hasProfiles = Directory.Exists(ResourceManager.PreparedDir)
+            && Directory.GetDirectories(ResourceManager.PreparedDir).Length > 0;
+        ShowStep(hasProfiles ? 1 : 0);
     }
 
     public void SetInitialPath(string path)
     {
         _txtPath.Text = path;
+        ShowStep(1);
+    }
+
+    // ─── Step 0: Setup / Manage Profiles ────────────────────────────────
+
+    private void BuildStepSetup()
+    {
+        _stepSetup = new Panel { Dock = DockStyle.Fill, Visible = false };
+
+        var title = new Label
+        {
+            Text = "Quick Setup",
+            Font = new Font("Segoe UI", 18f, FontStyle.Bold),
+            ForeColor = Color.FromArgb(30, 30, 30),
+            Location = new Point(30, 20),
+            AutoSize = true
+        };
+
+        var subtitle = new Label
+        {
+            Text = "Create default profiles so you can sandbox projects immediately.\nEach profile sets up a ready-to-use environment for that language.",
+            ForeColor = Color.FromArgb(100, 100, 100),
+            Location = new Point(32, 58),
+            Size = new Size(600, 40)
+        };
+
+        var lblPick = new Label
+        {
+            Text = "Select languages to create profiles for:",
+            Location = new Point(30, 110),
+            AutoSize = true
+        };
+
+        _lstSetupLangs = new CheckedListBox
+        {
+            Location = new Point(30, 135),
+            Size = new Size(600, 350),
+            CheckOnClick = true,
+            BorderStyle = BorderStyle.FixedSingle
+        };
+
+        RefreshSetupLanguageList();
+
+        _lblSetupStatus = new Label
+        {
+            Text = "",
+            ForeColor = Color.FromArgb(46, 139, 87),
+            Location = new Point(30, 498),
+            Size = new Size(600, 20)
+        };
+
+        _btnCreateProfiles = new Button
+        {
+            Text = "Create Selected Profiles",
+            Location = new Point(30, 530),
+            Size = new Size(260, 44),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(0, 120, 212),
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI", 10f, FontStyle.Bold)
+        };
+        _btnCreateProfiles.Click += OnCreateProfilesClicked;
+
+        _btnSkipSetup = new Button
+        {
+            Text = "Continue to Project Selection \u2192",
+            Location = new Point(370, 530),
+            Size = new Size(260, 44),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(60, 60, 60),
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI", 10f)
+        };
+        _btnSkipSetup.Click += (_, _) => ShowStep(1);
+
+        _stepSetup.Controls.AddRange([title, subtitle, lblPick, _lstSetupLangs,
+            _lblSetupStatus, _btnCreateProfiles, _btnSkipSetup]);
+        Controls.Add(_stepSetup);
+    }
+
+    private void RefreshSetupLanguageList()
+    {
+        _lstSetupLangs.Items.Clear();
+        foreach (var key in _sortedKeys)
+        {
+            var exists = Directory.Exists(Path.Combine(ResourceManager.PreparedDir, key));
+            var marker = exists ? "  [profile exists]" : "";
+            _lstSetupLangs.Items.Add($"{_languages[key].Label}  ({key}){marker}", isChecked: false);
+        }
+    }
+
+    private void OnCreateProfilesClicked(object? sender, EventArgs e)
+    {
+        var selected = new List<string>();
+        for (int i = 0; i < _lstSetupLangs.Items.Count; i++)
+        {
+            if (_lstSetupLangs.GetItemChecked(i))
+                selected.Add(_sortedKeys[i]);
+        }
+
+        if (selected.Count == 0)
+        {
+            MessageBox.Show(this, "Please check at least one language.", "No Selection",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        _btnCreateProfiles.Enabled = false;
+        _lblSetupStatus.Text = "Creating profiles...";
+        _lblSetupStatus.ForeColor = Color.FromArgb(100, 100, 100);
+
+        _ = Task.Run(() =>
+        {
+            var created = new List<string>();
+            var skipped = new List<string>();
+
+            foreach (var key in selected)
+            {
+                var profileDir = Path.Combine(ResourceManager.PreparedDir, key);
+                if (Directory.Exists(profileDir))
+                {
+                    skipped.Add(key);
+                    continue;
+                }
+
+                var basePorts = _portConfigs.TryGetValue("base", out var baseCfg)
+                    ? baseCfg.Ports.ToList() : new List<int>();
+                var langPorts = _portConfigs.TryGetValue(key, out var langCfg)
+                    ? langCfg.Default.ToList() : new List<int>();
+                var allPorts = basePorts.Union(langPorts).Distinct().OrderBy(p => p).ToList();
+
+                var spec = new ProfileSpec
+                {
+                    Name = key,
+                    Languages = [key],
+                    Versions = new Dictionary<string, string>(),
+                    Ports = allPorts
+                };
+
+                ProfileGenerator.Generate(spec, _languages);
+                created.Add(key);
+            }
+
+            Invoke(() =>
+            {
+                _btnCreateProfiles.Enabled = true;
+                RefreshSetupLanguageList();
+
+                var parts = new List<string>();
+                if (created.Count > 0)
+                    parts.Add($"Created: {string.Join(", ", created)}");
+                if (skipped.Count > 0)
+                    parts.Add($"Already existed: {string.Join(", ", skipped)}");
+
+                _lblSetupStatus.Text = string.Join("  |  ", parts);
+                _lblSetupStatus.ForeColor = Color.FromArgb(46, 139, 87);
+            });
+        });
     }
 
     // ─── Step 1: Folder Selection + Recent Projects ─────────────────────
@@ -164,9 +335,33 @@ public sealed class WizardForm : Form
 
         _lstRecent.SelectedIndexChanged += (_, _) =>
         {
-            _btnContinue.Enabled = _lstRecent.SelectedItems.Count > 0;
+            var hasSelection = _lstRecent.SelectedItems.Count > 0;
+            _btnContinue.Enabled = hasSelection;
+            _btnRescan.Enabled = hasSelection;
+            _btnRemove.Enabled = hasSelection;
         };
         _lstRecent.DoubleClick += OnContinueClicked;
+
+        _btnRemove = new Button
+        {
+            Text = "Remove",
+            Location = new Point(30, 572),
+            Size = new Size(100, 40),
+            FlatStyle = FlatStyle.Flat,
+            ForeColor = Color.FromArgb(180, 40, 40),
+            Enabled = false
+        };
+        _btnRemove.Click += OnRemoveClicked;
+
+        _btnRescan = new Button
+        {
+            Text = "Re-scan \u2192",
+            Location = new Point(140, 572),
+            Size = new Size(110, 40),
+            FlatStyle = FlatStyle.Flat,
+            Enabled = false
+        };
+        _btnRescan.Click += OnRescanClicked;
 
         _btnContinue = new Button
         {
@@ -181,10 +376,25 @@ public sealed class WizardForm : Form
         };
         _btnContinue.Click += OnContinueClicked;
 
+        _btnManageProfiles = new Button
+        {
+            Text = "Manage Profiles...",
+            Location = new Point(520, 170),
+            Size = new Size(110, 40),
+            FlatStyle = FlatStyle.Flat,
+            ForeColor = Color.FromArgb(0, 120, 212)
+        };
+        _btnManageProfiles.Click += (_, _) =>
+        {
+            RefreshSetupLanguageList();
+            _lblSetupStatus.Text = "";
+            ShowStep(0);
+        };
+
         PopulateRecentProjects();
 
         _stepFolder.Controls.AddRange([title, subtitle, lblPath, _txtPath, _btnBrowse,
-            _btnScan, lblRecent, _lstRecent, _btnContinue]);
+            _btnScan, _btnManageProfiles, lblRecent, _lstRecent, _btnRemove, _btnRescan, _btnContinue]);
         Controls.Add(_stepFolder);
     }
 
@@ -203,6 +413,8 @@ public sealed class WizardForm : Form
         }
 
         _btnContinue.Enabled = false;
+        _btnRescan.Enabled = false;
+        _btnRemove.Enabled = false;
     }
 
     private void OnContinueClicked(object? sender, EventArgs e)
@@ -231,6 +443,51 @@ public sealed class WizardForm : Form
         _projectPath = project.WorkspacePath;
         ShowStep(3);
         _ = Task.Run(() => RunCoreLaunch(project.Profile));
+    }
+
+    private void OnRemoveClicked(object? sender, EventArgs e)
+    {
+        if (_lstRecent.SelectedItems.Count == 0) return;
+
+        var project = (ProjectScaffolder.RecentProject)_lstRecent.SelectedItems[0].Tag!;
+        var result = MessageBox.Show(this,
+            $"Remove project '{project.Name}'?\n\nThis will stop the container and delete all project data (config, logs, sessions).\nYour source code is NOT affected.",
+            "Remove Project", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+        if (result != DialogResult.Yes) return;
+
+        try
+        {
+            ProjectScaffolder.RemoveProject(project.Name);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Cleanup error (non-fatal): {ex.Message}", "Warning",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        PopulateRecentProjects();
+    }
+
+    private void OnRescanClicked(object? sender, EventArgs e)
+    {
+        if (_lstRecent.SelectedItems.Count == 0) return;
+
+        var project = (ProjectScaffolder.RecentProject)_lstRecent.SelectedItems[0].Tag!;
+
+        if (!Directory.Exists(project.WorkspacePath))
+        {
+            MessageBox.Show(this,
+                $"Workspace folder no longer exists:\n{project.WorkspacePath}",
+                "Folder Missing", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        _projectPath = project.WorkspacePath;
+        _txtPath.Text = project.WorkspacePath;
+        RunDetection();
+        _txtProfileName.Text = project.Profile;
+        ShowStep(2);
     }
 
     private void OnScanClicked(object? sender, EventArgs e)
@@ -508,7 +765,7 @@ public sealed class WizardForm : Form
         try
         {
             var profileDir = Path.Combine(ResourceManager.PreparedDir, profileName);
-            var projectName = Path.GetFileName(_projectPath)!;
+            var projectName = ProjectScaffolder.ResolveProjectName(_projectPath);
             var containerName = $"sandbox-{projectName}";
             var baseImage = $"agent-sandbox-{profileName}:latest";
             var projectDir = ProjectScaffolder.GetProjectDir(projectName);
@@ -572,6 +829,10 @@ public sealed class WizardForm : Form
             }
 
             ProjectScaffolder.UpdateLastStarted(projectName);
+            ProjectScaffolder.UpdateWorkspacePath(projectName, _projectPath);
+            ProjectScaffolder.SyncHostAuth(projectName, Log);
+            ProjectScaffolder.WriteRuntimeEnv(projectName);
+            ProjectScaffolder.RemapPorts(projectName, Log);
 
             if (ProjectScaffolder.HasDockerfileExtension(projectName))
             {
@@ -594,6 +855,9 @@ public sealed class WizardForm : Form
                 ShowDoneButton("Container start failed");
                 return;
             }
+
+            Log($"[sandbox] Waiting for container to be ready...");
+            DockerRunner.WaitForReady(containerName, 120, Log);
 
             Log($"[sandbox] Attaching to {containerName}...");
             Log("[sandbox] OpenCode will open in a new terminal window.");
@@ -657,6 +921,7 @@ public sealed class WizardForm : Form
 
     private void ShowStep(int step)
     {
+        _stepSetup.Visible = step == 0;
         _stepFolder.Visible = step == 1;
         _stepDetect.Visible = step == 2;
         _stepLaunch.Visible = step == 3;

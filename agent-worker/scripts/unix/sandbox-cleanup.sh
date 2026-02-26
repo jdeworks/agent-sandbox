@@ -10,6 +10,33 @@ if [ ! -d "$PROJECTS_DIR" ] || [ -z "$(ls -A "$PROJECTS_DIR" 2>/dev/null)" ]; th
     exit 0
 fi
 
+########################################
+# Single project cleanup: sandbox-cleanup <name>
+########################################
+if [ -n "${1:-}" ] && [ "$1" != "--all" ]; then
+    target_name="$1"
+    target_dir="$PROJECTS_DIR/$target_name"
+    if [ ! -d "$target_dir" ]; then
+        echo "[cleanup] Project '$target_name' not found."
+        exit 1
+    fi
+    read -rp "Remove project '$target_name' and its volumes? [y/N] " confirm
+    if [[ ! "$confirm" =~ ^[yY]$ ]]; then
+        echo "Aborted."
+        exit 0
+    fi
+    compose_file="$target_dir/docker-compose.yml"
+    if [ -f "$compose_file" ]; then
+        docker compose -f "$compose_file" --project-directory "$target_dir" down -v 2>/dev/null || true
+    else
+        docker stop "sandbox-$target_name" 2>/dev/null || true
+        docker rm "sandbox-$target_name" 2>/dev/null || true
+    fi
+    rm -rf "$target_dir"
+    echo "[cleanup] Removed: $target_name"
+    exit 0
+fi
+
 projects=()
 for project_dir in "$PROJECTS_DIR"/*/; do
     [ -d "$project_dir" ] || continue

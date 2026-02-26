@@ -6,7 +6,7 @@ namespace AgentSandbox;
 
 internal static class Program
 {
-    private static readonly string[] CliCommands = ["prepare", "sandbox", "list", "stats", "cleanup", "help", "--help", "-h"];
+    private static readonly string[] CliCommands = ["setup", "prepare", "sandbox", "list", "stats", "cleanup", "profiles", "help", "--help", "-h"];
 
     [STAThread]
     static int Main(string[] args)
@@ -19,11 +19,13 @@ internal static class Program
             AttachConsole();
             return args[0].ToLowerInvariant() switch
             {
+                "setup" => Cli.RunSetup(args.Skip(1).ToArray()),
                 "prepare" => Cli.RunPrepare(args.Skip(1).ToArray()),
                 "sandbox" => Cli.RunSandbox(args.Skip(1).ToArray()),
                 "list" => Cli.RunList(),
                 "stats" => Cli.RunStats(),
                 "cleanup" => Cli.RunCleanup(args.Skip(1).ToArray()),
+                "profiles" => Cli.RunProfiles(args.Skip(1).ToArray()),
                 _ => Cli.ShowHelp()
             };
         }
