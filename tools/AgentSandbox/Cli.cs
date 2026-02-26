@@ -411,18 +411,28 @@ internal static class Cli
 
         Console.WriteLine($"[sandbox] Starting container {containerName}...");
         var composeFile = Path.Combine(projectDir, "docker-compose.yml");
-        if (DockerRunner.ComposeUp(composeFile, projectDir) != 0)
+        var upResult = DockerRunner.ComposeUp(composeFile, projectDir);
+        for (var retry = 0; retry < 10 && upResult != 0; retry++)
+        {
+            var (_, captureOutput) = DockerRunner.ComposeUpCapture(composeFile, projectDir);
+            if (!DockerRunner.TryParsePortFromComposeError(captureOutput, out var failedPort) ||
+                !ProjectScaffolder.RemapPort(projectName, failedPort, Console.WriteLine))
+                break;
+            Console.WriteLine($"[sandbox] Retrying after remapping port {failedPort}...");
+            upResult = DockerRunner.ComposeUp(composeFile, projectDir);
+        }
+        if (upResult != 0)
         {
             Console.WriteLine("Error: docker compose up failed.");
             return 1;
         }
 
-        Console.Write("[sandbox] Waiting for container to be ready");
-        DockerRunner.WaitForReady(containerName, 120, msg => Console.Write("."));
+        var runningContainer = DockerRunner.GetComposeContainerId(composeFile, projectDir) ?? containerName;
+        DockerRunner.WaitForReady(runningContainer, 120, msg => Console.Write(msg));
         Console.WriteLine();
 
         Console.WriteLine($"[sandbox] Attaching to {containerName}...");
-        DockerRunner.ExecInteractive(containerName, "opencode");
+        DockerRunner.ExecInteractive(runningContainer, "opencode");
 
         PostSessionCheck(projectName, containerName);
         return 0;

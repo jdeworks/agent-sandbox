@@ -121,7 +121,8 @@ On **first run** for a project:
 
 1. Builds the profile's base image (cached if unchanged)
 2. Scaffolds a project folder under `agent-worker/projects/<name>/` with all config
-3. Starts the container, waits for it to be ready, and launches OpenCode
+3. If any configured port is already in use (e.g. another sandbox), it is **remapped** to the next free port and a message is printed (e.g. `Port 3000 in use -> remapped to 3001:3000`). This applies on both Unix and Windows.
+4. Starts the container, **waits for it to be ready**, then launches OpenCode. Readiness is detected by checking container logs for `[sandbox] Ready.` (and falling back to a file check), so the wait is reliable even when `docker exec` is flaky (e.g. on WSL2). To skip the wait (e.g. for debugging), set `SANDBOX_SKIP_READY=1` in the environment before launching.
 
 On **subsequent runs** it reuses the existing project config. If the container is already running, you can **reattach** (open a new OpenCode session in the existing container) or **rebuild** from scratch.
 
@@ -178,7 +179,7 @@ To add framework entries, edit `agent-worker/sandbox/ports.json`.
 
 ## Multiple Sandboxes
 
-You can run multiple sandboxes simultaneously. When a port is already in use by another sandbox, the system automatically remaps it to the next available port and prints the mapping:
+You can run multiple sandboxes simultaneously. **Auto port remapping** (Unix and Windows): when a port in the profile is already in use (e.g. by another sandbox or a local server), the system rewrites the project's `docker-compose.yml` to use the next free port and prints:
 
 ```
 [sandbox] Port 3000 in use -> remapped to 3001:3000

@@ -228,11 +228,13 @@ public static class ProjectScaffolder
 
         var lines = File.ReadAllLines(composePath);
         var changed = false;
-        var regex = new Regex(@"^(\s*-\s*"")(\d+):(\d+)("".*)$");
+        // Match YAML port line: optional whitespace, "- ", optional space, quote, hostPort:containerPort, quote, rest (e.g. "5000:5000")
+        var regex = new Regex(@"^(\s*-\s*[""])(\d+):(\d+)([""].*)$");
 
         for (int i = 0; i < lines.Length; i++)
         {
-            var match = regex.Match(lines[i]);
+            var line = lines[i];
+            var match = regex.Match(line);
             if (!match.Success) continue;
 
             var hostPort = int.Parse(match.Groups[2].Value);
@@ -249,6 +251,31 @@ public static class ProjectScaffolder
 
         if (changed)
             ResourceManager.WriteLf(composePath, string.Join("\n", lines) + "\n");
+    }
+
+    /// <summary>Remap a single host port in docker-compose.yml to the next free port (used when ComposeUp fails with port already allocated).</summary>
+    public static bool RemapPort(string projectName, int hostPort, Action<string>? log = null)
+    {
+        var composePath = Path.Combine(GetProjectDir(projectName), "docker-compose.yml");
+        if (!File.Exists(composePath)) return false;
+
+        var lines = File.ReadAllLines(composePath);
+        var regex = new Regex(@"^(\s*-\s*[""])(\d+):(\d+)([""].*)$");
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var match = regex.Match(lines[i]);
+            if (!match.Success) continue;
+            var lineHostPort = int.Parse(match.Groups[2].Value);
+            if (lineHostPort != hostPort) continue;
+
+            var containerPort = int.Parse(match.Groups[3].Value);
+            var freePort = DockerRunner.FindFreePort(hostPort);
+            lines[i] = $"{match.Groups[1].Value}{freePort}:{containerPort}{match.Groups[4].Value}";
+            log?.Invoke($"[sandbox] Port {hostPort} in use -> remapped to {freePort}:{containerPort}");
+            ResourceManager.WriteLf(composePath, string.Join("\n", lines) + "\n");
+            return true;
+        }
+        return false;
     }
 
     public static void RemoveProject(string projectName)

@@ -19,6 +19,7 @@ public sealed class WizardForm : Form
     private CheckedListBox _lstSetupLangs = null!;
     private Button _btnCreateProfiles = null!;
     private Button _btnSkipSetup = null!;
+    private Button _btnBackSetup = null!;
     private Label _lblSetupStatus = null!;
 
     // Step 1: folder + recent projects
@@ -62,6 +63,12 @@ public sealed class WizardForm : Form
         MaximizeBox = false;
         Font = new Font("Segoe UI", 9.5f);
         BackColor = Color.White;
+        try
+        {
+            var ico = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            if (ico != null) Icon = ico;
+        }
+        catch { /* ignore if icon missing */ }
 
         BuildStepSetup();
         BuildStepFolder();
@@ -127,11 +134,21 @@ public sealed class WizardForm : Form
             Size = new Size(600, 20)
         };
 
+        _btnBackSetup = new Button
+        {
+            Text = "\u2190 Back",
+            Location = new Point(30, 530),
+            Size = new Size(100, 44),
+            FlatStyle = FlatStyle.Flat,
+            ForeColor = Color.FromArgb(80, 80, 80)
+        };
+        _btnBackSetup.Click += (_, _) => ShowStep(1);
+
         _btnCreateProfiles = new Button
         {
             Text = "Create Selected Profiles",
-            Location = new Point(30, 530),
-            Size = new Size(260, 44),
+            Location = new Point(145, 530),
+            Size = new Size(220, 44),
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(0, 120, 212),
             ForeColor = Color.White,
@@ -142,8 +159,8 @@ public sealed class WizardForm : Form
         _btnSkipSetup = new Button
         {
             Text = "Continue to Project Selection \u2192",
-            Location = new Point(370, 530),
-            Size = new Size(260, 44),
+            Location = new Point(380, 530),
+            Size = new Size(250, 44),
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(60, 60, 60),
             ForeColor = Color.White,
@@ -152,7 +169,7 @@ public sealed class WizardForm : Form
         _btnSkipSetup.Click += (_, _) => ShowStep(1);
 
         _stepSetup.Controls.AddRange([title, subtitle, lblPick, _lstSetupLangs,
-            _lblSetupStatus, _btnCreateProfiles, _btnSkipSetup]);
+            _lblSetupStatus, _btnBackSetup, _btnCreateProfiles, _btnSkipSetup]);
         Controls.Add(_stepSetup);
     }
 
@@ -298,7 +315,7 @@ public sealed class WizardForm : Form
         _btnScan = new Button
         {
             Text = "Scan && Continue \u2192",
-            Location = new Point(30, 170),
+            Location = new Point(30, 168),
             Size = new Size(200, 40),
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(0, 120, 212),
@@ -306,6 +323,21 @@ public sealed class WizardForm : Form
             Font = new Font("Segoe UI", 10f, FontStyle.Bold)
         };
         _btnScan.Click += OnScanClicked;
+
+        _btnManageProfiles = new Button
+        {
+            Text = "Manage Profiles...",
+            Location = new Point(242, 168),
+            Size = new Size(140, 40),
+            FlatStyle = FlatStyle.Flat,
+            ForeColor = Color.FromArgb(0, 120, 212)
+        };
+        _btnManageProfiles.Click += (_, _) =>
+        {
+            RefreshSetupLanguageList();
+            _lblSetupStatus.Text = "";
+            ShowStep(0);
+        };
 
         // Recent projects section
         var lblRecent = new Label
@@ -375,21 +407,6 @@ public sealed class WizardForm : Form
             Enabled = false
         };
         _btnContinue.Click += OnContinueClicked;
-
-        _btnManageProfiles = new Button
-        {
-            Text = "Manage Profiles...",
-            Location = new Point(520, 170),
-            Size = new Size(110, 40),
-            FlatStyle = FlatStyle.Flat,
-            ForeColor = Color.FromArgb(0, 120, 212)
-        };
-        _btnManageProfiles.Click += (_, _) =>
-        {
-            RefreshSetupLanguageList();
-            _lblSetupStatus.Text = "";
-            ShowStep(0);
-        };
 
         PopulateRecentProjects();
 
@@ -849,6 +866,15 @@ public sealed class WizardForm : Form
             var composePath = Path.Combine(projectDir, "docker-compose.yml");
             Log($"[sandbox] Starting container {containerName}...");
             var upResult = DockerRunner.ComposeUp(composePath, projectDir, Log);
+            for (var retry = 0; retry < 10 && upResult != 0; retry++)
+            {
+                var (_, captureOutput) = DockerRunner.ComposeUpCapture(composePath, projectDir);
+                if (!DockerRunner.TryParsePortFromComposeError(captureOutput, out var failedPort) ||
+                    !ProjectScaffolder.RemapPort(projectName, failedPort, Log))
+                    break;
+                Log($"[sandbox] Retrying after remapping port {failedPort}...");
+                upResult = DockerRunner.ComposeUp(composePath, projectDir, Log);
+            }
             if (upResult != 0)
             {
                 Log("ERROR: docker compose up failed. See output above.");
@@ -856,12 +882,12 @@ public sealed class WizardForm : Form
                 return;
             }
 
-            Log($"[sandbox] Waiting for container to be ready...");
-            DockerRunner.WaitForReady(containerName, 120, Log);
+            var runningContainer = DockerRunner.GetComposeContainerId(composePath, projectDir) ?? containerName;
+            DockerRunner.WaitForReady(runningContainer, 120, Log);
 
             Log($"[sandbox] Attaching to {containerName}...");
             Log("[sandbox] OpenCode will open in a new terminal window.");
-            DockerRunner.ExecInteractive(containerName, "opencode");
+            DockerRunner.ExecInteractive(runningContainer, "opencode");
 
             Log("");
             Log("[sandbox] Session ended.");
