@@ -32,7 +32,10 @@ if [ -n "${1:-}" ] && [ "$1" != "--all" ]; then
         docker stop "sandbox-$target_name" 2>/dev/null || true
         docker rm "sandbox-$target_name" 2>/dev/null || true
     fi
-    rm -rf "$target_dir"
+    if ! rm -rf "$target_dir" 2>/dev/null; then
+        echo "[cleanup] Some files are root-owned (container ran as root). Use: sandbox-cleanup-sudo $target_name"
+        exit 1
+    fi
     echo "[cleanup] Removed: $target_name"
     exit 0
 fi
@@ -84,7 +87,10 @@ for name in "${projects[@]}"; do
     fi
 
     echo "[cleanup] Removing project dir $project_dir..."
-    rm -rf "$project_dir"
+    if ! rm -rf "$project_dir" 2>/dev/null; then
+        echo "[cleanup] Permission denied (some files are root-owned). Use: sandbox-cleanup-sudo --all"
+        exit 1
+    fi
 done
 
 if [ "$1" = "--all" ]; then

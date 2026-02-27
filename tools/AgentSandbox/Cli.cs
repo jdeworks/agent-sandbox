@@ -359,8 +359,9 @@ internal static class Cli
 
             if (string.IsNullOrEmpty(choice) || choice == "1")
             {
+                var reattachCmd = ProjectScaffolder.GetAgentCommand(projectName);
                 Console.WriteLine($"[sandbox] Attaching to {containerName}...");
-                DockerRunner.ExecInteractive(containerName, "opencode");
+                DockerRunner.ExecInteractive(containerName, reattachCmd);
                 PostSessionCheck(projectName, containerName);
                 return 0;
             }
@@ -431,8 +432,9 @@ internal static class Cli
         DockerRunner.WaitForReady(runningContainer, 120, msg => Console.Write(msg));
         Console.WriteLine();
 
+        var agentCmd = ProjectScaffolder.GetAgentCommand(projectName);
         Console.WriteLine($"[sandbox] Attaching to {containerName}...");
-        DockerRunner.ExecInteractive(runningContainer, "opencode");
+        DockerRunner.ExecInteractive(runningContainer, agentCmd);
 
         PostSessionCheck(projectName, containerName);
         return 0;

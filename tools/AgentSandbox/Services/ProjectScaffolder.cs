@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace AgentSandbox.Services;
@@ -14,14 +15,6 @@ public static class ProjectScaffolder
 
     private static readonly string[] ApiKeyVars =
         ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "OPENCODE_API_KEY", "GEMINI_API_KEY", "CURSOR_API_KEY", "GITHUB_COPILOT_API_KEY"];
-
-    // Encrypted storage key file location
-    private static readonly string EncryptedKeyPath;
-
-    static ProjectScaffolder()
-    {
-        EncryptedKeyPath = Path.Combine(ResourceManager.AppDataRoot, ".envkey");
-    }
 
     public static string GetProjectDir(string projectName) =>
         Path.Combine(ResourceManager.ProjectsDir, projectName);
@@ -108,6 +101,17 @@ public static class ProjectScaffolder
         Directory.CreateDirectory(Path.Combine(projectDir, "sandbox_data"));
         File.WriteAllText(Path.Combine(projectDir, "sandbox_data", "changes.txt"), "");
 
+        var agentConfigSrc = Path.Combine(ResourceManager.TemplatesDir, "agent-config.json");
+        var agentConfigDst = Path.Combine(projectDir, "sandbox_data", "agent-config.json");
+        if (File.Exists(agentConfigSrc))
+        {
+            var agentJson = File.ReadAllText(agentConfigSrc);
+            var savedAgent = SavedSettings.GetDefaultAgent();
+            if (!string.IsNullOrEmpty(savedAgent))
+                agentJson = ApplyDefaultAgentToJson(agentJson, savedAgent);
+            ResourceManager.WriteLf(agentConfigDst, agentJson);
+        }
+
         Directory.CreateDirectory(Path.Combine(projectDir, "opencode_data"));
         File.Copy(
             Path.Combine(ResourceManager.TemplatesDir, "opencode.json"),
@@ -151,6 +155,21 @@ public static class ProjectScaffolder
     public static void RefreshFromProfile(string projectName, string workspacePath, string profileDir)
     {
         var projectDir = GetProjectDir(projectName);
+
+        var agentConfigDst = Path.Combine(projectDir, "sandbox_data", "agent-config.json");
+        if (!File.Exists(agentConfigDst))
+        {
+            var agentConfigSrc = Path.Combine(ResourceManager.TemplatesDir, "agent-config.json");
+            if (File.Exists(agentConfigSrc))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(agentConfigDst)!);
+                var agentJson = File.ReadAllText(agentConfigSrc);
+                var savedAgent = SavedSettings.GetDefaultAgent();
+                if (!string.IsNullOrEmpty(savedAgent))
+                    agentJson = ApplyDefaultAgentToJson(agentJson, savedAgent);
+                ResourceManager.WriteLf(agentConfigDst, agentJson);
+            }
+        }
 
         var composeTpl = File.ReadAllText(Path.Combine(profileDir, "docker-compose.yml.tpl"));
         var dockerPath = workspacePath.Replace('\\', '/');
@@ -246,10 +265,9 @@ public static class ProjectScaffolder
             }
         }
         
-        // Write to file (encrypt all API key values)
         foreach (var kvp in allVars)
         {
-            var encryptedValue = EncryptValue(kvp.Value);
+            var encryptedValue = SecureStorage.Encrypt(kvp.Value);
             sb.AppendLine($"{kvp.Key}={encryptedValue}");
         }
         
@@ -275,11 +293,8 @@ public static class ProjectScaffolder
             var key = line[..idx];
             var value = line[(idx + 1)..];
             
-            // Decrypt the value
             if (!string.IsNullOrEmpty(value))
-            {
-                value = DecryptValue(value);
-            }
+                value = SecureStorage.Decrypt(value);
             
             result[key] = value;
         }
@@ -379,90 +394,60 @@ public static class ProjectScaffolder
         File.Delete(extPath);
     }
 
-    // ─── Encryption helpers for secure API key storage ────────────────────────
+    // ─── Agent config (mirrors unix get_agent_command) ────────────────────────
 
-    private static byte[] GetOrCreateEncryptionKey()
+    /// <summary>Returns the CLI command to run in the container (e.g. opencode, agent, gh copilot agent, claude). Uses the saved default from Settings so changing the default applies to all projects (including existing ones).</summary>
+    public static string GetAgentCommand(string projectName)
     {
-        // Try to load existing key
-        if (File.Exists(EncryptedKeyPath))
-        {
-            try
-            {
-                var encryptedKey = File.ReadAllBytes(EncryptedKeyPath);
-                // Decrypt using DPAPI (machine-specific)
-                return ProtectedData.Unprotect(encryptedKey, null, DataProtectionScope.CurrentUser);
-            }
-            catch
-            {
-                // If decryption fails, generate new key
-            }
-        }
+        var savedDefault = SavedSettings.GetDefaultAgent();
+        if (!string.IsNullOrEmpty(savedDefault))
+            return MapAgentToCommand(savedDefault);
 
-        // Generate a new random 256-bit key
-        var key = RandomNumberGenerator.GetBytes(32);
-
-        // Encrypt the key with DPAPI so only this user/machine can decrypt it
-        var protectedKey = ProtectedData.Protect(key, null, DataProtectionScope.CurrentUser);
-
-        // Store the protected key
-        var dir = Path.GetDirectoryName(EncryptedKeyPath);
-        if (!Directory.Exists(dir))
-            Directory.CreateDirectory(dir!);
-        File.WriteAllBytes(EncryptedKeyPath, protectedKey);
-
-        return key;
-    }
-
-    private static string EncryptValue(string plainText)
-    {
-        if (string.IsNullOrEmpty(plainText)) return string.Empty;
-
-        var key = GetOrCreateEncryptionKey();
-        using var aes = Aes.Create();
-        aes.Key = key;
-        aes.GenerateIV();
-
-        using var encryptor = aes.CreateEncryptor();
-        var plainBytes = Encoding.UTF8.GetBytes(plainText);
-        var encryptedBytes = encryptor.TransformFinalBlock(plainBytes, 0, plainBytes.Length);
-
-        // Combine IV + encrypted data and encode as base64
-        var result = new byte[aes.IV.Length + encryptedBytes.Length];
-        Buffer.BlockCopy(aes.IV, 0, result, 0, aes.IV.Length);
-        Buffer.BlockCopy(encryptedBytes, 0, result, aes.IV.Length, encryptedBytes.Length);
-
-        return Convert.ToBase64String(result);
-    }
-
-    private static string DecryptValue(string encryptedText)
-    {
-        if (string.IsNullOrEmpty(encryptedText)) return string.Empty;
+        var configPath = Path.Combine(GetProjectDir(projectName), "sandbox_data", "agent-config.json");
+        if (!File.Exists(configPath))
+            return "opencode";
 
         try
         {
-            var key = GetOrCreateEncryptionKey();
-            var combined = Convert.FromBase64String(encryptedText);
+            var json = File.ReadAllText(configPath);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            var defaultAgent = root.TryGetProperty("defaultAgent", out var da) ? da.GetString() ?? "opencode" : "opencode";
+            if (!root.TryGetProperty("agentSettings", out var settings) || !settings.TryGetProperty(defaultAgent, out var agentNode))
+                return MapAgentToCommand(defaultAgent);
 
-            using var aes = Aes.Create();
-            aes.Key = key;
-
-            // Extract IV from the beginning
-            var iv = new byte[16];
-            Buffer.BlockCopy(combined, 0, iv, 0, 16);
-            aes.IV = iv;
-
-            // Extract encrypted data
-            var encryptedBytes = new byte[combined.Length - 16];
-            Buffer.BlockCopy(combined, 16, encryptedBytes, 0, encryptedBytes.Length);
-
-            using var decryptor = aes.CreateDecryptor();
-            var decryptedBytes = decryptor.TransformFinalBlock(encryptedBytes, 0, encryptedBytes.Length);
-            return Encoding.UTF8.GetString(decryptedBytes);
+            var cmd = agentNode.TryGetProperty("command", out var c) ? c.GetString() ?? "" : "";
+            var args = new List<string>();
+            if (agentNode.TryGetProperty("args", out var a) && a.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var arg in a.EnumerateArray())
+                    if (arg.ValueKind == JsonValueKind.String) args.Add(arg.GetString() ?? "");
+            }
+            if (string.IsNullOrEmpty(cmd))
+                return MapAgentToCommand(defaultAgent);
+            return args.Count > 0 ? $"{cmd} {string.Join(" ", args)}" : cmd;
         }
         catch
         {
-            // Return empty if decryption fails (might be plain text from older version)
-            return encryptedText;
+            return "opencode";
         }
+    }
+
+    private static string MapAgentToCommand(string agent)
+    {
+        return agent switch
+        {
+            "cursor" => "agent",
+            "copilot" => "gh copilot agent",
+            "claude" => "claude",
+            _ => "opencode"
+        };
+    }
+
+    /// <summary>Patch agent-config.json string to set defaultAgent. Used when scaffolding so saved default is applied.</summary>
+    public static string ApplyDefaultAgentToJson(string agentConfigJson, string defaultAgent)
+    {
+        if (string.IsNullOrEmpty(defaultAgent)) return agentConfigJson;
+        return Regex.Replace(agentConfigJson, @"(""defaultAgent""\s*:\s*)""[^""]*""", $"$1\"{defaultAgent}\"");
     }
 }

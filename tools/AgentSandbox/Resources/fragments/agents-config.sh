@@ -25,6 +25,6 @@ if [ -f "/workspace/.sandbox/copilot-config.json" ]; then
 fi
 
 # Ensure agents are in PATH (if not already)
-export PATH="$HOME/.claude/bin:$HOME/.cursor/bin:$HOME/.npm-global/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.claude/bin:$HOME/.cursor/bin:$HOME/.npm-global/bin:$PATH"
 
 echo "[sandbox] CLI agents configured."

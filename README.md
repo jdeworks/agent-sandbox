@@ -202,6 +202,7 @@ The container-side port stays the same; only the host-side mapping changes.
 - `GEMINI_API_KEY`
 
 **Windows GUI:** The Windows wizard includes an Environment Variables step where you can enter API keys. These are stored **encrypted** using AES-256 with a DPAPI-protected key, so they are secure on disk.
+
 ## CLI Agents
 
 The sandbox supports multiple CLI coding agents:
@@ -219,9 +220,9 @@ The sandbox supports multiple CLI coding agents:
 
 You can also set a default agent in `sandbox_data/agent-config.json`.
 
-**Windows:** The agent selection is configured via the environment variables step in the wizard.
+**Windows:** Use **Settings…** to choose the default CLI agent (OpenCode, Claude Code, Cursor CLI, GitHub Copilot) and to save environment variables (stored encrypted). The wizard’s environment variables step can override for that launch. The chosen default applies to all projects (including existing ones).
 
-All agents are pre-installed in the Docker base image.
+All agents are intended to be installed in the Docker base image. If Cursor/Claude/Copilot install fails in the container (e.g. network or platform), stub scripts are created so the command exists and prints a message; use **Settings** to switch the default to OpenCode and relaunch.
 
 ## OpenCode Configuration
 
@@ -252,7 +253,7 @@ sandbox-list                    # List all projects with status, profile, and wo
 sandbox-stats                   # Show disk usage: images, volumes, per-project
 sandbox-cleanup my-project      # Remove a specific project
 sandbox-cleanup --all           # Remove all projects, containers, and volumes
-sandbox-cleanup-sudo --all      # Same with sudo (removes root-owned files from containers)
+sandbox-cleanup-sudo [name|--all]  # Same with sudo (use when files are root-owned; script will suggest this if rm fails)
 prepare --list                  # List all prepared profiles
 prepare --delete python-node    # Delete a profile and its alias
 ```
@@ -267,7 +268,7 @@ agent-sandbox profiles                   List prepared profiles
 agent-sandbox profiles delete <name>     Delete a profile
 ```
 
-The Windows GUI also has **Remove** and **Re-scan** buttons in the recent projects list for managing and updating existing projects.
+The Windows GUI also has **Remove**, **Re-scan**, and **Regenerate environment** in the recent projects list. **Regenerate environment** stops the container, removes the project data, and removes the base image so the next launch does a full rebuild from the current template (useful after template updates or to fix a broken image). When a session ends, you can choose **Back to overview** (to launch another project) or **Close**.
 
 ## How Dependencies Work
 
@@ -311,6 +312,8 @@ Additional named Docker volumes are created per-profile for caches (venv, pip, n
 
 On Linux/macOS/WSL the agent process runs as your host user (via `HOST_UID`/`HOST_GID` in the container). Files created in the bind-mounted workspace are therefore owned by you, so you can edit or delete them without `sudo` after the container exits. The container still runs its setup (dependency installs, etc.) as root; only the OpenCode/agent process drops to your user.
 
+If a project was first run from **Windows** (or without `HOST_UID`/`HOST_GID`), some files under the project dir (e.g. `opencode_sessions/`) may be root-owned. In that case `sandbox-cleanup <name>` will report permission denied and tell you to use **sandbox-cleanup-sudo** to remove the project.
+
 ## Project Structure
 
 ```
@@ -350,6 +353,7 @@ agent-worker/
       sandbox_data/                  #   → /workspace/.sandbox
         changes.txt                  #     Dependency change log
         Dockerfile.extension         #     Agent-created system changes (transient)
+        agent-config.json            #     Default CLI agent (Unix); copied from template on scaffold
       opencode_data/                 #   → ~/.config/opencode
         opencode.json, oh-my-opencode.json, AGENTS.md
       opencode_sessions/             #   → ~/.local/share/opencode
@@ -409,8 +413,8 @@ dotnet publish -c Release -o ..\dist
 **Double-click** the exe (or run without arguments) to open the GUI wizard:
 
 1. **Quick Setup** -- shown on first launch (or via the "Manage Profiles..." button). Check the languages you want and click "Create Selected Profiles" to generate default single-language profiles. Existing profiles are marked. Click "Continue to Project Selection" when done.
-2. **Folder picker** -- Browse button opens a native Windows folder dialog (handles paths with spaces correctly)
-3. **Recent Projects** -- previously launched projects are listed below the folder picker, sorted by last used. Select one and click "Continue with Selected" to quick-launch without re-running detection. You can also **Remove** projects or **Re-scan** them to update languages/versions/ports.
+2. **Folder picker** -- Browse button opens a native Windows folder dialog (handles paths with spaces correctly).
+3. **Recent Projects** -- previously launched projects are listed below the folder picker, sorted by last used. Select one and click "Continue with Selected" to quick-launch without re-running detection. You can **Remove** a project, **Re-scan** it (update languages/versions/ports), or **Regenerate environment** (stop container, remove project data and base image; next launch does a full rebuild). **Settings…** opens the Settings dialog (default agent and saved API keys).
 4. **Scan** -- for new projects, auto-detects languages, versions, frameworks, and ports
 5. **Review** -- checkboxes for languages, editable version fields, editable port list, profile name
 6. **Launch** -- generates the profile, builds the Docker image, scaffolds the project, and attaches to the container
@@ -444,9 +448,12 @@ All data is stored under `%APPDATA%\AgentSandbox\`:
 ```
 %APPDATA%\AgentSandbox\
   .version                   # Tracks embedded resource version
+  .envkey                    # DPAPI-protected key for encrypting API keys
+  saved_settings.json        # Default CLI agent (and other app settings)
+  saved_env.env              # Saved API keys (encrypted)
   sandbox/                   # Extracted from exe: languages.json, ports.json, templates
     fragments/               # Shell fragments and agent instruction fragments
-  templates/                 # opencode.json, oh-my-opencode.json
+  templates/                 # opencode.json, oh-my-opencode.json, agent-config.json
   prepared/                  # Generated profiles (same as unix)
   projects/                  # Per-project data (compose files, config, logs)
 ```
@@ -465,10 +472,11 @@ tools/
     Services/                        #   Detection, generation, Docker, scaffolding, resources
     UI/
       WizardForm.cs                  #   WinForms wizard (folder picker, recent projects, detection, launch)
+      SettingsForm.cs                #   Settings dialog (default agent, saved API keys)
     Resources/                       #   Embedded data files (copied from sandbox/)
       languages.json, ports.json, Dockerfile.base.tpl, AGENTS.md.base
       fragments/                     #   *.sh and *.agents.md
-      templates/                     #   opencode.json, oh-my-opencode.json
+      templates/                     #   opencode.json, oh-my-opencode.json, agent-config.json
 ```
 
 ## Security

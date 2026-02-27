@@ -39,9 +39,10 @@ public static class DockerRunner
         return exit == 0 && !string.IsNullOrEmpty(id) ? id : null;
     }
 
-    public static int Build(string dockerfilePath, string tag, string context, Action<string>? onOutput = null)
+    public static int Build(string dockerfilePath, string tag, string context, Action<string>? onOutput = null, bool noCache = false)
     {
-        return Run("docker", $"build -f \"{dockerfilePath}\" -t \"{tag}\" \"{context}\"", onOutput);
+        var cacheFlag = noCache ? " --no-cache" : "";
+        return Run("docker", $"build{cacheFlag} -f \"{dockerfilePath}\" -t \"{tag}\" \"{context}\"", onOutput);
     }
 
     public static int ComposeUp(string composeFile, string projectDir, Action<string>? onOutput = null)
@@ -81,22 +82,46 @@ public static class DockerRunner
         return Run("docker", $"compose -f \"{composeFile}\" --project-directory \"{projectDir}\" down -v", null);
     }
 
-    public static int ExecInteractive(string containerName, string command)
+    /// <summary>
+    /// Run an interactive command in the container.
+    /// When <paramref name="newWindow"/> is true (GUI), opens a new terminal window so the session is interactive.
+    /// When false (CLI), runs in the current console and waits for exit.
+    /// </summary>
+    public static int ExecInteractive(string containerName, string command, bool newWindow = false)
     {
-        var psi = new ProcessStartInfo
+        if (newWindow)
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = $"/c docker exec -it \"{containerName}\" {command}",
+                UseShellExecute = true,
+                CreateNoWindow = false
+            };
+            using var proc = Process.Start(psi);
+            return proc != null ? 0 : 1;
+        }
+
+        var execPsi = new ProcessStartInfo
         {
             FileName = "docker",
             Arguments = $"exec -it \"{containerName}\" {command}",
             UseShellExecute = false
         };
-        using var proc = Process.Start(psi);
-        proc?.WaitForExit();
-        return proc?.ExitCode ?? 1;
+        using var execProc = Process.Start(execPsi);
+        execProc?.WaitForExit();
+        return execProc?.ExitCode ?? 1;
     }
 
     public static int StopContainer(string containerName)
     {
         return Run("docker", $"stop \"{containerName}\"", null);
+    }
+
+    /// <summary>Remove a Docker image so the next build rebuilds from Dockerfile. Returns exit code (0 = success).</summary>
+    public static int RemoveImage(string imageTag)
+    {
+        return Run("docker", $"rmi --force \"{imageTag}\"", null);
     }
 
     /// <summary>

@@ -5,6 +5,50 @@ namespace AgentSandbox.Services;
 
 public static class ProfileGenerator
 {
+    /// <summary>Regenerate an existing profile from the current template (e.g. after template updates). Infers languages from profile name and preserves versions from versions.env.</summary>
+    public static void RegenerateProfile(string profileName, Dictionary<string, LanguageConfig> languages, Dictionary<string, PortConfig> portConfigs)
+    {
+        var profileDir = Path.Combine(ResourceManager.PreparedDir, profileName);
+        var languagesList = profileName.Split('-', StringSplitOptions.RemoveEmptyEntries)
+            .Where(lang => languages.ContainsKey(lang))
+            .ToList();
+        if (languagesList.Count == 0)
+            languagesList.Add("node");
+
+        var versions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var versionsEnvPath = Path.Combine(profileDir, "versions.env");
+        if (File.Exists(versionsEnvPath))
+        {
+            foreach (var line in File.ReadAllLines(versionsEnvPath))
+            {
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#")) continue;
+                var eq = line.IndexOf('=');
+                if (eq <= 0) continue;
+                var key = line[..eq].Trim().Replace("_VERSION", "", StringComparison.OrdinalIgnoreCase).ToLowerInvariant();
+                var val = line[(eq + 1)..].Trim();
+                if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(val))
+                    versions[key] = val;
+            }
+        }
+
+        var basePorts = portConfigs.TryGetValue("base", out var baseCfg) ? baseCfg.Ports.ToList() : new List<int>();
+        var allPorts = languagesList
+            .SelectMany(lang => portConfigs.TryGetValue(lang, out var c) ? c.Default : Array.Empty<int>())
+            .Union(basePorts)
+            .Distinct()
+            .OrderBy(p => p)
+            .ToList();
+
+        var spec = new ProfileSpec
+        {
+            Name = profileName,
+            Languages = languagesList,
+            Versions = versions,
+            Ports = allPorts
+        };
+        Generate(spec, languages);
+    }
+
     public static void Generate(ProfileSpec spec, Dictionary<string, LanguageConfig> languages)
     {
         var profileDir = Path.Combine(ResourceManager.PreparedDir, spec.Name);
@@ -101,7 +145,7 @@ public static class ProfileGenerator
 
         envLines.Add($"      - NODE_VERSION={nodeVersion}");
 
-        pathParts.Add("/opt/opencode/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
+        pathParts.Add("/root/.local/bin:/root/.cursor/bin:/root/.claude/bin:/root/.npm-global/bin:/opt/opencode/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
         var pathEnv = string.Join(":", pathParts);
 
         var sb = new StringBuilder();
@@ -158,6 +202,18 @@ public static class ProfileGenerator
         sb.AppendLine("[ -d /workspace/.cache ] && chmod -R a+rwX /workspace/.cache");
         sb.AppendLine("[ -d /workspace/.config ] && chmod -R a+rwX /workspace/.config");
         sb.AppendLine("[ -d /workspace/.npm ] && chmod -R a+rwX /workspace/.npm");
+        sb.AppendLine();
+        sb.AppendLine("########################################");
+        sb.AppendLine("# Ensure CLI agent symlinks exist");
+        sb.AppendLine("########################################");
+        sb.AppendLine("for bin in agent claude; do");
+        sb.AppendLine("  if [ ! -x \"/usr/local/bin/$bin\" ] || head -1 \"/usr/local/bin/$bin\" 2>/dev/null | grep -q '^#!/bin/bash'; then");
+        sb.AppendLine("    for dir in /root/.local/bin /root/.cursor/bin /root/.claude/bin; do");
+        sb.AppendLine("      if [ -x \"$dir/$bin\" ]; then ln -sf \"$dir/$bin\" \"/usr/local/bin/$bin\"; break; fi");
+        sb.AppendLine("    done");
+        sb.AppendLine("  fi");
+        sb.AppendLine("done");
+        sb.AppendLine("export PATH=\"/root/.local/bin:$PATH\"");
         sb.AppendLine();
 
         foreach (var lang in spec.Languages)

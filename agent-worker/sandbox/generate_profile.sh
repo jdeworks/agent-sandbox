@@ -131,7 +131,7 @@ generate_compose() {
 
     env_lines+="      - NODE_VERSION=${NODE_VERSION}"$'\n'
 
-    path_parts+=("/opt/opencode/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+    path_parts+=("/root/.local/bin:/root/.cursor/bin:/root/.claude/bin:/root/.npm-global/bin:/opt/opencode/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
     local path_env
     path_env=$(IFS=':'; echo "${path_parts[*]}")
 
@@ -190,6 +190,18 @@ mkdir -p /workspace/.cache/opencode
 [ -d /workspace/.cache ] && chmod -R a+rwX /workspace/.cache
 [ -d /workspace/.config ] && chmod -R a+rwX /workspace/.config
 [ -d /workspace/.npm ] && chmod -R a+rwX /workspace/.npm
+
+########################################
+# Ensure CLI agent symlinks exist
+########################################
+for bin in agent claude; do
+  if [ ! -x "/usr/local/bin/$bin" ] || head -1 "/usr/local/bin/$bin" 2>/dev/null | grep -q '^#!/bin/bash'; then
+    for dir in /root/.local/bin /root/.cursor/bin /root/.claude/bin; do
+      if [ -x "$dir/$bin" ]; then ln -sf "$dir/$bin" "/usr/local/bin/$bin"; break; fi
+    done
+  fi
+done
+export PATH="/root/.local/bin:$PATH"
 
 HEADER
 

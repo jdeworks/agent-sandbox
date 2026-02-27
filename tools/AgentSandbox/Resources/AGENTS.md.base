@@ -167,3 +167,4 @@ Set these environment variables for each agent:
 - Claude Code: `ANTHROPIC_API_KEY`
 - Cursor CLI: `CURSOR_API_KEY`
 - GitHub Copilot: `GITHUB_COPILOT_API_KEY` (or use `gh auth login`)
+

@@ -31,7 +31,9 @@ public sealed class WizardForm : Form
     private Button _btnContinue = null!;
     private Button _btnRescan = null!;
     private Button _btnRemove = null!;
+    private Button _btnRegenerate = null!;
     private Button _btnManageProfiles = null!;
+    private Button _btnSettings = null!;
 
     // Step 2: detection results
     private CheckedListBox _lstLanguages = null!;
@@ -61,6 +63,8 @@ public sealed class WizardForm : Form
     private List<string> _sortedKeys = new();
     private Dictionary<string, string> _detectedVersions = new();
     private List<int> _detectedPorts = new();
+    private bool _forceNoCache;
+    private ProfileSpec? _pendingSpec;
 
     public WizardForm()
     {
@@ -86,9 +90,6 @@ public sealed class WizardForm : Form
         BuildStepFolder();
         BuildStepDetect();
         BuildStepEnvVars();
-        BuildStepLaunch();
-        BuildStepFolder();
-        BuildStepDetect();
         BuildStepLaunch();
 
         var hasProfiles = Directory.Exists(ResourceManager.PreparedDir)
@@ -155,9 +156,8 @@ public sealed class WizardForm : Form
             Text = "\u2190 Back",
             Location = new Point(30, 530),
             Size = new Size(100, 44),
-            FlatStyle = FlatStyle.Flat,
-            ForeColor = Color.FromArgb(80, 80, 80)
         };
+        StyleFlatButton(_btnBackSetup, Color.FromArgb(80, 80, 80));
         _btnBackSetup.Click += (_, _) => ShowStep(1);
 
         _btnCreateProfiles = new Button
@@ -165,11 +165,9 @@ public sealed class WizardForm : Form
             Text = "Create Selected Profiles",
             Location = new Point(145, 530),
             Size = new Size(220, 44),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(0, 120, 212),
-            ForeColor = Color.White,
             Font = new Font("Segoe UI", 10f, FontStyle.Bold)
         };
+        StyleFilledButton(_btnCreateProfiles, Color.FromArgb(0, 120, 212), Color.White);
         _btnCreateProfiles.Click += OnCreateProfilesClicked;
 
         _btnSkipSetup = new Button
@@ -177,11 +175,9 @@ public sealed class WizardForm : Form
             Text = "Continue to Project Selection \u2192",
             Location = new Point(380, 530),
             Size = new Size(250, 44),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(60, 60, 60),
-            ForeColor = Color.White,
             Font = new Font("Segoe UI", 10f)
         };
+        StyleFilledButton(_btnSkipSetup, Color.FromArgb(60, 60, 60), Color.White);
         _btnSkipSetup.Click += (_, _) => ShowStep(1);
 
         _stepSetup.Controls.AddRange([title, subtitle, lblPick, _lstSetupLangs,
@@ -303,7 +299,8 @@ public sealed class WizardForm : Form
         {
             Location = new Point(30, 122),
             Size = new Size(480, 28),
-            PlaceholderText = @"C:\Users\you\projects\my-app"
+            PlaceholderText = @"C:\Users\you\projects\my-app",
+            Font = new Font("Segoe UI", 10f)
         };
 
         _btnBrowse = new Button
@@ -311,8 +308,8 @@ public sealed class WizardForm : Form
             Text = "Browse...",
             Location = new Point(520, 120),
             Size = new Size(100, 30),
-            FlatStyle = FlatStyle.Flat
         };
+        StyleFlatButton(_btnBrowse, Color.FromArgb(80, 80, 80));
         _btnBrowse.Click += (_, _) =>
         {
             using var dlg = new FolderBrowserDialog
@@ -333,11 +330,9 @@ public sealed class WizardForm : Form
             Text = "Scan && Continue \u2192",
             Location = new Point(30, 168),
             Size = new Size(200, 40),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(0, 120, 212),
-            ForeColor = Color.White,
             Font = new Font("Segoe UI", 10f, FontStyle.Bold)
         };
+        StyleFilledButton(_btnScan, Color.FromArgb(0, 120, 212), Color.White);
         _btnScan.Click += OnScanClicked;
 
         _btnManageProfiles = new Button
@@ -345,14 +340,26 @@ public sealed class WizardForm : Form
             Text = "Manage Profiles...",
             Location = new Point(242, 168),
             Size = new Size(140, 40),
-            FlatStyle = FlatStyle.Flat,
-            ForeColor = Color.FromArgb(0, 120, 212)
         };
+        StyleFlatButton(_btnManageProfiles, Color.FromArgb(0, 120, 212));
         _btnManageProfiles.Click += (_, _) =>
         {
             RefreshSetupLanguageList();
             _lblSetupStatus.Text = "";
             ShowStep(0);
+        };
+
+        _btnSettings = new Button
+        {
+            Text = "Settings\u2026",
+            Location = new Point(392, 168),
+            Size = new Size(120, 40),
+        };
+        StyleFlatButton(_btnSettings, Color.FromArgb(0, 120, 212));
+        _btnSettings.Click += (_, _) =>
+        {
+            using var settingsForm = new SettingsForm();
+            settingsForm.ShowDialog(this);
         };
 
         // Recent projects section
@@ -387,6 +394,7 @@ public sealed class WizardForm : Form
             _btnContinue.Enabled = hasSelection;
             _btnRescan.Enabled = hasSelection;
             _btnRemove.Enabled = hasSelection;
+            _btnRegenerate.Enabled = hasSelection;
         };
         _lstRecent.DoubleClick += OnContinueClicked;
 
@@ -395,10 +403,9 @@ public sealed class WizardForm : Form
             Text = "Remove",
             Location = new Point(30, 572),
             Size = new Size(100, 40),
-            FlatStyle = FlatStyle.Flat,
-            ForeColor = Color.FromArgb(180, 40, 40),
             Enabled = false
         };
+        StyleFlatButton(_btnRemove, Color.FromArgb(180, 40, 40));
         _btnRemove.Click += OnRemoveClicked;
 
         _btnRescan = new Button
@@ -406,28 +413,53 @@ public sealed class WizardForm : Form
             Text = "Re-scan \u2192",
             Location = new Point(140, 572),
             Size = new Size(110, 40),
-            FlatStyle = FlatStyle.Flat,
             Enabled = false
         };
+        StyleFlatButton(_btnRescan, Color.FromArgb(0, 120, 212));
         _btnRescan.Click += OnRescanClicked;
+
+        _btnRegenerate = new Button
+        {
+            Text = "Regenerate environment",
+            Location = new Point(260, 572),
+            Size = new Size(160, 40),
+            Font = new Font("Segoe UI", 8.25f),
+            Enabled = false
+        };
+        StyleFlatButton(_btnRegenerate, Color.FromArgb(0, 120, 212));
+        _btnRegenerate.Paint += (s, pe) =>
+        {
+            var btn = (Button)s!;
+            var isHover = btn.ClientRectangle.Contains(btn.PointToClient(Cursor.Position));
+            var bg = !btn.Enabled ? btn.BackColor
+                : isHover ? btn.FlatAppearance.MouseOverBackColor
+                : btn.BackColor;
+            pe.Graphics.Clear(bg);
+            using var pen = new Pen(btn.Enabled ? btn.FlatAppearance.BorderColor : SystemColors.GrayText);
+            pe.Graphics.DrawRectangle(pen, 0, 0, btn.Width - 1, btn.Height - 1);
+            var textColor = btn.Enabled ? btn.ForeColor : SystemColors.GrayText;
+            TextRenderer.DrawText(pe.Graphics, btn.Text, btn.Font, btn.ClientRectangle, textColor,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+        };
+        _btnRegenerate.MouseEnter += (_, _) => _btnRegenerate.Invalidate();
+        _btnRegenerate.MouseLeave += (_, _) => _btnRegenerate.Invalidate();
+        _btnRegenerate.Click += OnRegenerateClicked;
 
         _btnContinue = new Button
         {
             Text = "Continue with Selected \u2192",
-            Location = new Point(410, 572),
-            Size = new Size(220, 40),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(46, 139, 87),
-            ForeColor = Color.White,
+            Location = new Point(430, 572),
+            Size = new Size(200, 40),
             Font = new Font("Segoe UI", 10f, FontStyle.Bold),
             Enabled = false
         };
+        StyleFilledButton(_btnContinue, Color.FromArgb(46, 139, 87), Color.White);
         _btnContinue.Click += OnContinueClicked;
 
         PopulateRecentProjects();
 
         _stepFolder.Controls.AddRange([title, subtitle, lblPath, _txtPath, _btnBrowse,
-            _btnScan, _btnManageProfiles, lblRecent, _lstRecent, _btnRemove, _btnRescan, _btnContinue]);
+            _btnScan, _btnManageProfiles, _btnSettings, lblRecent, _lstRecent, _btnRemove, _btnRescan, _btnRegenerate, _btnContinue]);
         Controls.Add(_stepFolder);
     }
 
@@ -448,6 +480,7 @@ public sealed class WizardForm : Form
         _btnContinue.Enabled = false;
         _btnRescan.Enabled = false;
         _btnRemove.Enabled = false;
+        _btnRegenerate.Enabled = false;
     }
 
     private void OnContinueClicked(object? sender, EventArgs e)
@@ -474,10 +507,7 @@ public sealed class WizardForm : Form
         }
 
         _projectPath = project.WorkspacePath;
-        // For quick launch, skip env vars and use defaults from host environment
-        ShowStep(4);  // Go directly to launch
-        _ = Task.Run(() => RunCoreLaunch(project.Profile));
-        ShowStep(3);
+        ShowStep(4);
         _ = Task.Run(() => RunCoreLaunch(project.Profile));
     }
 
@@ -503,6 +533,64 @@ public sealed class WizardForm : Form
         }
 
         PopulateRecentProjects();
+    }
+
+    private void OnRegenerateClicked(object? sender, EventArgs e)
+    {
+        if (_lstRecent.SelectedItems.Count == 0) return;
+
+        var project = (ProjectScaffolder.RecentProject)_lstRecent.SelectedItems[0].Tag!;
+
+        var result = MessageBox.Show(this,
+            "Regenerate the base environment and do a full rebuild?\n\n" +
+            "This will:\n" +
+            "• Stop and remove the container\n" +
+            "• Remove project data (config, logs, sessions)\n" +
+            "• Regenerate the profile from the current template\n" +
+            "• Remove the base Docker image\n" +
+            "• Then automatically run a full rebuild and launch\n\n" +
+            "Your source code is not affected.",
+            "Regenerate environment", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+        if (result != DialogResult.Yes) return;
+
+        try
+        {
+            ProfileGenerator.RegenerateProfile(project.Profile, _languages, _portConfigs);
+
+            var projectDir = ProjectScaffolder.GetProjectDir(project.Name);
+            var composeFile = Path.Combine(projectDir, "docker-compose.yml");
+
+            if (File.Exists(composeFile))
+                DockerRunner.ComposeDownVolumes(composeFile, projectDir);
+            else
+            {
+                var containerName = $"sandbox-{project.Name}";
+                if (DockerRunner.IsContainerRunning(containerName))
+                    DockerRunner.StopContainer(containerName);
+            }
+
+            ProjectScaffolder.RemoveProject(project.Name);
+
+            var baseImageTag = $"agent-sandbox-{project.Profile}:latest";
+            DockerRunner.RemoveImage(baseImageTag);
+
+            var composeImageTag = $"{project.Name}-agent:latest";
+            DockerRunner.RemoveImage(composeImageTag);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Regenerate error: {ex.Message}", "Error",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        PopulateRecentProjects();
+        _txtPath.Text = project.WorkspacePath;
+        _projectPath = project.WorkspacePath;
+        _forceNoCache = true;
+        ShowStep(4);
+        _ = Task.Run(() => RunCoreLaunch(project.Profile));
     }
 
     private void OnRescanClicked(object? sender, EventArgs e)
@@ -597,7 +685,8 @@ public sealed class WizardForm : Form
         _txtPorts = new TextBox
         {
             Location = new Point(30, 312),
-            Size = new Size(600, 28)
+            Size = new Size(600, 28),
+            Font = new Font("Segoe UI", 10f)
         };
 
         var lblProfile = new Label { Text = "Profile name:", Location = new Point(30, 360), AutoSize = true };
@@ -605,7 +694,8 @@ public sealed class WizardForm : Form
         _txtProfileName = new TextBox
         {
             Location = new Point(30, 382),
-            Size = new Size(300, 28)
+            Size = new Size(300, 28),
+            Font = new Font("Segoe UI", 10f)
         };
 
         _btnBack = new Button
@@ -613,8 +703,8 @@ public sealed class WizardForm : Form
             Text = "\u2190 Back",
             Location = new Point(30, 440),
             Size = new Size(100, 40),
-            FlatStyle = FlatStyle.Flat
         };
+        StyleFlatButton(_btnBack, Color.FromArgb(80, 80, 80));
         _btnBack.Click += (_, _) => ShowStep(1);
 
         _btnLaunch = new Button
@@ -622,11 +712,9 @@ public sealed class WizardForm : Form
             Text = "Generate && Launch Sandbox",
             Location = new Point(340, 440),
             Size = new Size(290, 40),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(0, 120, 212),
-            ForeColor = Color.White,
             Font = new Font("Segoe UI", 10f, FontStyle.Bold)
         };
+        StyleFilledButton(_btnLaunch, Color.FromArgb(0, 120, 212), Color.White);
         _btnLaunch.Click += OnLaunchClicked;
 
         _stepDetect.Controls.AddRange([title, lblLang, _lstLanguages, lblVer, _gridVersions,
@@ -715,38 +803,8 @@ public sealed class WizardForm : Form
             Ports = ports
         };
 
-        ShowStep(3);  // Go to env vars first
-        _ = Task.Run(() =>
-        {
-            try
-            {
-                Log($"[sandbox] Profile:   {spec.Name}");
-                Log($"[sandbox] Languages: {string.Join(", ", spec.Languages)}");
-                Log($"[sandbox] Ports:     {string.Join(", ", spec.Ports)}");
-                Log($"[sandbox] Workspace: {_projectPath}");
-                Log("");
-
-                Log("[sandbox] Checking Docker...");
-                if (!DockerRunner.IsDockerAvailable())
-                {
-                    Log("ERROR: Docker is not available. Is Docker Desktop running?");
-                    ShowDoneButton("Docker not available");
-                    return;
-                }
-                Log("[sandbox] Docker is ready.");
-
-                Log($"[sandbox] Generating profile '{spec.Name}'...");
-                ProfileGenerator.Generate(spec, _languages);
-                Log("[sandbox] Profile generated.");
-
-                RunCoreLaunch(spec.Name);
-            }
-            catch (Exception ex)
-            {
-                Log($"ERROR: {ex.Message}");
-                ShowDoneButton("Error occurred");
-            }
-        });
+        _pendingSpec = spec;
+        ShowStep(3);
     }
 
     // ─── Step 3: Environment Variables ───────────────────────────────────────
@@ -775,31 +833,25 @@ public sealed class WizardForm : Form
 
         // Anthropic API Key (for Claude Code)
         var lblAnthropic = new Label { Text = "ANTHROPIC_API_KEY (Claude Code):", Location = new Point(30, 80), AutoSize = true };
-        _txtAnthropicKey = new TextBox { Location = new Point(30, 102), Size = new Size(600, 28), UseSystemPasswordChar = true };
+        _txtAnthropicKey = new TextBox { Location = new Point(30, 102), Size = new Size(600, 28), UseSystemPasswordChar = true, Font = new Font("Segoe UI", 10f) };
 
-        // OpenAI API Key
         var lblOpenAI = new Label { Text = "OPENAI_API_KEY (OpenAI):", Location = new Point(30, 140), AutoSize = true };
-        _txtOpenAIKey = new TextBox { Location = new Point(30, 162), Size = new Size(600, 28), UseSystemPasswordChar = true };
+        _txtOpenAIKey = new TextBox { Location = new Point(30, 162), Size = new Size(600, 28), UseSystemPasswordChar = true, Font = new Font("Segoe UI", 10f) };
 
-        // Cursor API Key
         var lblCursor = new Label { Text = "CURSOR_API_KEY (Cursor CLI):", Location = new Point(30, 200), AutoSize = true };
-        _txtCursorKey = new TextBox { Location = new Point(30, 222), Size = new Size(600, 28), UseSystemPasswordChar = true };
+        _txtCursorKey = new TextBox { Location = new Point(30, 222), Size = new Size(600, 28), UseSystemPasswordChar = true, Font = new Font("Segoe UI", 10f) };
 
-        // GitHub Copilot API Key
         var lblCopilot = new Label { Text = "GITHUB_COPILOT_API_KEY (GitHub Copilot):", Location = new Point(30, 260), AutoSize = true };
-        _txtGitHubCopilotKey = new TextBox { Location = new Point(30, 282), Size = new Size(600, 28), UseSystemPasswordChar = true };
+        _txtGitHubCopilotKey = new TextBox { Location = new Point(30, 282), Size = new Size(600, 28), UseSystemPasswordChar = true, Font = new Font("Segoe UI", 10f) };
 
-        // OpenRouter API Key
         var lblOpenRouter = new Label { Text = "OPENROUTER_API_KEY:", Location = new Point(30, 320), AutoSize = true };
-        _txtOpenRouterKey = new TextBox { Location = new Point(30, 342), Size = new Size(600, 28), UseSystemPasswordChar = true };
+        _txtOpenRouterKey = new TextBox { Location = new Point(30, 342), Size = new Size(600, 28), UseSystemPasswordChar = true, Font = new Font("Segoe UI", 10f) };
 
-        // OpenCode API Key
         var lblOpenCode = new Label { Text = "OPENCODE_API_KEY:", Location = new Point(30, 380), AutoSize = true };
-        _txtOpenCodeKey = new TextBox { Location = new Point(30, 402), Size = new Size(600, 28), UseSystemPasswordChar = true };
+        _txtOpenCodeKey = new TextBox { Location = new Point(30, 402), Size = new Size(600, 28), UseSystemPasswordChar = true, Font = new Font("Segoe UI", 10f) };
 
-        // Gemini API Key
         var lblGemini = new Label { Text = "GEMINI_API_KEY:", Location = new Point(30, 440), AutoSize = true };
-        _txtGeminiKey = new TextBox { Location = new Point(30, 462), Size = new Size(600, 28), UseSystemPasswordChar = true };
+        _txtGeminiKey = new TextBox { Location = new Point(30, 462), Size = new Size(600, 28), UseSystemPasswordChar = true, Font = new Font("Segoe UI", 10f) };
 
         // Load existing env vars from project if available
         LoadEnvVarsFromProject();
@@ -810,21 +862,18 @@ public sealed class WizardForm : Form
             Text = "\u2190 Back",
             Location = new Point(30, 520),
             Size = new Size(100, 40),
-            FlatStyle = FlatStyle.Flat
         };
-        _btnBackEnv.Click += (_, _) => ShowStep(2);  // Go back to detect step
+        StyleFlatButton(_btnBackEnv, Color.FromArgb(80, 80, 80));
+        _btnBackEnv.Click += (_, _) => ShowStep(2);
 
-        // Continue button
         _btnContinueEnv = new Button
         {
             Text = "Continue to Launch \u2192",
             Location = new Point(340, 520),
             Size = new Size(290, 40),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(0, 120, 212),
-            ForeColor = Color.White,
             Font = new Font("Segoe UI", 10f, FontStyle.Bold)
         };
+        StyleFilledButton(_btnContinueEnv, Color.FromArgb(0, 120, 212), Color.White);
         _btnContinueEnv.Click += OnEnvVarsContinue;
 
         _stepEnvVars.Controls.AddRange([
@@ -845,11 +894,21 @@ public sealed class WizardForm : Form
     {
         try
         {
+            // First load saved defaults from Settings
+            var saved = EnvVarSettings.Load();
+            if (saved.TryGetValue("ANTHROPIC_API_KEY", out var v)) _txtAnthropicKey.Text = v;
+            if (saved.TryGetValue("OPENAI_API_KEY", out v)) _txtOpenAIKey.Text = v;
+            if (saved.TryGetValue("CURSOR_API_KEY", out v)) _txtCursorKey.Text = v;
+            if (saved.TryGetValue("GITHUB_COPILOT_API_KEY", out v)) _txtGitHubCopilotKey.Text = v;
+            if (saved.TryGetValue("OPENROUTER_API_KEY", out v)) _txtOpenRouterKey.Text = v;
+            if (saved.TryGetValue("OPENCODE_API_KEY", out v)) _txtOpenCodeKey.Text = v;
+            if (saved.TryGetValue("GEMINI_API_KEY", out v)) _txtGeminiKey.Text = v;
+
+            // Then override with most recent project's env vars if available
             var projectsDir = Path.Combine(ResourceManager.AppDataRoot, "projects");
             if (!Directory.Exists(projectsDir))
                 return;
 
-            // Try to load from the most recently modified project
             var projectDirs = Directory.GetDirectories(projectsDir)
                 .OrderByDescending(d => File.GetLastWriteTime(d))
                 .ToList();
@@ -859,14 +918,14 @@ public sealed class WizardForm : Form
                 var envVars = ProjectScaffolder.ReadRuntimeEnvForUI(Path.GetFileName(projDir));
                 if (envVars.Count > 0)
                 {
-                    if (envVars.TryGetValue("ANTHROPIC_API_KEY", out var v)) _txtAnthropicKey.Text = v;
+                    if (envVars.TryGetValue("ANTHROPIC_API_KEY", out v)) _txtAnthropicKey.Text = v;
                     if (envVars.TryGetValue("OPENAI_API_KEY", out v)) _txtOpenAIKey.Text = v;
                     if (envVars.TryGetValue("CURSOR_API_KEY", out v)) _txtCursorKey.Text = v;
                     if (envVars.TryGetValue("GITHUB_COPILOT_API_KEY", out v)) _txtGitHubCopilotKey.Text = v;
                     if (envVars.TryGetValue("OPENROUTER_API_KEY", out v)) _txtOpenRouterKey.Text = v;
                     if (envVars.TryGetValue("OPENCODE_API_KEY", out v)) _txtOpenCodeKey.Text = v;
                     if (envVars.TryGetValue("GEMINI_API_KEY", out v)) _txtGeminiKey.Text = v;
-                    break;  // Use first project's env vars as defaults
+                    break;
                 }
             }
         }
@@ -875,15 +934,45 @@ public sealed class WizardForm : Form
 
     private void OnEnvVarsContinue(object? sender, EventArgs e)
     {
-        // Save env vars to a temporary location for this launch
-        SaveEnvVarsForLaunch();
-        ShowStep(4);  // Go to launch step
-    }
+        var spec = _pendingSpec;
+        _pendingSpec = null;
 
-    private void SaveEnvVarsForLaunch()
-    {
-        // We'll store these in memory and pass to the launch process
-        // The actual file writing happens in the launch step
+        ShowStep(4);
+
+        if (spec != null)
+        {
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    Log($"[sandbox] Profile:   {spec.Name}");
+                    Log($"[sandbox] Languages: {string.Join(", ", spec.Languages)}");
+                    Log($"[sandbox] Ports:     {string.Join(", ", spec.Ports)}");
+                    Log($"[sandbox] Workspace: {_projectPath}");
+                    Log("");
+
+                    Log("[sandbox] Checking Docker...");
+                    if (!DockerRunner.IsDockerAvailable())
+                    {
+                        Log("ERROR: Docker is not available. Is Docker Desktop running?");
+                        ShowDoneButton("Docker not available");
+                        return;
+                    }
+                    Log("[sandbox] Docker is ready.");
+
+                    Log($"[sandbox] Generating profile '{spec.Name}'...");
+                    ProfileGenerator.Generate(spec, _languages);
+                    Log("[sandbox] Profile generated.");
+
+                    RunCoreLaunch(spec.Name);
+                }
+                catch (Exception ex)
+                {
+                    Log($"ERROR: {ex.Message}");
+                    ShowDoneButton("Error occurred");
+                }
+            });
+        }
     }
 
     // Dictionary to store env vars for current launch
@@ -912,8 +1001,6 @@ public sealed class WizardForm : Form
     }
 
     // ─── Step 4: Launching ────────────────────────────────────────────────
-
-    // ─── Step 3: Launching ──────────────────────────────────────────────
 
     private void BuildStepLaunch()
     {
@@ -989,7 +1076,8 @@ public sealed class WizardForm : Form
                 if (result == DialogResult.Yes)
                 {
                     Log("[sandbox] Reattaching...");
-                    DockerRunner.ExecInteractive(containerName, "opencode");
+                    var reattachCmd = ProjectScaffolder.GetAgentCommand(projectName);
+                    DockerRunner.ExecInteractive(containerName, reattachCmd, newWindow: true);
                     Log("[sandbox] Session ended.");
                     PostSessionCheck(projectName, containerName, projectDir);
                     ShowDoneButton("Session complete");
@@ -1004,9 +1092,11 @@ public sealed class WizardForm : Form
                     DockerRunner.StopContainer(containerName);
             }
 
-            Log($"[sandbox] Building base image {baseImage}...");
+            var noCache = _forceNoCache;
+            _forceNoCache = false;
+            Log($"[sandbox] Building base image {baseImage}{(noCache ? " (no cache)" : "")}...");
             var buildResult = DockerRunner.Build(
-                Path.Combine(profileDir, "Dockerfile.base"), baseImage, profileDir, Log);
+                Path.Combine(profileDir, "Dockerfile.base"), baseImage, profileDir, Log, noCache);
             if (buildResult != 0)
             {
                 Log("ERROR: Docker build failed. See output above.");
@@ -1030,13 +1120,7 @@ public sealed class WizardForm : Form
             ProjectScaffolder.UpdateLastStarted(projectName);
             ProjectScaffolder.UpdateWorkspacePath(projectName, _projectPath);
             ProjectScaffolder.SyncHostAuth(projectName, Log);
-            ProjectScaffolder.SyncHostAuth(projectName, Log);
             ProjectScaffolder.WriteRuntimeEnv(projectName, GetCurrentEnvVars());
-            ProjectScaffolder.UpdateWorkspacePath(projectName, _projectPath);
-            ProjectScaffolder.RemapPorts(projectName, Log);
-            ProjectScaffolder.UpdateWorkspacePath(projectName, _projectPath);
-            ProjectScaffolder.SyncHostAuth(projectName, Log);
-            ProjectScaffolder.WriteRuntimeEnv(projectName);
             ProjectScaffolder.RemapPorts(projectName, Log);
 
             if (ProjectScaffolder.HasDockerfileExtension(projectName))
@@ -1073,9 +1157,10 @@ public sealed class WizardForm : Form
             var runningContainer = DockerRunner.GetComposeContainerId(composePath, projectDir) ?? containerName;
             DockerRunner.WaitForReady(runningContainer, 120, Log);
 
+            var agentCmd = ProjectScaffolder.GetAgentCommand(projectName);
             Log($"[sandbox] Attaching to {containerName}...");
-            Log("[sandbox] OpenCode will open in a new terminal window.");
-            DockerRunner.ExecInteractive(runningContainer, "opencode");
+            Log($"[sandbox] Starting agent: {agentCmd} (new terminal window)");
+            DockerRunner.ExecInteractive(runningContainer, agentCmd, newWindow: true);
 
             Log("");
             Log("[sandbox] Session ended.");
@@ -1118,20 +1203,56 @@ public sealed class WizardForm : Form
             return;
         }
 
-        var btn = new Button
+        foreach (var c in _stepLaunch.Controls.OfType<Button>().ToList())
+            _stepLaunch.Controls.Remove(c);
+
+        var btnBack = new Button
+        {
+            Text = "Back to overview",
+            Location = new Point(30, 618),
+            Size = new Size(180, 40),
+            Font = new Font("Segoe UI", 10f, FontStyle.Bold)
+        };
+        StyleFilledButton(btnBack, Color.FromArgb(0, 120, 212), Color.White);
+        btnBack.Click += (_, _) =>
+        {
+            PopulateRecentProjects();
+            ShowStep(1);
+        };
+
+        var btnClose = new Button
         {
             Text = $"Close  ({status})",
-            Location = new Point(30, 620),
-            Size = new Size(600, 36),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(60, 60, 60),
-            ForeColor = Color.White
+            Location = new Point(230, 618),
+            Size = new Size(180, 40),
         };
-        btn.Click += (_, _) => Close();
-        _stepLaunch.Controls.Add(btn);
+        StyleFilledButton(btnClose, Color.FromArgb(60, 60, 60), Color.White);
+        btnClose.Click += (_, _) => Close();
+
+        _stepLaunch.Controls.Add(btnBack);
+        _stepLaunch.Controls.Add(btnClose);
     }
 
     // ─── Helpers ────────────────────────────────────────────────────────
+
+    private static void StyleFlatButton(Button btn, Color fg, Color? hoverBg = null)
+    {
+        btn.FlatStyle = FlatStyle.Flat;
+        btn.ForeColor = fg;
+        btn.FlatAppearance.BorderColor = fg;
+        btn.FlatAppearance.MouseOverBackColor = hoverBg ?? Color.FromArgb(30, fg);
+        btn.FlatAppearance.MouseDownBackColor = Color.FromArgb(50, fg);
+    }
+
+    private static void StyleFilledButton(Button btn, Color bg, Color fg, Color? hoverBg = null)
+    {
+        btn.FlatStyle = FlatStyle.Flat;
+        btn.BackColor = bg;
+        btn.ForeColor = fg;
+        btn.FlatAppearance.BorderColor = bg;
+        btn.FlatAppearance.MouseOverBackColor = hoverBg ?? ControlPaint.Light(bg, 0.15f);
+        btn.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(bg, 0.1f);
+    }
 
     private void ShowStep(int step)
     {

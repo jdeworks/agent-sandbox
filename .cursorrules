@@ -38,6 +38,7 @@ After copying files to `tools/AgentSandbox/Resources/`, bump the `VersionStamp` 
 - `agent-worker/sandbox/AGENTS.md.base` -> also copy to `tools/AgentSandbox/Resources/AGENTS.md.base`
 - `agent-worker/templates/opencode.json` -> also copy to `tools/AgentSandbox/Resources/templates/opencode.json`
 - `agent-worker/templates/oh-my-opencode.json` -> also copy to `tools/AgentSandbox/Resources/templates/oh-my-opencode.json`
+- `agent-worker/templates/agent-config.json` -> also copy to `tools/AgentSandbox/Resources/templates/agent-config.json`
 
 ### Modifying profile generation logic
 
@@ -100,6 +101,7 @@ SOURCE OF TRUTH (agent-worker/sandbox/)    WINDOWS COPY (tools/AgentSandbox/Reso
 SOURCE OF TRUTH (agent-worker/templates/)
   opencode.json              ─────────>      templates/opencode.json
   oh-my-opencode.json        ─────────>      templates/oh-my-opencode.json
+  agent-config.json          ─────────>      templates/agent-config.json
 ```
 
 The `agent-worker/sandbox/` directory is the canonical source. The `tools/AgentSandbox/Resources/` directory contains copies that are embedded into the exe at build time. Always edit the source first, then copy to Resources.
