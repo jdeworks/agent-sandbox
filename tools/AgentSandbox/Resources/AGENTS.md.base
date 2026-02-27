@@ -2,6 +2,103 @@
 
 You are running inside an isolated container sandbox. The project root is the current directory at `/workspace/src`.
 
+## ⚠️ CRITICAL: Read Before Making ANY Changes
+
+This environment is ephemeral. Changes made inside the container are NOT persistent
+unless you explicitly record them in the correct format. Failure to follow these
+instructions will result in LOST WORK when the container restarts.
+
+---
+
+## 📁 Change Recording Files
+
+| File | Purpose | Format |
+|------|---------|--------|
+| `/workspace/.sandbox/changes.txt` | High-level activity log | Human-readable |
+| `/workspace/.sandbox/Dockerfile.extension` | Dockerfile RUN commands | Dockerfile syntax |
+
+---
+
+## ✅ MANDATORY: Recording Package Manager Changes
+
+For npm, pip, cargo, gem, composer, etc.:
+
+1. Update the project's manifest file (package.json, requirements.txt, etc.)
+2. IMMEDIATELY append to `/workspace/.sandbox/changes.txt`:
+   ```
+   YYYY-MM-DD Added <packages> to <manifest-file>
+   ```
+
+### Examples:
+```
+2026-02-27 Added bullmq@5.1.0, ioredis@5.3.2 to apps/worker/package.json
+2026-02-27 Added pytest==8.0.0 to requirements.txt
+2026-02-27 Added serde, tokio to Cargo.toml
+```
+
+---
+
+## ⚠️ MANDATORY: Recording System Changes
+
+For apt-get, apk, yum, dnf, zypper:
+
+### Step 1: Create Dockerfile.extension (BEFORE running apt)
+```bash
+# Example: Installing postgresql
+echo "RUN apt-get update && apt-get install -y postgresql" > /workspace/.sandbox/Dockerfile.extension
+```
+
+### Step 2: Record in changes.txt
+```
+2026-02-27 Installed postgresql via apt-get
+```
+
+### ⚡ CRITICAL RULES:
+- ALWAYS use valid Dockerfile RUN command syntax
+- The command will be appended directly to the project Dockerfile
+- Without this file, your apt-get changes will be LOST on restart
+
+### Examples - DO THIS:
+```bash
+# GOOD - Changes persist after restart
+echo "RUN apt-get update && apt-get install -y postgresql" > /workspace/.sandbox/Dockerfile.extension
+echo "2026-02-27 Installed postgresql via apt-get" >> /workspace/.sandbox/changes.txt
+apt-get update && apt-get install -y postgresql
+```
+
+### Examples - DON'T DO THIS:
+```bash
+# BAD - Changes disappear after restart!
+apt-get install -y postgresql
+# (No Dockerfile.extension created - changes lost)
+```
+
+---
+
+## 🔍 Verification
+
+At any time, verify your changes are recorded:
+```bash
+cat /workspace/.sandbox/changes.txt           # Check activity log
+cat /workspace/.sandbox/Dockerfile.extension  # Check Dockerfile commands
+```
+
+---
+
+## 🚨 What Happens On Session End
+
+1. Script checks if container is still running
+2. IF container NOT running → Auto-bake:
+   - Appends Dockerfile.extension RUN commands to project Dockerfile
+   - Appends changes.txt to project log
+   - Deletes Dockerfile.extension
+3. IF container still running → Prompt user:
+   - "Container running. Bake changes now? [Y/n]"
+   - If user skips, changes remain for next session
+```
+
+---
+
 ## Pre-installed Tools
 
 The following are **always available** in the base image regardless of which
@@ -13,36 +110,6 @@ Dockerfile.extension:
 
 If you need to run `npm install` or `npx`, just use them directly -- they
 are already on the PATH.
-
-## Dependency Changes
-
-When you install, remove, or update any dependency:
-
-1. **Append a line to `/workspace/.sandbox/changes.txt`** describing the change (see format below).
-2. Update the appropriate manifest file in the project root (e.g. `requirements.txt`, `package.json`, `go.mod`, `Cargo.toml`).
-
-Example lines for changes.txt:
-```
-2025-01-15 added pytest==8.0.0 to requirements.txt
-2025-01-15 added express@4.18.0 to package.json
-```
-
-## System or Image Changes
-
-When you install, remove, or update any system-level dependency (even via apt):
-you MUST create `/workspace/.sandbox/Dockerfile.extension` with the
-corresponding shell commands so the container can be fully rebuilt.
-Write it as a plain shell script (executable commands only, no comments or
-documentation). Example:
-
-```
-apt-get update && apt-get install -y golang-go gcc g++ libc6-dev pkg-config
-```
-
-**Important:** Never create this file in the project source directory.
-Always use the `/workspace/.sandbox/` path. When the user restarts the
-sandbox, they will be prompted to bake it into the project Dockerfile;
-the file is then removed automatically.
 
 ## Dev Servers
 
@@ -61,3 +128,42 @@ re-run the sandbox preparation step (`prepare`) so that:
 
 The sandbox will keep working for the already-configured stack, but the
 new tooling won't be available until the environment is re-prepared.
+
+## Available CLI Agents
+
+This sandbox comes with multiple CLI coding agents pre-installed:
+
+| Agent | Command | Description |
+|-------|---------|-------------|
+| OpenCode | `opencode` | Default agent with oh-my-opencode orchestration |
+| Claude Code | `claude` | Anthropic's CLI agent |
+| Cursor CLI | `agent` | Cursor's CLI agent |
+| GitHub Copilot | `gh copilot agent` | Microsoft's GitHub Copilot CLI |
+
+### Switching Agents
+
+The default agent is OpenCode. To use a different agent, you can invoke it directly:
+
+```bash
+# Use Claude Code
+claude --help
+
+# Use Cursor CLI
+agent --help
+
+# Use GitHub Copilot  /gh copilot agent --help
+```
+
+### Authentication
+
+Each agent may require authentication. Auth files are synced from the host on container startup:
+- Claude Code: `~/.claude/auth.json` → container mounts from host
+- Cursor CLI: `~/.cursor/config.json` → container mounts from host  
+- GitHub Copilot: Use `gh auth login` inside the container
+
+### API Keys
+
+Set these environment variables for each agent:
+- Claude Code: `ANTHROPIC_API_KEY`
+- Cursor CLI: `CURSOR_API_KEY`
+- GitHub Copilot: `GITHUB_COPILOT_API_KEY` (or use `gh auth login`)

@@ -46,7 +46,7 @@ The generation logic exists in two places:
 - `agent-worker/sandbox/generate_profile.sh` (bash, used by unix scripts)
 - `tools/AgentSandbox/Services/ProfileGenerator.cs` (C#, used by Windows exe)
 
-Changes to Dockerfile assembly, compose generation, install.sh assembly, or AGENTS.md assembly must be mirrored in both.
+Changes to Dockerfile assembly, compose generation, install.sh assembly, or AGENTS.md assembly must be mirrored in both. The compose template and install.sh include `HOST_UID`/`HOST_GID` (Unix only) so the agent process runs as the host user and workspace files stay owned by the user; `sandbox.sh` substitutes these when writing docker-compose.yml, and `ProjectScaffolder.cs` replaces them with empty string on Windows.
 
 ### Modifying detection logic
 
@@ -67,6 +67,7 @@ Changes to how languages, versions, or frameworks are detected must be mirrored 
 ### Modifying helper commands (list, stats, cleanup)
 
 - `agent-worker/scripts/unix/sandbox-list.sh`, `sandbox-stats.sh`, `sandbox-cleanup.sh` (bash)
+- `agent-worker/scripts/unix/setup.sh` -- also registers the `sandbox-cleanup-sudo` alias (runs cleanup with sudo for root-owned files)
 - `tools/AgentSandbox/Cli.cs` -- `RunList()`, `RunStats()`, `RunCleanup()` methods (C#)
 
 ### Modifying port detection
@@ -107,7 +108,7 @@ The `agent-worker/sandbox/` directory is the canonical source. The `tools/AgentS
 
 Three documentation files must stay in sync with the codebase:
 
-- `README.md` -- top-level project docs (languages table, frameworks table, dependency list, project structure tree, adding-languages steps)
+- `README.md` -- top-level project docs (languages table, frameworks table, dependency list, project structure tree, adding-languages steps, file ownership (Unix), helper commands including sandbox-cleanup-sudo)
 - `agent-worker/sandbox/fragments/README.md` -- fragment conventions and per-language table
 - This file (`.cursorrules`) -- architecture notes and sync checklist
 

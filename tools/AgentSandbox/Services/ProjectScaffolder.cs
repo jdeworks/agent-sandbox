@@ -13,7 +13,15 @@ public static class ProjectScaffolder
     public record RecentProject(string Name, string Profile, string WorkspacePath, string LastStarted);
 
     private static readonly string[] ApiKeyVars =
-        ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "OPENCODE_API_KEY", "GEMINI_API_KEY"];
+        ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "OPENCODE_API_KEY", "GEMINI_API_KEY", "CURSOR_API_KEY", "GITHUB_COPILOT_API_KEY"];
+
+    // Encrypted storage key file location
+    private static readonly string EncryptedKeyPath;
+
+    static ProjectScaffolder()
+    {
+        EncryptedKeyPath = Path.Combine(ResourceManager.AppDataRoot, ".envkey");
+    }
 
     public static string GetProjectDir(string projectName) =>
         Path.Combine(ResourceManager.ProjectsDir, projectName);
@@ -89,7 +97,9 @@ public static class ProjectScaffolder
         var dockerPath = workspacePath.Replace('\\', '/');
         var compose = composeTpl
             .Replace("{{PROJECT_NAME}}", projectName)
-            .Replace("{{WORKSPACE_PATH}}", dockerPath);
+            .Replace("{{WORKSPACE_PATH}}", dockerPath)
+            .Replace("{{HOST_UID}}", "")  // Unix scripts substitute; Windows runs container as root
+            .Replace("{{HOST_GID}}", "");
         ResourceManager.WriteLf(Path.Combine(projectDir, "docker-compose.yml"), compose);
 
         var baseImage = $"agent-sandbox-{profileName}:latest";
@@ -146,7 +156,9 @@ public static class ProjectScaffolder
         var dockerPath = workspacePath.Replace('\\', '/');
         var compose = composeTpl
             .Replace("{{PROJECT_NAME}}", projectName)
-            .Replace("{{WORKSPACE_PATH}}", dockerPath);
+            .Replace("{{WORKSPACE_PATH}}", dockerPath)
+            .Replace("{{HOST_UID}}", "")
+            .Replace("{{HOST_GID}}", "");
         ResourceManager.WriteLf(Path.Combine(projectDir, "docker-compose.yml"), compose);
 
         var agentsMd = Path.Combine(profileDir, "AGENTS.md");
@@ -208,17 +220,71 @@ public static class ProjectScaffolder
         }
     }
 
-    public static void WriteRuntimeEnv(string projectName)
+    public static void WriteRuntimeEnv(string projectName, Dictionary<string, string>? overrides = null)
     {
         var envPath = Path.Combine(GetProjectDir(projectName), "runtime.env");
         var sb = new StringBuilder();
+        
+        // Collect all env vars (host env + overrides)
+        var allVars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        
+        // Add host environment variables
         foreach (var key in ApiKeyVars)
         {
             var val = Environment.GetEnvironmentVariable(key);
             if (!string.IsNullOrEmpty(val))
-                sb.AppendLine($"{key}={val}");
+                allVars[key] = val;
         }
+        
+        // Override with UI-provided values (these take precedence)
+        if (overrides != null)
+        {
+            foreach (var kvp in overrides)
+            {
+                if (!string.IsNullOrEmpty(kvp.Value))
+                    allVars[kvp.Key] = kvp.Value;
+            }
+        }
+        
+        // Write to file (encrypt all API key values)
+        foreach (var kvp in allVars)
+        {
+            var encryptedValue = EncryptValue(kvp.Value);
+            sb.AppendLine($"{kvp.Key}={encryptedValue}");
+        }
+        
         ResourceManager.WriteLf(envPath, sb.ToString());
+    }
+
+    // Read and decrypt runtime env vars for UI display
+    public static Dictionary<string, string> ReadRuntimeEnvForUI(string projectName)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var envPath = Path.Combine(GetProjectDir(projectName), "runtime.env");
+        
+        if (!File.Exists(envPath))
+            return result;
+        
+        var lines = File.ReadAllLines(envPath);
+        foreach (var line in lines)
+        {
+            if (string.IsNullOrWhiteSpace(line) || !line.Contains('='))
+                continue;
+            
+            var idx = line.IndexOf('=');
+            var key = line[..idx];
+            var value = line[(idx + 1)..];
+            
+            // Decrypt the value
+            if (!string.IsNullOrEmpty(value))
+            {
+                value = DecryptValue(value);
+            }
+            
+            result[key] = value;
+        }
+        
+        return result;
     }
 
     public static void RemapPorts(string projectName, Action<string>? log = null)
@@ -311,5 +377,92 @@ public static class ProjectScaffolder
         ResourceManager.WriteLf(dockerfilePath, existing.TrimEnd() + "\n" + appended + "\n");
 
         File.Delete(extPath);
+    }
+
+    // ─── Encryption helpers for secure API key storage ────────────────────────
+
+    private static byte[] GetOrCreateEncryptionKey()
+    {
+        // Try to load existing key
+        if (File.Exists(EncryptedKeyPath))
+        {
+            try
+            {
+                var encryptedKey = File.ReadAllBytes(EncryptedKeyPath);
+                // Decrypt using DPAPI (machine-specific)
+                return ProtectedData.Unprotect(encryptedKey, null, DataProtectionScope.CurrentUser);
+            }
+            catch
+            {
+                // If decryption fails, generate new key
+            }
+        }
+
+        // Generate a new random 256-bit key
+        var key = RandomNumberGenerator.GetBytes(32);
+
+        // Encrypt the key with DPAPI so only this user/machine can decrypt it
+        var protectedKey = ProtectedData.Protect(key, null, DataProtectionScope.CurrentUser);
+
+        // Store the protected key
+        var dir = Path.GetDirectoryName(EncryptedKeyPath);
+        if (!Directory.Exists(dir))
+            Directory.CreateDirectory(dir!);
+        File.WriteAllBytes(EncryptedKeyPath, protectedKey);
+
+        return key;
+    }
+
+    private static string EncryptValue(string plainText)
+    {
+        if (string.IsNullOrEmpty(plainText)) return string.Empty;
+
+        var key = GetOrCreateEncryptionKey();
+        using var aes = Aes.Create();
+        aes.Key = key;
+        aes.GenerateIV();
+
+        using var encryptor = aes.CreateEncryptor();
+        var plainBytes = Encoding.UTF8.GetBytes(plainText);
+        var encryptedBytes = encryptor.TransformFinalBlock(plainBytes, 0, plainBytes.Length);
+
+        // Combine IV + encrypted data and encode as base64
+        var result = new byte[aes.IV.Length + encryptedBytes.Length];
+        Buffer.BlockCopy(aes.IV, 0, result, 0, aes.IV.Length);
+        Buffer.BlockCopy(encryptedBytes, 0, result, aes.IV.Length, encryptedBytes.Length);
+
+        return Convert.ToBase64String(result);
+    }
+
+    private static string DecryptValue(string encryptedText)
+    {
+        if (string.IsNullOrEmpty(encryptedText)) return string.Empty;
+
+        try
+        {
+            var key = GetOrCreateEncryptionKey();
+            var combined = Convert.FromBase64String(encryptedText);
+
+            using var aes = Aes.Create();
+            aes.Key = key;
+
+            // Extract IV from the beginning
+            var iv = new byte[16];
+            Buffer.BlockCopy(combined, 0, iv, 0, 16);
+            aes.IV = iv;
+
+            // Extract encrypted data
+            var encryptedBytes = new byte[combined.Length - 16];
+            Buffer.BlockCopy(combined, 16, encryptedBytes, 0, encryptedBytes.Length);
+
+            using var decryptor = aes.CreateDecryptor();
+            var decryptedBytes = decryptor.TransformFinalBlock(encryptedBytes, 0, encryptedBytes.Length);
+            return Encoding.UTF8.GetString(decryptedBytes);
+        }
+        catch
+        {
+            // Return empty if decryption fails (might be plain text from older version)
+            return encryptedText;
+        }
     }
 }

@@ -113,6 +113,8 @@ public static class ProfileGenerator
         sb.AppendLine("    environment:");
         sb.AppendLine($"      - HOME=/workspace");
         sb.AppendLine($"      - PATH={pathEnv}");
+        sb.AppendLine("      - HOST_UID={{HOST_UID}}");
+        sb.AppendLine("      - HOST_GID={{HOST_GID}}");
         foreach (var env in envLines)
             sb.AppendLine(env);
         sb.AppendLine("    volumes:");
@@ -171,6 +173,17 @@ public static class ProfileGenerator
 
         sb.AppendLine("echo \"[sandbox] Ready.\"");
         sb.AppendLine("touch /tmp/.sandbox-ready");
+        sb.AppendLine("if [ -n \"${HOST_UID:-}\" ] && [ -n \"${HOST_GID:-}\" ]; then");
+        sb.AppendLine("  run_as_user=dev");
+        sb.AppendLine("  if getent passwd \"$HOST_UID\" >/dev/null 2>&1; then");
+        sb.AppendLine("    run_as_user=$(getent passwd \"$HOST_UID\" | cut -d: -f1)");
+        sb.AppendLine("  else");
+        sb.AppendLine("    groupadd -g \"$HOST_GID\" dev 2>/dev/null || true");
+        sb.AppendLine("    useradd -u \"$HOST_UID\" -g \"$HOST_GID\" -m -s /bin/bash dev 2>/dev/null || true");
+        sb.AppendLine("  fi");
+        sb.AppendLine("  chown -R \"$HOST_UID:$HOST_GID\" /workspace");
+        sb.AppendLine("  exec runuser -u \"$run_as_user\" -- opencode");
+        sb.AppendLine("fi");
         sb.AppendLine("exec opencode");
 
         ResourceManager.WriteLf(Path.Combine(profileDir, "install.sh"), sb.ToString());

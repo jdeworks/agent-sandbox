@@ -1,0 +1,34 @@
+{
+  "defaultAgent": "opencode",
+  "availableAgents": [
+    "opencode",
+    "claude",
+    "cursor",
+    "copilot"
+  ],
+  "agentSettings": {
+    "opencode": {
+      "command": "opencode",
+      "args": [],
+      "description": "OpenCode with oh-my-opencode plugin"
+    },
+    "claude": {
+      "command": "claude",
+      "args": [],
+      "description": "Claude Code CLI (Anthropic)",
+      "authFile": "~/.claude/auth.json"
+    },
+    "cursor": {
+      "command": "agent",
+      "args": [],
+      "description": "Cursor CLI",
+      "authFile": "~/.cursor/config.json"
+    },
+    "copilot": {
+      "command": "gh copilot",
+      "args": ["agent"],
+      "description": "GitHub Copilot CLI",
+      "authFile": "~/.copilot/config.json"
+    }
+  }
+}

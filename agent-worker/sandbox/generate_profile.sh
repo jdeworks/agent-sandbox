@@ -151,6 +151,8 @@ services:
     environment:
       - HOME=/workspace
       - PATH=${path_env}
+      - HOST_UID={{HOST_UID}}
+      - HOST_GID={{HOST_GID}}
 ${env_lines}    volumes:
       - {{WORKSPACE_PATH}}:/workspace/src${vol_mounts}
       - ./opencode_data:/workspace/.config/opencode
@@ -202,6 +204,17 @@ HEADER
     cat >> "$PROFILE_DIR/install.sh" <<'FOOTER'
 echo "[sandbox] Ready."
 touch /tmp/.sandbox-ready
+if [ -n "${HOST_UID:-}" ] && [ -n "${HOST_GID:-}" ]; then
+  run_as_user=dev
+  if getent passwd "$HOST_UID" >/dev/null 2>&1; then
+    run_as_user=$(getent passwd "$HOST_UID" | cut -d: -f1)
+  else
+    groupadd -g "$HOST_GID" dev 2>/dev/null || true
+    useradd -u "$HOST_UID" -g "$HOST_GID" -m -s /bin/bash dev 2>/dev/null || true
+  fi
+  chown -R "$HOST_UID:$HOST_GID" /workspace
+  exec runuser -u "$run_as_user" -- opencode
+fi
 exec opencode
 FOOTER
 

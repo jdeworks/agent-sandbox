@@ -26,7 +26,7 @@ source ~/.bash_aliases
 sandbox-python ~/my-project
 ```
 
-The setup script checks for Docker/jq, installs helper aliases (`sandbox-list`, `sandbox-stats`, `sandbox-cleanup`), and offers to create **default single-language profiles**. If you pick Python during setup, `sandbox-python` is ready to use immediately -- no `prepare` step needed.
+The setup script checks for Docker/jq, installs helper aliases (`sandbox-list`, `sandbox-stats`, `sandbox-cleanup`, `sandbox-cleanup-sudo`), and offers to create **default single-language profiles**. If you pick Python during setup, `sandbox-python` is ready to use immediately -- no `prepare` step needed.
 
 For multi-language projects (e.g. Python + Node), use `prepare` to create a combined profile:
 
@@ -193,11 +193,35 @@ The container-side port stays the same; only the host-side mapping changes.
 
 **API key passthrough:** If you have API keys set in your host environment, they are automatically forwarded into the container via a `runtime.env` file on every startup:
 
-- `ANTHROPIC_API_KEY`
+- `ANTHROPIC_API_KEY` (Claude Code)
 - `OPENAI_API_KEY`
+- `CURSOR_API_KEY` (Cursor CLI)
+- `GITHUB_COPILOT_API_KEY` (GitHub Copilot)
 - `OPENROUTER_API_KEY`
 - `OPENCODE_API_KEY`
 - `GEMINI_API_KEY`
+
+**Windows GUI:** The Windows wizard includes an Environment Variables step where you can enter API keys. These are stored **encrypted** using AES-256 with a DPAPI-protected key, so they are secure on disk.
+## CLI Agents
+
+The sandbox supports multiple CLI coding agents:
+
+| Agent | Command | Description |
+|-------|---------|-------------|
+| OpenCode | `opencode` | Default agent with oh-my-opencode orchestration |
+| Claude Code | `claude` | Anthropic's CLI agent |
+| Cursor CLI | `agent` | Cursor's CLI agent |
+| GitHub Copilot | `gh copilot agent` | Microsoft's GitHub Copilot CLI |
+
+### Selecting an Agent
+
+**Unix:** On startup, you'll be prompted to choose an agent for that session.
+
+You can also set a default agent in `sandbox_data/agent-config.json`.
+
+**Windows:** The agent selection is configured via the environment variables step in the wizard.
+
+All agents are pre-installed in the Docker base image.
 
 ## OpenCode Configuration
 
@@ -228,6 +252,7 @@ sandbox-list                    # List all projects with status, profile, and wo
 sandbox-stats                   # Show disk usage: images, volumes, per-project
 sandbox-cleanup my-project      # Remove a specific project
 sandbox-cleanup --all           # Remove all projects, containers, and volumes
+sandbox-cleanup-sudo --all      # Same with sudo (removes root-owned files from containers)
 prepare --list                  # List all prepared profiles
 prepare --delete python-node    # Delete a profile and its alias
 ```
@@ -282,6 +307,10 @@ For more verbose output, run OpenCode with `opencode --log-level DEBUG`.
 
 Additional named Docker volumes are created per-profile for caches (venv, pip, npm, cargo, etc.).
 
+### File ownership (Unix)
+
+On Linux/macOS/WSL the agent process runs as your host user (via `HOST_UID`/`HOST_GID` in the container). Files created in the bind-mounted workspace are therefore owned by you, so you can edit or delete them without `sudo` after the container exits. The container still runs its setup (dependency installs, etc.) as root; only the OpenCode/agent process drops to your user.
+
 ## Project Structure
 
 ```
@@ -314,7 +343,7 @@ agent-worker/
       sandbox.sh                     #   Core sandbox logic (called by profile wrappers)
       sandbox-list.sh                #   List all projects with status and profile
       sandbox-stats.sh               #   Disk usage and statistics (dynamic volume discovery)
-      sandbox-cleanup.sh             #   Remove projects, containers, volumes
+      sandbox-cleanup.sh             #   Remove projects, containers, volumes (sandbox-cleanup-sudo for full cleanup)
   projects/                          # Auto-generated per-project data
     <name>/
       docker-compose.yml, Dockerfile, config.env, runtime.env

@@ -13,6 +13,7 @@ public sealed class WizardForm : Form
     private Panel _stepSetup = null!;
     private Panel _stepFolder = null!;
     private Panel _stepDetect = null!;
+    private Panel _stepEnvVars = null!;
     private Panel _stepLaunch = null!;
 
     // Step 0: setup / manage profiles
@@ -41,7 +42,18 @@ public sealed class WizardForm : Form
     private Button _btnBack = null!;
     private Button _btnLaunch = null!;
 
-    // Step 3: launching
+    // Step 3: env vars
+    private TextBox _txtAnthropicKey = null!;
+    private TextBox _txtOpenAIKey = null!;
+    private TextBox _txtCursorKey = null!;
+    private TextBox _txtGitHubCopilotKey = null!;
+    private TextBox _txtOpenRouterKey = null!;
+    private TextBox _txtOpenCodeKey = null!;
+    private TextBox _txtGeminiKey = null!;
+    private Button _btnBackEnv = null!;
+    private Button _btnContinueEnv = null!;
+
+    // Step 4: launching
     private TextBox _txtLog = null!;
 
     // State
@@ -71,6 +83,10 @@ public sealed class WizardForm : Form
         catch { /* ignore if icon missing */ }
 
         BuildStepSetup();
+        BuildStepFolder();
+        BuildStepDetect();
+        BuildStepEnvVars();
+        BuildStepLaunch();
         BuildStepFolder();
         BuildStepDetect();
         BuildStepLaunch();
@@ -458,6 +474,9 @@ public sealed class WizardForm : Form
         }
 
         _projectPath = project.WorkspacePath;
+        // For quick launch, skip env vars and use defaults from host environment
+        ShowStep(4);  // Go directly to launch
+        _ = Task.Run(() => RunCoreLaunch(project.Profile));
         ShowStep(3);
         _ = Task.Run(() => RunCoreLaunch(project.Profile));
     }
@@ -693,11 +712,10 @@ public sealed class WizardForm : Form
         {
             Name = profileName,
             Languages = selectedLanguages,
-            Versions = versions,
             Ports = ports
         };
 
-        ShowStep(3);
+        ShowStep(3);  // Go to env vars first
         _ = Task.Run(() =>
         {
             try
@@ -730,6 +748,170 @@ public sealed class WizardForm : Form
             }
         });
     }
+
+    // ─── Step 3: Environment Variables ───────────────────────────────────────
+
+    private void BuildStepEnvVars()
+    {
+        _stepEnvVars = new Panel { Dock = DockStyle.Fill, Visible = false };
+
+        var title = new Label
+        {
+            Text = "Environment Variables",
+            Font = new Font("Segoe UI", 14f, FontStyle.Bold),
+            ForeColor = Color.FromArgb(30, 30, 30),
+            Location = new Point(30, 12),
+            AutoSize = true
+        };
+
+        var desc = new Label
+        {
+            Text = "Configure API keys for the CLI agents (optional - can also be set in host environment):",
+            Font = new Font("Segoe UI", 9f),
+            ForeColor = Color.FromArgb(80, 80, 80),
+            Location = new Point(30, 45),
+            AutoSize = true
+        };
+
+        // Anthropic API Key (for Claude Code)
+        var lblAnthropic = new Label { Text = "ANTHROPIC_API_KEY (Claude Code):", Location = new Point(30, 80), AutoSize = true };
+        _txtAnthropicKey = new TextBox { Location = new Point(30, 102), Size = new Size(600, 28), UseSystemPasswordChar = true };
+
+        // OpenAI API Key
+        var lblOpenAI = new Label { Text = "OPENAI_API_KEY (OpenAI):", Location = new Point(30, 140), AutoSize = true };
+        _txtOpenAIKey = new TextBox { Location = new Point(30, 162), Size = new Size(600, 28), UseSystemPasswordChar = true };
+
+        // Cursor API Key
+        var lblCursor = new Label { Text = "CURSOR_API_KEY (Cursor CLI):", Location = new Point(30, 200), AutoSize = true };
+        _txtCursorKey = new TextBox { Location = new Point(30, 222), Size = new Size(600, 28), UseSystemPasswordChar = true };
+
+        // GitHub Copilot API Key
+        var lblCopilot = new Label { Text = "GITHUB_COPILOT_API_KEY (GitHub Copilot):", Location = new Point(30, 260), AutoSize = true };
+        _txtGitHubCopilotKey = new TextBox { Location = new Point(30, 282), Size = new Size(600, 28), UseSystemPasswordChar = true };
+
+        // OpenRouter API Key
+        var lblOpenRouter = new Label { Text = "OPENROUTER_API_KEY:", Location = new Point(30, 320), AutoSize = true };
+        _txtOpenRouterKey = new TextBox { Location = new Point(30, 342), Size = new Size(600, 28), UseSystemPasswordChar = true };
+
+        // OpenCode API Key
+        var lblOpenCode = new Label { Text = "OPENCODE_API_KEY:", Location = new Point(30, 380), AutoSize = true };
+        _txtOpenCodeKey = new TextBox { Location = new Point(30, 402), Size = new Size(600, 28), UseSystemPasswordChar = true };
+
+        // Gemini API Key
+        var lblGemini = new Label { Text = "GEMINI_API_KEY:", Location = new Point(30, 440), AutoSize = true };
+        _txtGeminiKey = new TextBox { Location = new Point(30, 462), Size = new Size(600, 28), UseSystemPasswordChar = true };
+
+        // Load existing env vars from project if available
+        LoadEnvVarsFromProject();
+
+        // Back button
+        _btnBackEnv = new Button
+        {
+            Text = "\u2190 Back",
+            Location = new Point(30, 520),
+            Size = new Size(100, 40),
+            FlatStyle = FlatStyle.Flat
+        };
+        _btnBackEnv.Click += (_, _) => ShowStep(2);  // Go back to detect step
+
+        // Continue button
+        _btnContinueEnv = new Button
+        {
+            Text = "Continue to Launch \u2192",
+            Location = new Point(340, 520),
+            Size = new Size(290, 40),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(0, 120, 212),
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI", 10f, FontStyle.Bold)
+        };
+        _btnContinueEnv.Click += OnEnvVarsContinue;
+
+        _stepEnvVars.Controls.AddRange([
+            title, desc,
+            lblAnthropic, _txtAnthropicKey,
+            lblOpenAI, _txtOpenAIKey,
+            lblCursor, _txtCursorKey,
+            lblCopilot, _txtGitHubCopilotKey,
+            lblOpenRouter, _txtOpenRouterKey,
+            lblOpenCode, _txtOpenCodeKey,
+            lblGemini, _txtGeminiKey,
+            _btnBackEnv, _btnContinueEnv
+        ]);
+        Controls.Add(_stepEnvVars);
+    }
+
+    private void LoadEnvVarsFromProject()
+    {
+        try
+        {
+            var projectsDir = Path.Combine(ResourceManager.AppDataRoot, "projects");
+            if (!Directory.Exists(projectsDir))
+                return;
+
+            // Try to load from the most recently modified project
+            var projectDirs = Directory.GetDirectories(projectsDir)
+                .OrderByDescending(d => File.GetLastWriteTime(d))
+                .ToList();
+
+            foreach (var projDir in projectDirs)
+            {
+                var envVars = ProjectScaffolder.ReadRuntimeEnvForUI(Path.GetFileName(projDir));
+                if (envVars.Count > 0)
+                {
+                    if (envVars.TryGetValue("ANTHROPIC_API_KEY", out var v)) _txtAnthropicKey.Text = v;
+                    if (envVars.TryGetValue("OPENAI_API_KEY", out v)) _txtOpenAIKey.Text = v;
+                    if (envVars.TryGetValue("CURSOR_API_KEY", out v)) _txtCursorKey.Text = v;
+                    if (envVars.TryGetValue("GITHUB_COPILOT_API_KEY", out v)) _txtGitHubCopilotKey.Text = v;
+                    if (envVars.TryGetValue("OPENROUTER_API_KEY", out v)) _txtOpenRouterKey.Text = v;
+                    if (envVars.TryGetValue("OPENCODE_API_KEY", out v)) _txtOpenCodeKey.Text = v;
+                    if (envVars.TryGetValue("GEMINI_API_KEY", out v)) _txtGeminiKey.Text = v;
+                    break;  // Use first project's env vars as defaults
+                }
+            }
+        }
+        catch { /* ignore */ }
+    }
+
+    private void OnEnvVarsContinue(object? sender, EventArgs e)
+    {
+        // Save env vars to a temporary location for this launch
+        SaveEnvVarsForLaunch();
+        ShowStep(4);  // Go to launch step
+    }
+
+    private void SaveEnvVarsForLaunch()
+    {
+        // We'll store these in memory and pass to the launch process
+        // The actual file writing happens in the launch step
+    }
+
+    // Dictionary to store env vars for current launch
+    private Dictionary<string, string> _currentEnvVars = new();
+
+    public Dictionary<string, string> GetCurrentEnvVars()
+    {
+        _currentEnvVars.Clear();
+
+        if (!string.IsNullOrWhiteSpace(_txtAnthropicKey.Text))
+            _currentEnvVars["ANTHROPIC_API_KEY"] = _txtAnthropicKey.Text;
+        if (!string.IsNullOrWhiteSpace(_txtOpenAIKey.Text))
+            _currentEnvVars["OPENAI_API_KEY"] = _txtOpenAIKey.Text;
+        if (!string.IsNullOrWhiteSpace(_txtCursorKey.Text))
+            _currentEnvVars["CURSOR_API_KEY"] = _txtCursorKey.Text;
+        if (!string.IsNullOrWhiteSpace(_txtGitHubCopilotKey.Text))
+            _currentEnvVars["GITHUB_COPILOT_API_KEY"] = _txtGitHubCopilotKey.Text;
+        if (!string.IsNullOrWhiteSpace(_txtOpenRouterKey.Text))
+            _currentEnvVars["OPENROUTER_API_KEY"] = _txtOpenRouterKey.Text;
+        if (!string.IsNullOrWhiteSpace(_txtOpenCodeKey.Text))
+            _currentEnvVars["OPENCODE_API_KEY"] = _txtOpenCodeKey.Text;
+        if (!string.IsNullOrWhiteSpace(_txtGeminiKey.Text))
+            _currentEnvVars["GEMINI_API_KEY"] = _txtGeminiKey.Text;
+
+        return _currentEnvVars;
+    }
+
+    // ─── Step 4: Launching ────────────────────────────────────────────────
 
     // ─── Step 3: Launching ──────────────────────────────────────────────
 
@@ -848,6 +1030,12 @@ public sealed class WizardForm : Form
             ProjectScaffolder.UpdateLastStarted(projectName);
             ProjectScaffolder.UpdateWorkspacePath(projectName, _projectPath);
             ProjectScaffolder.SyncHostAuth(projectName, Log);
+            ProjectScaffolder.SyncHostAuth(projectName, Log);
+            ProjectScaffolder.WriteRuntimeEnv(projectName, GetCurrentEnvVars());
+            ProjectScaffolder.UpdateWorkspacePath(projectName, _projectPath);
+            ProjectScaffolder.RemapPorts(projectName, Log);
+            ProjectScaffolder.UpdateWorkspacePath(projectName, _projectPath);
+            ProjectScaffolder.SyncHostAuth(projectName, Log);
             ProjectScaffolder.WriteRuntimeEnv(projectName);
             ProjectScaffolder.RemapPorts(projectName, Log);
 
@@ -950,7 +1138,8 @@ public sealed class WizardForm : Form
         _stepSetup.Visible = step == 0;
         _stepFolder.Visible = step == 1;
         _stepDetect.Visible = step == 2;
-        _stepLaunch.Visible = step == 3;
+        _stepEnvVars.Visible = step == 3;
+        _stepLaunch.Visible = step == 4;
     }
 
     private static string FormatTimeAgo(string isoTimestamp)

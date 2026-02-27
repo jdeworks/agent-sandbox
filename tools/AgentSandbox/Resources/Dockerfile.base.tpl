@@ -30,6 +30,23 @@ ENV PATH="/opt/opencode/bin:${PATH}"
 # Oh My OpenCode
 RUN npm install -g oh-my-opencode @code-yeongyu/comment-checker
 
+# Claude Code CLI
+RUN curl -fsSL https://claude.ai/install.sh | bash \
+    && ln -sf /root/.claude/bin/claude /usr/local/bin/claude
+
+# Cursor CLI
+RUN curl https://cursor.com/install -fsS | bash \
+    && ln -sf /root/.cursor/bin/agent /usr/local/bin/agent
+
+# GitHub Copilot CLI
+RUN npm install -g @github/copilot \
+    && ln -sf /root/.npm-global/bin/gh /usr/local/bin/gh-copilot
+
+# Environment variables for CLI agents
+ENV ANTHROPIC_API_KEY=""
+ENV CURSOR_API_KEY=""
+ENV GITHUB_COPILOT_API_KEY=""
+
 # {{LANGUAGE_LAYERS}}
 
 WORKDIR /workspace
