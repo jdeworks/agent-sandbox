@@ -101,6 +101,11 @@ echo "  sandbox-cleanup  -> remove projects and volumes"
 add_alias "sandbox-cleanup-sudo" "sudo bash $SCRIPT_DIR/sandbox-cleanup.sh"
 echo "  sandbox-cleanup-sudo -> same as above with sudo (removes root-owned files)"
 
+add_alias "sandbox-cleanup-prepared" "bash $SCRIPT_DIR/sandbox-cleanup.sh prepared"
+echo "  sandbox-cleanup-prepared -> clean up prepared profiles (interactive)"
+add_alias "sandbox-cleanup-prepared-sudo" "sudo bash $SCRIPT_DIR/sandbox-cleanup.sh prepared"
+echo "  sandbox-cleanup-prepared-sudo -> same with sudo (for root-owned files)"
+
 echo ""
 
 ########################################
@@ -199,7 +204,7 @@ while IFS= read -r line; do
     [ -z "$line" ] && continue
     alias_name=$(echo "$line" | sed "s/^alias \([^=]*\)=.*/\1/")
     case "$alias_name" in
-        sandbox-list|sandbox-stats|sandbox-cleanup|sandbox-cleanup-sudo|prepare) continue ;;
+        sandbox-list|sandbox-stats|sandbox-cleanup|sandbox-cleanup-sudo|sandbox-cleanup-prepared|sandbox-cleanup-prepared-sudo|prepare) continue ;;
         sandbox-*) echo "    $alias_name /path/to/project" ;;
     esac
 done < <(grep '^alias sandbox-' "$ALIASES_FILE" 2>/dev/null)

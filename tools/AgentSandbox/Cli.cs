@@ -23,7 +23,8 @@ internal static class Cli
               agent-sandbox sandbox --profile <name> <path>  Launch with a specific profile
               agent-sandbox list                     CLI: list all projects
               agent-sandbox stats                    CLI: show disk usage
-              agent-sandbox cleanup [<project>]      CLI: remove a project (or --all)
+              QJ|              agent-sandbox cleanup [project]       CLI: remove sandbox (interactive, --all)
+#NM|              agent-sandbox cleanup prepared   CLI: clean up prepared profiles
               agent-sandbox profiles                 CLI: list prepared profiles
               agent-sandbox profiles delete <name>   CLI: delete a profile
               agent-sandbox help                     Show this help
@@ -513,6 +514,14 @@ internal static class Cli
 
     public static int RunCleanup(string[] args)
     {
+
+        // Handle "prepared" subcommand
+        if (args.Length > 0 && args[0].ToLower() == "prepared")
+        {
+            var subArgs = args.Length > 1 ? args.Skip(1).ToArray() : [];
+            return RunCleanupPrepared(subArgs);
+        }
+
         if (!Directory.Exists(ResourceManager.ProjectsDir))
         {
             Console.WriteLine("No projects to clean up.");
@@ -574,6 +583,193 @@ internal static class Cli
         Directory.Delete(projectDir, true);
         Console.WriteLine($"  Removed: {name}");
     }
+
+
+    // ─── Cleanup Prepared ─────────────────────────────────────────────────
+    
+    private static int RunCleanupPrepared(string[] args)
+    {
+        if (!Directory.Exists(ResourceManager.PreparedDir))
+        {
+            Console.WriteLine("No prepared profiles to clean up.");
+            return 0;
+        }
+
+        var profiles = Directory.GetDirectories(ResourceManager.PreparedDir)
+            .Select(d => Path.GetFileName(d)!)
+            .ToList();
+
+        if (profiles.Count == 0)
+        {
+            Console.WriteLine("No prepared profiles to clean up.");
+            return 0;
+        }
+
+        string? target = args.Length > 0 ? args[0] : null;
+
+        // Handle --all
+        if (target == "--all")
+        {
+            Console.WriteLine();
+            Console.WriteLine("WARNING: This will remove ALL prepared profiles!");
+            var hasProjects = profiles.Any(p => GetProjectsUsingProfile(p).Any());
+            if (hasProjects)
+                Console.WriteLine("Some sandbox projects will lose their profile!");
+            
+            Console.Write("Remove ALL prepared profiles? [y/N]: ");
+            if (Console.ReadLine()?.Trim().ToLower() != "y")
+            {
+                Console.WriteLine("Aborted.");
+                return 0;
+            }
+
+            foreach (var profile in profiles)
+            {
+                var dir = Path.Combine(ResourceManager.PreparedDir, profile);
+                if (Directory.Exists(dir))
+                {
+                    Directory.Delete(dir, true);
+                    Console.WriteLine($"  Removed: {profile}");
+                }
+            }
+            Console.WriteLine("All prepared profiles removed.");
+            return 0;
+        }
+
+        // Handle single profile
+        if (target != null)
+        {
+            var dir = Path.Combine(ResourceManager.PreparedDir, target);
+            if (!Directory.Exists(dir))
+            {
+                Console.WriteLine($"Prepared profile '{target}' not found.");
+                return 1;
+            }
+
+            var usingProjects = GetProjectsUsingProfile(target).ToList();
+            if (usingProjects.Any())
+            {
+                Console.WriteLine();
+                Console.WriteLine($"WARNING: The following projects use profile '{target}':");
+                foreach (var proj in usingProjects)
+                    Console.WriteLine($"  - {proj}");
+                Console.WriteLine("These sandboxes will stop working!");
+                Console.WriteLine();
+            }
+
+            Console.Write($"Remove prepared profile '{target}'? [y/N]: ");
+            if (Console.ReadLine()?.Trim().ToLower() != "y")
+            {
+                Console.WriteLine("Aborted.");
+                return 0;
+            }
+
+            Directory.Delete(dir, true);
+            Console.WriteLine($"Removed prepared profile: {target}");
+            return 0;
+        }
+
+        // Interactive mode
+        Console.WriteLine();
+        Console.WriteLine("=== Prepared Profiles ===");
+        Console.WriteLine();
+
+        for (int i = 0; i < profiles.Count; i++)
+        {
+            var p = profiles[i];
+            var usingProjects = GetProjectsUsingProfile(p).ToList();
+            Console.Write($"{i + 1}) {p}");
+            if (usingProjects.Any())
+                Console.Write($" (used by: {string.Join(", ", usingProjects)})");
+            Console.WriteLine();
+        }
+
+        Console.WriteLine();
+        Console.Write("Enter numbers (comma-separated, e.g. 1,3,5) or 'all': ");
+        var input = Console.ReadLine()?.Trim();
+
+        if (input?.ToLower() == "all")
+        {
+            return RunCleanupPrepared(["--all"]);
+        }
+
+        var toDelete = new List<string>();
+        if (!string.IsNullOrEmpty(input))
+        {
+            foreach (var part in input.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (int.TryParse(part.Trim(), out int idx) && idx > 0 && idx <= profiles.Count)
+                {
+                    toDelete.Add(profiles[idx - 1]);
+                }
+            }
+        }
+
+        if (toDelete.Count == 0)
+        {
+            Console.WriteLine("No valid selections. Aborted.");
+            return 0;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("The following will be deleted:");
+        foreach (var p in toDelete)
+        {
+            var usingProjects = GetProjectsUsingProfile(p).ToList();
+            Console.Write($"  - {p}");
+            if (usingProjects.Any())
+            {
+                Console.Write($" (used by: {string.Join(", ", usingProjects)})");
+                Console.WriteLine();
+                Console.WriteLine("    ^ These sandboxes will stop working!");
+            }
+            else
+            {
+                Console.WriteLine();
+            }
+        }
+        Console.WriteLine();
+
+        Console.Write("Confirm deletion? [y/N]: ");
+        if (Console.ReadLine()?.Trim().ToLower() != "y")
+        {
+            Console.WriteLine("Aborted.");
+            return 0;
+        }
+
+        foreach (var p in toDelete)
+        {
+            var dir = Path.Combine(ResourceManager.PreparedDir, p);
+            if (Directory.Exists(dir))
+            {
+                Directory.Delete(dir, true);
+                Console.WriteLine($"  Removed: {p}");
+            }
+        }
+        Console.WriteLine("Done.");
+        return 0;
+    }
+
+    private static IEnumerable<string> GetProjectsUsingProfile(string profile)
+    {
+        if (!Directory.Exists(ResourceManager.ProjectsDir))
+            yield break;
+
+        foreach (var dir in Directory.GetDirectories(ResourceManager.ProjectsDir))
+        {
+            var configPath = Path.Combine(dir, "config.env");
+            if (!File.Exists(configPath))
+                continue;
+
+            var lines = File.ReadAllLines(configPath);
+            var profileLine = lines.FirstOrDefault(l => l.StartsWith("PROFILE="));
+            if (profileLine != null && profileLine.Substring(8).Trim() == profile)
+            {
+                yield return Path.GetFileName(dir);
+            }
+        }
+    }
+
 
     // ─── Profiles ──────────────────────────────────────────────────────
 

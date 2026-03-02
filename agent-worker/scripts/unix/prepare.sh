@@ -346,10 +346,37 @@ profile_name="${profile_name:-$default_name}"
 
 profile_dir="$PREPARED_DIR/$profile_name"
 
+########################################
+# Helper: List projects using a given prepared profile
+########################################
+list_projects_using_profile() {
+  local profile="$1"
+  local repo_dir="$(cd "$SCRIPT_DIR/../.." && pwd)"
+  local projects_dir="$repo_dir/projects"
+  local any=false
+  for d in "$projects_dir"/*/; do
+    [ -d "$d" ] || continue
+    local cfg="$d/config.env"
+    if [ -f "$cfg" ]; then
+      local p=$(grep '^PROFILE=' "$cfg" | cut -d= -f2-)
+      if [ "$p" = "$profile" ]; then
+        echo "  - $(basename "$d")"
+        any=true
+      fi
+    fi
+  done
+  if ! $any; then
+    echo "  (none)"
+  fi
+}
+
+
 # Check if profile dir exists and auto-suffix if needed
 if [ -d "$profile_dir" ]; then
     echo ""
     echo "[prepare] Profile '$profile_name' already exists."
+    echo "[prepare] Projects using this profile:"
+    list_projects_using_profile "$profile_name"
     suffix=2
     while [ -d "$PREPARED_DIR/${profile_name}-${suffix}" ]; do
         suffix=$((suffix + 1))

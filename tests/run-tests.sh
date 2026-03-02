@@ -66,6 +66,13 @@ done
 grep -q 'suffix=2' "$SANDBOX_SCRIPTS/prepare.sh" 2>/dev/null && \
     log_pass "prepare.sh: Auto-suffix code exists" || log_fail "prepare.sh: No auto-suffix code"
 
+# Test for list_projects_using_profile function
+grep -q "list_projects_using_profile()" "$SANDBOX_SCRIPTS/prepare.sh" 2>/dev/null && 
+    log_pass "prepare.sh: list_projects_using_profile function exists" || log_fail "prepare.sh: No list_projects_using_profile"
+
+grep -q "list_projects_using_profile.*profile_name" "$SANDBOX_SCRIPTS/prepare.sh" 2>/dev/null && 
+    log_pass "prepare.sh: Calls list_projects_using_profile" || log_fail "prepare.sh: Does not call list_projects_using_profile"
+
 # ----- TEST 1.2: prepare.sh - alias handling -----
 log_section "1.2 prepare.sh - Alias Handling"
 
