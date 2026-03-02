@@ -346,15 +346,18 @@ profile_name="${profile_name:-$default_name}"
 
 profile_dir="$PREPARED_DIR/$profile_name"
 
+# Check if profile dir exists and auto-suffix if needed
 if [ -d "$profile_dir" ]; then
     echo ""
-    echo "[prepare] Profile '$profile_name' already exists at $profile_dir."
-    read -rp "Overwrite? [y/N]: " overwrite
-    if [[ ! "$overwrite" =~ ^[yY]$ ]]; then
-        echo "[prepare] Aborted."
-        exit 0
-    fi
-    rm -rf "$profile_dir"
+    echo "[prepare] Profile '$profile_name' already exists."
+    suffix=2
+    while [ -d "$PREPARED_DIR/${profile_name}-${suffix}" ]; do
+        suffix=$((suffix + 1))
+    done
+    new_name="${profile_name}-${suffix}"
+    echo "[prepare] Using '$new_name' instead."
+    profile_name="$new_name"
+    profile_dir="$PREPARED_DIR/$profile_name"
 fi
 
 ########################################
@@ -394,21 +397,25 @@ alias_line="alias $alias_name='$profile_dir/sandbox.sh'"
 
 echo ""
 touch "$ALIASES_FILE"
+# Handle alias: if it exists, update silently; if not, ask user
 existing=$(grep "^alias ${alias_name}=" "$ALIASES_FILE" 2>/dev/null || true)
 
 if [ -n "$existing" ]; then
-    echo "[prepare] Updating existing alias '$alias_name'."
+    # Alias already exists - update it silently
     sed -i "/^alias ${alias_name}=/d" "$ALIASES_FILE"
-fi
-
-read -rp "Add alias '$alias_name' to $ALIASES_FILE? [Y/n]: " add_alias
-add_alias="${add_alias:-Y}"
-if [[ "$add_alias" =~ ^[yY]$ ]]; then
     echo "$alias_line" >> "$ALIASES_FILE"
-    echo "[prepare] Alias '$alias_name' added."
+    echo "[prepare] Alias '$alias_name' updated."
 else
-    echo "[prepare] Skipped. You can run it directly:"
-    echo "  $profile_dir/sandbox.sh /path/to/project"
+    # New alias - ask user
+    read -rp "Add alias '$alias_name' to $ALIASES_FILE? [Y/n]: " add_alias
+    add_alias="${add_alias:-Y}"
+    if [[ "$add_alias" =~ ^[yY]$ ]]; then
+        echo "$alias_line" >> "$ALIASES_FILE"
+        echo "[prepare] Alias '$alias_name' added."
+    else
+        echo "[prepare] Skipped. You can run it directly:"
+        echo "  $profile_dir/sandbox.sh /path/to/project"
+    fi
 fi
 
 echo ""

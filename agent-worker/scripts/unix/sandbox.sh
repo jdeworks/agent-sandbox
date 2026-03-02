@@ -436,6 +436,11 @@ else
         -e "s|{{HOST_UID}}|$(id -u)|g" \
         -e "s|{{HOST_GID}}|$(id -g)|g" \
         "$SANDBOX_PROFILE_DIR/docker-compose.yml.tpl" > "$PROJECT_DIR/docker-compose.yml"
+    # Ensure Dockerfile exists (e.g., projects created before this step was added)
+    if [ ! -f "$PROJECT_DIR/Dockerfile" ]; then
+        echo "FROM $BASE_IMAGE" > "$PROJECT_DIR/Dockerfile"
+    fi
+    mkdir -p "$PROJECT_DIR/opencode_data"
     cp "$SANDBOX_PROFILE_DIR/AGENTS.md" "$PROJECT_DIR/opencode_data/AGENTS.md"
 fi
 

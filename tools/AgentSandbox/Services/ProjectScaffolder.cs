@@ -180,6 +180,16 @@ public static class ProjectScaffolder
             .Replace("{{HOST_GID}}", "");
         ResourceManager.WriteLf(Path.Combine(projectDir, "docker-compose.yml"), compose);
 
+        // Ensure Dockerfile exists (e.g., projects created before this step was added)
+        var profileName = Path.GetFileName(profileDir);
+        var dockerfilePath = Path.Combine(projectDir, "Dockerfile");
+        if (!File.Exists(dockerfilePath))
+            ResourceManager.WriteLf(dockerfilePath, $"FROM agent-sandbox-{profileName}:latest\n");
+
+        // Ensure opencode_data directory exists before copying AGENTS.md
+        Directory.CreateDirectory(Path.Combine(projectDir, "opencode_data"));
+
+
         var agentsMd = Path.Combine(profileDir, "AGENTS.md");
         if (File.Exists(agentsMd))
             File.Copy(agentsMd, Path.Combine(projectDir, "opencode_data", "AGENTS.md"), true);
