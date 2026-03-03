@@ -238,6 +238,7 @@ FOOTER
 ########################################
 generate_agents_md() {
     cp "$SANDBOX_DIR/AGENTS.md.base" "$PROFILE_DIR/AGENTS.md"
+    cp "$SANDBOX_DIR/socratic.md" "$PROFILE_DIR/socratic.md"
 
     for lang in "${SELECTED[@]}"; do
         local frag="$FRAGMENTS_DIR/${lang}.agents.md"

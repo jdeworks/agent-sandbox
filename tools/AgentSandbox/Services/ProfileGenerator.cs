@@ -272,6 +272,9 @@ public static class ProfileGenerator
         }
 
         ResourceManager.WriteLf(Path.Combine(profileDir, "AGENTS.md"), sb.ToString());
+
+        var socraticContent = ResourceManager.ReadSandboxFile("socratic.md");
+        ResourceManager.WriteLf(Path.Combine(profileDir, "socratic.md"), socraticContent);
     }
 
     private static void GenerateVersionsEnv(string profileDir, ProfileSpec spec, string nodeVersion)

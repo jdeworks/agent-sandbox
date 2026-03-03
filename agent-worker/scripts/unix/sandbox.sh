@@ -407,6 +407,7 @@ if [ ! -d "$PROJECT_DIR" ]; then
     cp "$TEMPLATES_DIR/opencode.json" "$PROJECT_DIR/opencode_data/opencode.json"
     cp "$TEMPLATES_DIR/oh-my-opencode.json" "$PROJECT_DIR/opencode_data/oh-my-opencode.json"
     cp "$SANDBOX_PROFILE_DIR/AGENTS.md" "$PROJECT_DIR/opencode_data/AGENTS.md"
+    cp "$SANDBOX_PROFILE_DIR/socratic.md" "$PROJECT_DIR/opencode_data/socratic.md"
     mkdir -p "$PROJECT_DIR/opencode_sessions"
     mkdir -p "$PROJECT_DIR/logs"
 
@@ -442,6 +443,7 @@ else
     fi
     mkdir -p "$PROJECT_DIR/opencode_data"
     cp "$SANDBOX_PROFILE_DIR/AGENTS.md" "$PROJECT_DIR/opencode_data/AGENTS.md"
+    cp "$SANDBOX_PROFILE_DIR/socratic.md" "$PROJECT_DIR/opencode_data/socratic.md"
 fi
 
 # Update LAST_STARTED and WORKSPACE_PATH on every run

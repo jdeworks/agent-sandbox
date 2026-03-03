@@ -122,6 +122,9 @@ public static class ProjectScaffolder
         File.Copy(
             Path.Combine(profileDir, "AGENTS.md"),
             Path.Combine(projectDir, "opencode_data", "AGENTS.md"), true);
+        File.Copy(
+            Path.Combine(profileDir, "socratic.md"),
+            Path.Combine(projectDir, "opencode_data", "socratic.md"), true);
 
         Directory.CreateDirectory(Path.Combine(projectDir, "opencode_sessions"));
         Directory.CreateDirectory(Path.Combine(projectDir, "logs"));
@@ -193,6 +196,10 @@ public static class ProjectScaffolder
         var agentsMd = Path.Combine(profileDir, "AGENTS.md");
         if (File.Exists(agentsMd))
             File.Copy(agentsMd, Path.Combine(projectDir, "opencode_data", "AGENTS.md"), true);
+
+        var socraticMd = Path.Combine(profileDir, "socratic.md");
+        if (File.Exists(socraticMd))
+            File.Copy(socraticMd, Path.Combine(projectDir, "opencode_data", "socratic.md"), true);
     }
 
     public static void UpdateLastStarted(string projectName)

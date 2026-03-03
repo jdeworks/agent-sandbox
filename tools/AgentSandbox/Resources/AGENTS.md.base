@@ -8,6 +8,10 @@ This environment is ephemeral. Changes made inside the container are NOT persist
 unless you explicitly record them in the correct format. Failure to follow these
 instructions will result in LOST WORK when the container restarts.
 
+## Socratic Method
+
+For development tasks, follow the Socratic method in `./socratic.md`.
+
 ---
 
 ## 📁 Change Recording Files
@@ -128,43 +132,4 @@ re-run the sandbox preparation step (`prepare`) so that:
 
 The sandbox will keep working for the already-configured stack, but the
 new tooling won't be available until the environment is re-prepared.
-
-## Available CLI Agents
-
-This sandbox comes with multiple CLI coding agents pre-installed:
-
-| Agent | Command | Description |
-|-------|---------|-------------|
-| OpenCode | `opencode` | Default agent with oh-my-opencode orchestration |
-| Claude Code | `claude` | Anthropic's CLI agent |
-| Cursor CLI | `agent` | Cursor's CLI agent |
-| GitHub Copilot | `gh copilot agent` | Microsoft's GitHub Copilot CLI |
-
-### Switching Agents
-
-The default agent is OpenCode. To use a different agent, you can invoke it directly:
-
-```bash
-# Use Claude Code
-claude --help
-
-# Use Cursor CLI
-agent --help
-
-# Use GitHub Copilot  /gh copilot agent --help
-```
-
-### Authentication
-
-Each agent may require authentication. Auth files are synced from the host on container startup:
-- Claude Code: `~/.claude/auth.json` → container mounts from host
-- Cursor CLI: `~/.cursor/config.json` → container mounts from host  
-- GitHub Copilot: Use `gh auth login` inside the container
-
-### API Keys
-
-Set these environment variables for each agent:
-- Claude Code: `ANTHROPIC_API_KEY`
-- Cursor CLI: `CURSOR_API_KEY`
-- GitHub Copilot: `GITHUB_COPILOT_API_KEY` (or use `gh auth login`)
 
