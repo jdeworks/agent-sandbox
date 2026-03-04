@@ -1,0 +1,22 @@
+{
+  "name": "xss-analysis",
+  "description": "Specialized template for Cross-Site Scripting (XSS) vulnerability analysis",
+  "version": "1.0.0",
+  "extends": "exploit-analysis",
+  "variables": {
+    "REPO": "Repository name",
+    "BRANCH": "Branch name",
+    "FILE": "File path",
+    "LINE": "Line number",
+    "CATEGORY": "XSS",
+    "SEVERITY": "Severity level",
+    "CWE": "CWE-79: Cross-site Scripting",
+    "LANGUAGE": "Programming language",
+    "CODE": "The vulnerable code snippet",
+    "CONTEXT": "Output context (HTML, JavaScript, Attribute, URL, CSS, SVG, DOM)",
+    "IS_REFLECTED": "Is the input reflected directly?",
+    "IS_STORED": "Is it stored XSS?"
+  },
+  "outputFormat": "json",
+  "focus": "XSS exploitation in various contexts"
+}

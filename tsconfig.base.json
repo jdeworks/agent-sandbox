@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@security-analyzer/types": ["packages/types/src"],
+      "@security-analyzer/types/*": ["packages/types/src/*"],
+      "@security-analyzer/common": ["packages/common/src"],
+      "@security-analyzer/common/*": ["packages/common/src/*"]
+    }
+  }
+}

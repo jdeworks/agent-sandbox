@@ -1,0 +1,20 @@
+{
+  "name": "eval-analysis",
+  "description": "Template for unsafe code evaluation (eval, exec, etc.) analysis",
+  "version": "1.0.0",
+  "extends": "exploit-analysis",
+  "variables": {
+    "REPO": "Repository name",
+    "BRANCH": "Branch name",
+    "FILE": "File path",
+    "LINE": "Line number",
+    "CATEGORY": "Eval",
+    "SEVERITY": "Severity level",
+    "CWE": "CWE-95: Eval Injection",
+    "LANGUAGE": "Programming language (Python, JavaScript, PHP)",
+    "CODE": "The vulnerable code snippet",
+    "INPUT_SOURCE": "Where the eval input comes from (user input, file, network)"
+  },
+  "outputFormat": "json",
+  "focus": "Code injection via unsafe evaluation"
+}

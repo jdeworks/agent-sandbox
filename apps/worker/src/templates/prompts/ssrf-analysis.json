@@ -1,0 +1,20 @@
+{
+  "name": "ssrf-analysis",
+  "description": "Template for Server-Side Request Forgery (SSRF) vulnerability analysis",
+  "version": "1.0.0",
+  "extends": "exploit-analysis",
+  "variables": {
+    "REPO": "Repository name",
+    "BRANCH": "Branch name",
+    "FILE": "File path",
+    "LINE": "Line number",
+    "CATEGORY": "SSRF",
+    "SEVERITY": "Severity level",
+    "CWE": "CWE-918: Server-Side Request Forgery",
+    "LANGUAGE": "Programming language",
+    "CODE": "The vulnerable code snippet",
+    "REQUEST_TYPE": "HTTP client type (requests, urllib, axios, fetch, etc.)"
+  },
+  "outputFormat": "json",
+  "focus": "SSRF exploitation for internal service access"
+}

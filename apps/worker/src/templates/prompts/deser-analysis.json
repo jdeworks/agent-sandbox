@@ -1,0 +1,20 @@
+{
+  "name": "deser-analysis",
+  "description": "Template for Insecure Deserialization vulnerability analysis",
+  "version": "1.0.0",
+  "extends": "exploit-analysis",
+  "variables": {
+    "REPO": "Repository name",
+    "BRANCH": "Branch name",
+    "FILE": "File path",
+    "LINE": "Line number",
+    "CATEGORY": "Deser",
+    "SEVERITY": "Severity level",
+    "CWE": "CWE-502: Deserialization of Untrusted Data",
+    "LANGUAGE": "Programming language",
+    "CODE": "The vulnerable code snippet",
+    "SERIALIZER": "Serialization library (pickle, yaml, json, marshal, etc.)"
+  },
+  "outputFormat": "json",
+  "focus": "Deserialization gadget chain exploitation"
+}
