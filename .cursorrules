@@ -68,8 +68,8 @@ Changes to how languages, versions, or frameworks are detected must be mirrored 
 ### Modifying helper commands (list, stats, cleanup)
 
 - `agent-worker/scripts/unix/sandbox-list.sh`, `sandbox-stats.sh`, `sandbox-cleanup.sh` (bash)
-- `agent-worker/scripts/unix/setup.sh` -- also registers the `sandbox-cleanup-sudo` alias (runs cleanup with sudo for root-owned files)
-- `tools/AgentSandbox/Cli.cs` -- `RunList()`, `RunStats()`, `RunCleanup()` methods (C#)
+- `agent-worker/scripts/unix/setup.sh` -- also registers `sandbox-cleanup-sudo`, `sandbox-cleanup-prepared`, `sandbox-cleanup-prepared-unused` (unused-only), `sandbox-cleanup-prepared-sudo`
+- `tools/AgentSandbox/Cli.cs` -- `RunList()`, `RunStats()`, `RunCleanup()`, `RunCleanupPrepared()` (C#); prepared cleanup supports `--unused-only`
 
 ### Modifying port detection
 

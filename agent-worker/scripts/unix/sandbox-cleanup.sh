@@ -17,19 +17,31 @@ else
 fi
 
 ########################################
-# Helper: List projects using a profile
+# Helper: Get profile names in use by scanning project Dockerfiles
+# Format: FROM agent-sandbox-<profile>:latest
+# Output: one profile name per line (unique)
 ########################################
-get_projects_using_profile() {
+get_profiles_in_use_by_dockerfiles() {
+    local dockerfile
+    for d in "$PROJECTS_DIR"/*/; do
+        [ -d "$d" ] || continue
+        dockerfile="$d/Dockerfile"
+        if [ -f "$dockerfile" ]; then
+            sed -n 's/^[[:space:]]*FROM[[:space:]]*agent-sandbox-\([^:]*\):latest.*/\1/p' "$dockerfile"
+        fi
+    done 2>/dev/null | sort -u
+}
+
+########################################
+# Helper: List project dir names that reference this profile (via Dockerfile)
+########################################
+get_projects_using_profile_dockerfile() {
     local profile="$1"
     local result=""
     for d in "$PROJECTS_DIR"/*/; do
         [ -d "$d" ] || continue
-        local cfg="$d/config.env"
-        if [ -f "$cfg" ]; then
-            local p=$(grep '^PROFILE=' "$cfg" 2>/dev/null | cut -d= -f2-)
-            if [ "$p" = "$profile" ]; then
-                result="$result $(basename "$d")"
-            fi
+        if [ -f "$d/Dockerfile" ] && grep -q "^[[:space:]]*FROM[[:space:]]*agent-sandbox-${profile}:latest" "$d/Dockerfile" 2>/dev/null; then
+            result="$result $(basename "$d")"
         fi
     done
     echo "$result"
@@ -79,7 +91,7 @@ cleanup_prepared() {
             exit 1
         fi
         
-        local using_projects=$(get_projects_using_profile "$target_profile")
+        local using_projects=$(get_projects_using_profile_dockerfile "$target_profile")
         if [ -n "$using_projects" ]; then
             echo ""
             echo "WARNING: The following projects use profile '$target_profile':"
@@ -113,7 +125,7 @@ cleanup_prepared() {
         echo "WARNING: This will remove ALL prepared profiles!"
         local total_affected=0
         for profile in "${profiles[@]}"; do
-            local using=$(get_projects_using_profile "$profile")
+            local using=$(get_projects_using_profile_dockerfile "$profile")
             if [ -n "$using" ]; then
                 total_affected=1
             fi
@@ -137,6 +149,40 @@ cleanup_prepared() {
         return 0
     fi
     
+    # Mode: unused-only — only delete prepared profiles not referenced in any project Dockerfile
+    if [ "$mode" = "unused-only" ]; then
+        local in_use_list
+        in_use_list=$(get_profiles_in_use_by_dockerfiles)
+        local unused=()
+        for profile in "${profiles[@]}"; do
+            if echo "$in_use_list" | grep -qxF "$profile"; then
+                continue
+            fi
+            unused+=("$profile")
+        done
+        if [ ${#unused[@]} -eq 0 ]; then
+            echo "No unused prepared profiles (all are in use by at least one project)."
+            return 0
+        fi
+        echo "Unused prepared profiles (not used by any project):"
+        for profile in "${unused[@]}"; do
+            echo "  - $profile"
+        done
+        echo ""
+        read -rp "Remove these ${#unused[@]} prepared profile(s)? [y/N] " confirm
+        if [[ ! "$confirm" =~ ^[yY]$ ]]; then
+            echo "Aborted."
+            return 0
+        fi
+        for profile in "${unused[@]}"; do
+            $rm_cmd "$PREPARED_DIR/$profile" 2>/dev/null || true
+            sed -i "/^alias sandbox-$profile=/d" "$ALIASES_FILE" 2>/dev/null || true
+            echo "[cleanup] Removed: $profile"
+        done
+        echo "[cleanup] Done."
+        return 0
+    fi
+
     # Mode: interactive
     echo ""
     echo "=== Prepared Profiles ==="
@@ -148,7 +194,7 @@ cleanup_prepared() {
     local display_profiles=()
     
     for profile in "${profiles[@]}"; do
-        local using=$(get_projects_using_profile "$profile")
+        local using=$(get_projects_using_profile_dockerfile "$profile")
         profile_projects[$index]="$using"
         display_profiles+=("$profile")
         
@@ -189,7 +235,7 @@ cleanup_prepared() {
     echo ""
     echo "WARNING: The following will be deleted:"
     for profile in "${to_delete[@]}"; do
-        local using=$(get_projects_using_profile "$profile")
+        local using=$(get_projects_using_profile_dockerfile "$profile")
         echo "  - $profile"
         if [ -n "$using" ]; then
             echo "    Used by: $using"
@@ -371,6 +417,9 @@ case "$CMD" in
         case "$SUBCMD" in
             --all)
                 cleanup_prepared "all"
+                ;;
+            --unused-only)
+                cleanup_prepared "unused-only"
                 ;;
             -s|--sudo)
                 # Re-run with sudo

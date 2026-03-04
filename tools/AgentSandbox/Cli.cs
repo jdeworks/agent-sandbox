@@ -607,12 +607,45 @@ internal static class Cli
 
         string? target = args.Length > 0 ? args[0] : null;
 
+        // Handle --unused-only: only delete prepared profiles not referenced in any project Dockerfile
+        if (target == "--unused-only")
+        {
+            var inUse = GetProfilesInUseByDockerfiles();
+            var unused = profiles.Where(p => !inUse.Contains(p)).ToList();
+            if (unused.Count == 0)
+            {
+                Console.WriteLine("No unused prepared profiles (all are in use by at least one project).");
+                return 0;
+            }
+            Console.WriteLine("Unused prepared profiles (not used by any project):");
+            foreach (var p in unused)
+                Console.WriteLine($"  - {p}");
+            Console.WriteLine();
+            Console.Write($"Remove these {unused.Count} prepared profile(s)? [y/N]: ");
+            if (Console.ReadLine()?.Trim().ToLower() != "y")
+            {
+                Console.WriteLine("Aborted.");
+                return 0;
+            }
+            foreach (var profile in unused)
+            {
+                var dir = Path.Combine(ResourceManager.PreparedDir, profile);
+                if (Directory.Exists(dir))
+                {
+                    Directory.Delete(dir, true);
+                    Console.WriteLine($"  Removed: {profile}");
+                }
+            }
+            Console.WriteLine("Done.");
+            return 0;
+        }
+
         // Handle --all
         if (target == "--all")
         {
             Console.WriteLine();
             Console.WriteLine("WARNING: This will remove ALL prepared profiles!");
-            var hasProjects = profiles.Any(p => GetProjectsUsingProfile(p).Any());
+            var hasProjects = profiles.Any(p => GetProjectsUsingProfileDockerfile(p).Any());
             if (hasProjects)
                 Console.WriteLine("Some sandbox projects will lose their profile!");
             
@@ -646,7 +679,7 @@ internal static class Cli
                 return 1;
             }
 
-            var usingProjects = GetProjectsUsingProfile(target).ToList();
+            var usingProjects = GetProjectsUsingProfileDockerfile(target).ToList();
             if (usingProjects.Any())
             {
                 Console.WriteLine();
@@ -677,7 +710,7 @@ internal static class Cli
         for (int i = 0; i < profiles.Count; i++)
         {
             var p = profiles[i];
-            var usingProjects = GetProjectsUsingProfile(p).ToList();
+            var usingProjects = GetProjectsUsingProfileDockerfile(p).ToList();
             Console.Write($"{i + 1}) {p}");
             if (usingProjects.Any())
                 Console.Write($" (used by: {string.Join(", ", usingProjects)})");
@@ -715,7 +748,7 @@ internal static class Cli
         Console.WriteLine("The following will be deleted:");
         foreach (var p in toDelete)
         {
-            var usingProjects = GetProjectsUsingProfile(p).ToList();
+            var usingProjects = GetProjectsUsingProfileDockerfile(p).ToList();
             Console.Write($"  - {p}");
             if (usingProjects.Any())
             {
@@ -750,26 +783,62 @@ internal static class Cli
         return 0;
     }
 
-    private static IEnumerable<string> GetProjectsUsingProfile(string profile)
+    /// <summary>Profile names in use by scanning project Dockerfiles (FROM agent-sandbox-&lt;profile&gt;:latest).</summary>
+    private static HashSet<string> GetProfilesInUseByDockerfiles()
+    {
+        var inUse = new HashSet<string>(StringComparer.Ordinal);
+        if (!Directory.Exists(ResourceManager.ProjectsDir))
+            return inUse;
+
+        foreach (var dir in Directory.GetDirectories(ResourceManager.ProjectsDir))
+        {
+            var dockerfile = Path.Combine(dir, "Dockerfile");
+            if (!File.Exists(dockerfile))
+                continue;
+
+            foreach (var line in File.ReadAllLines(dockerfile))
+            {
+                var t = line.Trim();
+                if (t.StartsWith("FROM ", StringComparison.OrdinalIgnoreCase) && t.Contains("agent-sandbox-") && t.Contains(":latest"))
+                {
+                    var from = t.Substring(5).TrimStart();
+                    var start = from.IndexOf("agent-sandbox-", StringComparison.Ordinal);
+                    if (start >= 0)
+                    {
+                        start += "agent-sandbox-".Length;
+                        var end = from.IndexOf(":latest", start, StringComparison.Ordinal);
+                        if (end > start)
+                            inUse.Add(from.Substring(start, end - start));
+                    }
+                    break;
+                }
+            }
+        }
+        return inUse;
+    }
+
+    private static IEnumerable<string> GetProjectsUsingProfileDockerfile(string profile)
     {
         if (!Directory.Exists(ResourceManager.ProjectsDir))
             yield break;
 
+        var needle = $"agent-sandbox-{profile}:latest";
         foreach (var dir in Directory.GetDirectories(ResourceManager.ProjectsDir))
         {
-            var configPath = Path.Combine(dir, "config.env");
-            if (!File.Exists(configPath))
+            var dockerfile = Path.Combine(dir, "Dockerfile");
+            if (!File.Exists(dockerfile))
                 continue;
 
-            var lines = File.ReadAllLines(configPath);
-            var profileLine = lines.FirstOrDefault(l => l.StartsWith("PROFILE="));
-            if (profileLine != null && profileLine.Substring(8).Trim() == profile)
+            foreach (var line in File.ReadAllLines(dockerfile))
             {
-                yield return Path.GetFileName(dir);
+                if (line.TrimStart().StartsWith("FROM ", StringComparison.OrdinalIgnoreCase) && line.Contains(needle))
+                {
+                    yield return Path.GetFileName(dir)!;
+                    break;
+                }
             }
         }
     }
-
 
     // ─── Profiles ──────────────────────────────────────────────────────
 

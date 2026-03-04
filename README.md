@@ -4,6 +4,59 @@ Isolated Docker sandbox for AI coding agents. Each project runs inside a locked-
 
 The sandbox environment is tailored to your project -- you pick the languages you need (Python, Node, Go, Rust, ...) and only those runtimes are installed. Ports are auto-detected based on the frameworks in your project, so dev servers just work.
 
+## Common use cases
+
+- **Run AI agents in isolation** — Each project runs in its own container; the agent only sees the workspace you mount. No access to the rest of your machine.
+- **Language-tailored environments** — Create profiles with only the runtimes you need (e.g. Python + Node). Dependencies are installed inside the container; your host stays clean.
+- **Ports and dev servers** — Frameworks (Next.js, Flask, etc.) are detected and the right ports are exposed so the agent can run and use dev servers without extra config.
+- **Persistent config and caches** — OpenCode config, sessions, and language caches (venv, npm, cargo, …) live on the host between runs. Re-launch the same project and everything is still there.
+- **Safe system changes** — When the agent needs system packages (e.g. `apt install`), it writes a `Dockerfile.extension`; you choose whether to bake it into the project’s Dockerfile. No surprise changes to your host.
+- **Multiple projects** — Each project gets its own profile and data. List projects, see disk usage, and clean up individual projects or only unused prepared profiles when you’re done.
+
+## Common issues if you don’t use a sandbox
+
+Running an AI coding agent (e.g. OpenCode) directly on your host is convenient but has real downsides. A sandbox addresses these by design:
+
+- **Agent with full host access** — Without a sandbox, the agent has access to your entire filesystem, environment variables, SSH keys, and other repos. It can run any command. A mistaken or overeager suggestion can overwrite important files, leak secrets, or alter system config. In a sandbox, the agent only sees the mounted workspace and runs inside a container; system-level changes are recorded in `Dockerfile.extension` and only applied if you approve.
+
+- **Version and environment conflicts** — Different projects often need different Python, Node, or Go versions, or conflicting global tools. Without isolation you rely on a single global environment or juggle version managers, and one project’s deps can break another’s. With a sandbox, each profile has its own runtimes and versions; project A can use Python 3.11 while project B uses 3.12. Dependencies live in the container (venvs, `node_modules`, etc.), so your host stays clean and projects don’t interfere.
+
+- **Risky experimentation** — Letting the agent try new runtimes, system packages, or shell commands on your host can leave your machine in a bad state. In a sandbox you can experiment freely; wiping or rebuilding a project (or a profile) is a single cleanup command. System changes go through `Dockerfile.extension`, so you decide what gets baked in.
+
+- **Reproducibility** — Sandbox profiles (Dockerfile.base, install.sh, versions.env) define exactly what the agent sees. The same profile gives the same environment every time and on any machine that has Docker. Without a sandbox, “works on my machine” and environment drift are common.
+
+- **Cross-project and cache pollution** — On the host, global caches (npm, pip, cargo, Go module cache) are shared. One project’s dependency resolution or install can affect another, and agent-installed packages can linger everywhere. In a sandbox, each profile has its own container image and named volumes; installs and caches are scoped to that environment so projects stay independent.
+
+- **Accidental edits outside the project** — Agents sometimes run scripts or find/replace that escape the intended folder (parent directories, sibling repos, home). On the host that can overwrite or delete unrelated work. In a sandbox, only the workspace directory is mounted; the agent literally cannot see or modify anything else.
+
+- **Port and process clashes** — Running the agent on several projects at once on the host means shared ports and shared processes; one project’s dev server can conflict with another’s. The sandbox gives each project its own container and, when a port is in use, automatically remaps it (e.g. 3000 → 3001) so multiple sandboxes can run side by side.
+
+- **Secrets and credentials in scope** — On the host, the agent can read `~/.ssh`, `.env` files in other dirs, and any env vars your shell has. A single bad suggestion or script can expose or log them. In a sandbox, only the workspace and what you explicitly pass (e.g. API keys via the tool’s passthrough) are visible; the rest of your home and system are out of scope.
+
+- **Leftover agent artifacts and cleanup** — Without isolation, agent-generated files, failed experiments, and caches end up scattered across your repo and system. Cleaning up is manual and error-prone. With a sandbox, all agent and dependency state lives under the project’s data dir and volumes; you can remove a project or an unused profile in one go (`sandbox-cleanup`, `sandbox-cleanup-prepared-unused`).
+
+- **Closer to CI and production** — If your CI or deployment runs in containers, a sandboxed agent environment is much closer to that. You avoid “runs locally but fails in CI” because local and sandbox both use a defined, containerized setup rather than whatever is installed on your machine.
+
+## Command reference
+
+All commands in one place. Details are in the sections below.
+
+| Action | Linux / macOS / WSL | Windows (CLI) |
+|--------|---------------------|---------------|
+| **Setup** | `./agent-worker/scripts/unix/setup.sh` then `source ~/.bash_aliases` | `agent-sandbox setup` |
+| **Prepare profile** | `prepare` (interactive) | `agent-sandbox prepare C:\path` |
+| **List prepared profiles** | `prepare --list` | `agent-sandbox profiles` |
+| **Delete a profile** | `prepare --delete <name>` | `agent-sandbox profiles delete <name>` |
+| **Launch sandbox** | `sandbox-<profile> /path` or `sandbox-<profile>` (recent) | `agent-sandbox sandbox C:\path` or `agent-sandbox sandbox` |
+| **List projects** | `sandbox-list` | `agent-sandbox list` |
+| **Disk usage** | `sandbox-stats` | `agent-sandbox stats` |
+| **Remove a project** | `sandbox-cleanup <name>` or `sandbox-cleanup --all` | `agent-sandbox cleanup <name>` or `agent-sandbox cleanup --all` |
+| **Cleanup with sudo** (root-owned files) | `sandbox-cleanup-sudo [name or --all]` | — |
+| **Remove prepared profiles** (interactive) | `sandbox-cleanup prepared` | `agent-sandbox cleanup prepared` |
+| **Remove only unused prepared profiles** | `sandbox-cleanup-prepared-unused` or `sandbox-cleanup.sh prepared --unused-only` | `agent-sandbox cleanup prepared --unused-only` |
+
+On Windows you can also use the **GUI**: double-click the exe for a wizard (folder picker, recent projects, Scan & Launch).
+
 ## Prerequisites
 
 **Linux / macOS / WSL:**
@@ -254,6 +307,8 @@ sandbox-stats                   # Show disk usage: images, volumes, per-project
 sandbox-cleanup my-project      # Remove a specific project
 sandbox-cleanup --all           # Remove all projects, containers, and volumes
 sandbox-cleanup-sudo [name|--all]  # Same with sudo (use when files are root-owned; script will suggest this if rm fails)
+sandbox-cleanup prepared        # Interactive: remove prepared profiles (warns if in use)
+sandbox-cleanup-prepared-unused # Remove only prepared profiles not used by any project
 prepare --list                  # List all prepared profiles
 prepare --delete python-node    # Delete a profile and its alias
 ```
@@ -264,6 +319,8 @@ prepare --delete python-node    # Delete a profile and its alias
 agent-sandbox list                       List all projects
 agent-sandbox stats                      Show disk usage
 agent-sandbox cleanup [<project>]        Remove a project (or --all)
+agent-sandbox cleanup prepared           Interactive: remove prepared profiles
+agent-sandbox cleanup prepared --unused-only   Remove only prepared profiles not used by any project
 agent-sandbox profiles                   List prepared profiles
 agent-sandbox profiles delete <name>     Delete a profile
 ```
@@ -436,6 +493,8 @@ agent-sandbox sandbox                          Pick from recent projects
 agent-sandbox list                             List all projects
 agent-sandbox stats                            Show disk usage
 agent-sandbox cleanup [<project>]              Remove a project (or --all)
+agent-sandbox cleanup prepared                 Interactive: remove prepared profiles
+agent-sandbox cleanup prepared --unused-only   Remove only prepared profiles not used by any project
 agent-sandbox profiles                         List prepared profiles
 agent-sandbox profiles delete <name>           Delete a profile
 agent-sandbox help                             Show this help
