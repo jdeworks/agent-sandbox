@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+set -e
+
+# Recommend scanners for a real target (URL or folder).
+# Usage:
+#   ./recommend-scanners https://example.com
+#   ./recommend-scanners /mnt/scan-volumes/myrepo
+#   ./recommend-scanners /home/me/myrepo --mount-name myrepo
+#   ./recommend-scanners /home/me/myrepo --mount-name myrepo --subpath src
+
+cd "$(dirname "$0")"
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: ./recommend-scanners <target> [--mount-name <name>] [--subpath <path>]"
+  exit 1
+fi
+
+TARGET="$1"
+shift || true
+
+MOUNT_NAME=""
+SUBPATH=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --mount-name)
+      MOUNT_NAME="${2:-}"
+      shift 2
+      ;;
+    --subpath)
+      SUBPATH="${2:-}"
+      shift 2
+      ;;
+    *)
+      echo "Unknown arg: $1"
+      exit 1
+      ;;
+  esac
+done
+
+API_BASE="${VITE_API_URL:-http://localhost:3000/api}"
+API_TARGET="$TARGET"
+
+if [[ "$TARGET" =~ ^https?:// ]]; then
+  API_TARGET="$TARGET"
+elif [[ "$TARGET" == /mnt/scan-volumes/* || "$TARGET" == /uploads/* ]]; then
+  API_TARGET="$TARGET"
+elif [[ -d "$TARGET" ]]; then
+  if [[ -z "$MOUNT_NAME" ]]; then
+    echo "Local host folder detected."
+    echo "Provide --mount-name so it can be added as volume, e.g.:"
+    echo "  ./recommend-scanners \"$TARGET\" --mount-name myrepo"
+    exit 1
+  fi
+  ./add-volume "$MOUNT_NAME" "$TARGET"
+  API_TARGET="/mnt/scan-volumes/$MOUNT_NAME"
+else
+  echo "Target does not exist or is not supported: $TARGET"
+  exit 1
+fi
+
+if [[ -n "$SUBPATH" ]]; then
+  API_TARGET="${API_TARGET%/}/$SUBPATH"
+fi
+
+echo "Requesting recommendations for target: $API_TARGET"
+RESP="$(curl -sS "${API_BASE}/volumes/suggest-scanners?target=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$API_TARGET")")"
+
+python3 - <<'PY' "$RESP"
+import json,sys
+raw=sys.argv[1]
+try:
+    data=json.loads(raw)
+except Exception:
+    print(raw)
+    raise SystemExit(1)
+
+items=data.get("suggestions",[])
+if not items:
+    print("No suggestions returned.")
+    raise SystemExit(0)
+
+print("Recommended scanners:")
+for s in items:
+    print(f" - {s.get('name')}: {s.get('reason')}")
+PY

@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Remove a scan volume: updates docker-compose and scan-volumes.json. Only touches scan-* volumes.
+# Usage: ./remove-volume <volume-name>
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+VOLUMES_FILE="$SCRIPT_DIR/scan-volumes.json"
+NAME="$1"
+
+if [[ -z "$NAME" ]]; then
+  echo "Usage: ./remove-volume <volume-name>"
+  echo "  List volumes with: ./list-volumes"
+  exit 1
+fi
+
+if [[ ! -f "$VOLUMES_FILE" ]]; then
+  echo "No scan-volumes.json found."
+  exit 1
+fi
+
+if ! grep -q "\"name\":\"$NAME\"" "$VOLUMES_FILE" 2>/dev/null; then
+  echo "Error: volume '$NAME' not in scan-volumes.json"
+  exit 1
+fi
+
+node "$SCRIPT_DIR/scripts/patch-compose-volumes.js" remove "$NAME"
+
+node -e "
+const fs = require('fs');
+const d = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+d.volumes = (d.volumes || []).filter(v => v.name !== process.argv[2]);
+fs.writeFileSync(process.argv[1], JSON.stringify(d, null, 2) + '\n');
+" "$VOLUMES_FILE" "$NAME"
+
+echo "Removed volume '$NAME'. Restart containers: docker compose up -d --force-recreate backend worker"
+docker compose up -d --force-recreate backend worker 2>/dev/null || true

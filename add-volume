@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Add a host folder as a scan volume: updates docker-compose and scan-volumes.json, then restarts.
+# Usage: ./add-volume <volume-name> [host-path]
+#   If host-path is omitted, uses current directory (.).
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+VOLUMES_FILE="$SCRIPT_DIR/scan-volumes.json"
+NAME="$1"
+HOST_PATH="${2:-.}"
+
+if [[ -z "$NAME" ]]; then
+  echo "Usage: ./add-volume <volume-name> [host-path]"
+  echo "  volume-name: e.g. myrepo (mounts at /mnt/scan-volumes/myrepo)"
+  echo "  host-path: host directory (default: .)"
+  exit 1
+fi
+
+HOST_PATH="$(cd "$HOST_PATH" 2>/dev/null && pwd || realpath "$HOST_PATH" 2>/dev/null || echo "$HOST_PATH")"
+if [[ ! -d "$HOST_PATH" ]]; then
+  echo "Error: not a directory: $HOST_PATH"
+  exit 1
+fi
+
+[[ -f "$VOLUMES_FILE" ]] || echo '{"volumes":[]}' > "$VOLUMES_FILE"
+if grep -q "\"name\":\"$NAME\"" "$VOLUMES_FILE" 2>/dev/null; then
+  echo "Error: volume '$NAME' already exists. Use ./remove-volume $NAME first."
+  exit 1
+fi
+
+node "$SCRIPT_DIR/scripts/patch-compose-volumes.js" add "$NAME" "$HOST_PATH"
+
+MOUNT_PATH="/mnt/scan-volumes/${NAME}"
+node -e "
+const fs = require('fs');
+const d = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+d.volumes = d.volumes || [];
+d.volumes.push({ name: process.argv[2], mountPath: process.argv[3] });
+fs.writeFileSync(process.argv[1], JSON.stringify(d, null, 2) + '\n');
+" "$VOLUMES_FILE" "$NAME" "$MOUNT_PATH"
+
+echo "Added volume '$NAME' -> $MOUNT_PATH (host: $HOST_PATH)"
+echo "Restarting backend and worker..."
+docker compose up -d --force-recreate backend worker 2>/dev/null || echo "Run: docker compose up -d --force-recreate backend worker"

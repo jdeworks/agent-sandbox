@@ -1,0 +1,8 @@
+{
+  "volumes": [
+    {
+      "name": "dummy",
+      "mountPath": "/mnt/scan-volumes/dummy"
+    }
+  ]
+}

@@ -20,12 +20,31 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, Search, Eye, Trash2, RefreshCw } from 'lucide-react';
+import { Plus, Search, Eye, Trash2, RefreshCw, FolderOpen, HelpCircle, Sparkles } from 'lucide-react';
 import { getScans, createScan, deleteScan, getScanResults, uploadFolder, getScanners } from '@/lib/api';
 import type { Scan, ScanResult, CreateScanInput, ScannerMetadata } from '@security-analyzer/types';
 
-// Polling interval for scan progress (in ms)
-const POLL_INTERVAL = 3000;
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
+
+// Map scanner name -> category for grouping (align with Settings page)
+const SCANNER_CATEGORY: Record<string, string> = {
+  bandit: 'SAST',
+  semgrep: 'SAST',
+  opengrep: 'SAST',
+  nuclei: 'DAST',
+  zap: 'DAST',
+  sqlmap: 'DAST',
+  nmap: 'Network',
+  ssl: 'Network',
+  gitleaks: 'Secrets',
+  trufflehog: 'Secrets',
+  trivy: 'Container',
+  grype: 'Dependency',
+  checkov: 'IaC',
+  mobsf: 'Mobile',
+  'test-scanner': 'Test',
+};
 
 const statusVariant = (status: string) => {
   switch (status) {
@@ -39,6 +58,55 @@ const statusVariant = (status: string) => {
       return 'outline';
   }
 };
+
+function suggestScannersFromTargetInput(target: string): { name: string; reason: string }[] {
+  const t = target.trim().toLowerCase();
+  if (!t) return [];
+  const out: { name: string; reason: string }[] = [];
+  const isUrl = t.startsWith('http://') || t.startsWith('https://');
+  const isIp = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(t);
+  const isRepoUrl =
+    isUrl &&
+    ((t.includes('github.com/') || t.includes('gitlab.com/') || t.includes('bitbucket.org/')) ||
+      t.endsWith('.git'));
+
+  if (isRepoUrl) {
+    out.push({ name: 'semgrep', reason: 'Repository URL - static code analysis' });
+    out.push({ name: 'opengrep', reason: 'Repository URL - semantic analysis' });
+    out.push({ name: 'gitleaks', reason: 'Repository URL - secret detection' });
+    out.push({ name: 'trufflehog', reason: 'Repository URL - secret verification' });
+    return out;
+  }
+
+  if (isUrl) {
+    out.push({ name: 'nuclei', reason: 'URL target for web DAST scanning' });
+    out.push({ name: 'zap', reason: 'URL target for active web testing' });
+    out.push({ name: 'sqlmap', reason: 'URL target for SQL injection checks' });
+    out.push({ name: 'ssl', reason: 'URL target for TLS/SSL checks' });
+    return out;
+  }
+
+  if (isIp || t.includes(':')) {
+    out.push({ name: 'nmap', reason: 'Host/IP target for network scanning' });
+    out.push({ name: 'ssl', reason: 'Host target for TLS/SSL checks' });
+    out.push({ name: 'nuclei', reason: 'Host target for template-based checks' });
+  }
+
+  if (t.includes('docker.io/') || t.startsWith('sha256:')) {
+    out.push({ name: 'trivy', reason: 'Container image style target' });
+    out.push({ name: 'grype', reason: 'Container image style target' });
+  }
+
+  if (t.endsWith('.apk') || t.endsWith('.ipa') || t.endsWith('.aab')) {
+    out.push({ name: 'mobsf', reason: 'Mobile artifact target' });
+  }
+
+  if (t.endsWith('.tf') || t.endsWith('.tf.json') || t.includes('terraform') || t.includes('kubernetes')) {
+    out.push({ name: 'checkov', reason: 'IaC-style target naming' });
+  }
+
+  return out.filter((item, idx, arr) => arr.findIndex((x) => x.name === item.name) === idx);
+}
 
 export default function ScansPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -57,6 +125,15 @@ export default function ScansPage() {
     const [uploading, setUploading] = useState(false);
 const [availableScanners, setAvailableScanners] = useState<ScannerMetadata[]>([]);
 const [selectedScanners, setSelectedScanners] = useState<string[]>([]);
+  const [targetType, setTargetType] = useState<'url' | 'upload' | 'volume'>('url');
+  const [volumeList, setVolumeList] = useState<{ name: string; mountPath: string }[]>([]);
+  const [selectedVolumeRoot, setSelectedVolumeRoot] = useState(''); // mountPath of volume (for dropdown)
+  const [selectedVolumePath, setSelectedVolumePath] = useState(''); // full path used as scan target
+  const [browseEntries, setBrowseEntries] = useState<{ name: string; path: string; isDirectory: boolean }[]>([]);
+  const [browsePath, setBrowsePath] = useState('');
+  const [volumeHelpOpen, setVolumeHelpOpen] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestedScanners, setSuggestedScanners] = useState<{ name: string; reason: string }[]>([]);
 
   const fetchScans = useCallback(async () => {
     try {
@@ -71,20 +148,10 @@ const [selectedScanners, setSelectedScanners] = useState<string[]>([]);
     }
   }, []);
 
-  // Initial fetch and polling for running scans
+  // Single fetch on mount only; use Refresh button to update (no polling to avoid spamming /scans)
   useEffect(() => {
     fetchScans();
-
-    // Poll for updates when there are running scans
-    const hasRunningScans = scans.some((s) => s.status === 'pending' || s.status === 'running');
-    if (!hasRunningScans) return;
-
-    const interval = setInterval(() => {
-      fetchScans();
-    }, POLL_INTERVAL);
-
-    return () => clearInterval(interval);
-    }, [fetchScans, scans]);
+  }, [fetchScans]);
 
   useEffect(() => {
     if (fileInputRef.current) {
@@ -97,8 +164,7 @@ const [selectedScanners, setSelectedScanners] = useState<string[]>([]);
       try {
         const scanners = await getScanners();
         setAvailableScanners(scanners);
-        // By default select all scanners
-        setSelectedScanners(scanners.map(s => s.name));
+        setSelectedScanners(scanners.map((s) => s.name));
       } catch (err) {
         console.error('Failed to fetch scanners:', err);
       }
@@ -106,26 +172,109 @@ const [selectedScanners, setSelectedScanners] = useState<string[]>([]);
     fetchScannersList();
   }, []);
 
+  const fetchVolumes = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/volumes`);
+      if (res.ok) {
+        const data = await res.json();
+        setVolumeList(data.volumes || []);
+      } else setVolumeList([]);
+    } catch {
+      setVolumeList([]);
+    }
+  }, []);
+
+  const browsePathForVolume = useCallback(
+    async (pathToBrowse: string) => {
+      try {
+        const res = await fetch(
+          `${API_BASE}/volumes/browse?path=${encodeURIComponent(pathToBrowse)}`
+        );
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Browse failed');
+        const data = await res.json();
+        setBrowsePath(data.path);
+        setBrowseEntries(data.entries || []);
+      } catch (err) {
+        console.error(err);
+        setBrowseEntries([]);
+      }
+    },
+    []
+  );
+
+  const handleSuggestScanners = useCallback(async () => {
+    const target = targetType === 'volume' ? selectedVolumePath : newScanTarget;
+    if (!target.trim()) return;
+    setSuggesting(true);
+    try {
+      let suggestions: { name: string; reason: string }[] = [];
+      const res = await fetch(
+        `${API_BASE}/volumes/suggest-scanners?target=${encodeURIComponent(target)}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        suggestions = data.suggestions || [];
+      } else {
+        // Fallback if backend doesn't have enhanced suggestion endpoint yet.
+        suggestions = suggestScannersFromTargetInput(target);
+      }
+      if (!suggestions.length) {
+        suggestions = suggestScannersFromTargetInput(target);
+      }
+      const names = suggestions.map((s) => s.name);
+      setSelectedScanners(names); // preset selection
+      setSuggestedScanners(suggestions);
+    } catch (err) {
+      console.error(err);
+      const fallback = suggestScannersFromTargetInput(target);
+      setSelectedScanners(fallback.map((s) => s.name));
+      setSuggestedScanners(fallback);
+    } finally {
+      setSuggesting(false);
+    }
+  }, [targetType, selectedVolumePath, newScanTarget]);
+
+  useEffect(() => {
+    if (isNewScanOpen && targetType === 'volume') fetchVolumes();
+  }, [isNewScanOpen, targetType, fetchVolumes]);
+
+  useEffect(() => {
+    if (targetType === 'volume' && selectedVolumePath) browsePathForVolume(selectedVolumePath);
+  }, [targetType, selectedVolumePath, browsePathForVolume]);
+
+  useEffect(() => {
+    setSuggestedScanners([]);
+  }, [targetType, newScanTarget, selectedVolumePath]);
+
+  const currentVolumeRoot = volumeList.find((v) => v.mountPath === selectedVolumeRoot)?.mountPath ?? '';
+
   const filteredScans = scans.filter(
     (scan) =>
       scan.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       scan.target.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const effectiveTarget =
+    targetType === 'volume' ? selectedVolumePath : newScanTarget;
+
   const handleCreateScan = async () => {
-    if (!newScanName.trim() || !newScanTarget.trim()) return;
+    if (!newScanName.trim() || !effectiveTarget.trim()) return;
 
     setCreating(true);
     try {
       const scanData: CreateScanInput = {
         name: newScanName,
-        target: newScanTarget,
-        scanners: selectedScanners.map(name => ({ name, enabled: true })),
-        scanMode: newScanTarget.startsWith('http') ? 'url' : 'local',
+        target: effectiveTarget,
+        scanners: selectedScanners.map((name) => ({ name, enabled: true })),
+        scanMode: effectiveTarget.startsWith('http') ? 'url' : 'local',
       };
       await createScan(scanData);
       setNewScanName('');
       setNewScanTarget('');
+      setSelectedVolumeRoot('');
+      setSelectedVolumePath('');
+      setBrowsePath('');
+      setBrowseEntries([]);
       setIsNewScanOpen(false);
       fetchScans();
     } catch (err) {
@@ -224,49 +373,247 @@ const [selectedScanners, setSelectedScanners] = useState<string[]>([]);
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Input
-                    placeholder="Target (URL, repo, container, or local path)"
-                    value={newScanTarget}
-                    onChange={(e) => setNewScanTarget(e.target.value)}
-                  />
+                  <label className="text-sm font-medium">Target</label>
+                  <div className="flex gap-2 border rounded-md p-2">
+                    {(['url', 'upload', 'volume'] as const).map((t) => (
+                      <label key={t} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="targetType"
+                          checked={targetType === t}
+                          onChange={() => setTargetType(t)}
+                        />
+                        <span className="text-sm capitalize">{t === 'url' ? 'URL' : t === 'upload' ? 'Upload folder' : 'Volume folder'}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {targetType === 'url' && (
+                    <>
+                      <Input
+                        placeholder="URL (e.g. https://example.com)"
+                        value={newScanTarget}
+                        onChange={(e) => setNewScanTarget(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">Enter a URL for DAST/network scans.</p>
+                    </>
+                  )}
+                  {targetType === 'upload' && (
+                    <>
+                      <Input
+                        placeholder="Path set after upload"
+                        value={newScanTarget}
+                        readOnly
+                        className="bg-muted"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleUploadFolder}
+                        disabled={uploading}
+                      >
+                        {uploading ? 'Uploading...' : 'Upload Folder'}
+                      </Button>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        style={{ display: 'none' }}
+                        onChange={onFileChange}
+                        multiple
+                      />
+                      <p className="text-xs text-muted-foreground">Upload is slower for large trees; prefer connecting a volume.</p>
+                    </>
+                  )}
+                  {targetType === 'volume' && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">Connected volumes</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          title="How to connect a local folder"
+                          onClick={() => setVolumeHelpOpen(true)}
+                        >
+                          <HelpCircle className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      {volumeList.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          No volumes connected. Run from repo root: <code className="bg-muted px-1 rounded">./add-volume &lt;name&gt; [path]</code> then restart containers.
+                        </p>
+                      ) : (
+                        <>
+                          <select
+                            className="w-full border rounded-md px-3 py-2 text-sm"
+                            value={currentVolumeRoot}
+                            onChange={(e) => {
+                              const p = e.target.value;
+                              setSelectedVolumeRoot(p);
+                              setSelectedVolumePath(p);
+                              if (p) browsePathForVolume(p);
+                            }}
+                          >
+                            <option value="">Select a volume root…</option>
+                            {volumeList.map((v) => (
+                              <option key={v.name} value={v.mountPath}>{v.name} ({v.mountPath})</option>
+                            ))}
+                          </select>
+                          {browsePath && (
+                            <div className="border rounded-md p-2 max-h-32 overflow-y-auto">
+                              <div className="flex items-center gap-2 mb-1">
+                                <FolderOpen className="h-4 w-4" />
+                                <span className="text-xs font-medium">{browsePath}</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {browsePath !== selectedVolumeRoot && (
+                                  <button
+                                    type="button"
+                                    className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/80"
+                                    onClick={() => {
+                                      const parent = browsePath.split('/').slice(0, -1).join('/');
+                                      if (parent) setSelectedVolumePath(parent);
+                                    }}
+                                  >
+                                    .. parent
+                                  </button>
+                                )}
+                                {browseEntries
+                                  .filter((e) => e.isDirectory)
+                                  .map((e) => (
+                                    <button
+                                      key={e.path}
+                                      type="button"
+                                      className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/80"
+                                      onClick={() => setSelectedVolumePath(e.path)}
+                                    >
+                                      {e.name}/
+                                    </button>
+                                  ))}
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1">Selected path: {selectedVolumePath || browsePath}</p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
+              </div>
+              {effectiveTarget.trim() && (
+                <div className="grid gap-2">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={handleUploadFolder}
-                    disabled={uploading}
+                    size="sm"
+                    onClick={handleSuggestScanners}
+                    disabled={suggesting}
+                    className="justify-start"
                   >
-                    {uploading ? 'Uploading...' : 'Upload Folder'}
+                    {suggesting ? (
+                      <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Sparkles className="h-4 w-4 mr-2" />
+                    )}
+                    Preset scanners for this target
                   </Button>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    style={{ display: 'none' }}
-                    onChange={onFileChange}
-                    multiple
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Enter a URL (e.g., https://example.com) or upload a local folder.
-                  </p>
-              </div>
+                  {suggestedScanners.length > 0 && (
+                    <div className="border rounded-md p-2 space-y-1">
+                      {suggestedScanners.map((s) => (
+                        <p key={s.name} className="text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">{s.name}</span>: {s.reason}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="grid gap-2">
                 <label className="text-sm font-medium">Select Scanners</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {availableScanners.map((scanner) => (
-                    <label key={scanner.name} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={selectedScanners.includes(scanner.name)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedScanners([...selectedScanners, scanner.name]);
-                          } else {
-                            setSelectedScanners(selectedScanners.filter((name) => name !== scanner.name));
-                          }
-                        }}
-                      />
-                      <span className="text-sm">{scanner.name}</span>
-                    </label>
-                  ))}
+                <div className="flex flex-wrap gap-2 mb-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedScanners(availableScanners.map((s) => s.name))}
+                  >
+                    Select all
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedScanners([])}
+                  >
+                    Deselect all
+                  </Button>
+                </div>
+                <div className="space-y-3 max-h-48 overflow-y-auto">
+                  {Object.entries(
+                    availableScanners.reduce(
+                      (acc, s) => {
+                        const cat = SCANNER_CATEGORY[s.name] ?? 'Other';
+                        if (!acc[cat]) acc[cat] = [];
+                        acc[cat].push(s);
+                        return acc;
+                      },
+                      {} as Record<string, ScannerMetadata[]>
+                    )
+                  )
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([category, list]) => (
+                      <div key={category} className="border rounded-lg p-2">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium">{category}</span>
+                          <div className="flex gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() =>
+                                setSelectedScanners((prev) =>
+                                  Array.from(new Set([...prev, ...list.map((s) => s.name)]))
+                                )
+                              }
+                            >
+                              All
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() =>
+                                setSelectedScanners((prev) =>
+                                  prev.filter((n) => !list.some((s) => s.name === n))
+                                )
+                              }
+                            >
+                              None
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1">
+                          {list.map((scanner) => (
+                            <label key={scanner.name} className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={selectedScanners.includes(scanner.name)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedScanners([...selectedScanners, scanner.name]);
+                                  } else {
+                                    setSelectedScanners(
+                                      selectedScanners.filter((name) => name !== scanner.name)
+                                    );
+                                  }
+                                }}
+                              />
+                              <span className="text-sm">{scanner.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                 </div>
               </div>
               </div>
@@ -276,11 +623,41 @@ const [selectedScanners, setSelectedScanners] = useState<string[]>([]);
                 </Button>
                 <Button
                   onClick={handleCreateScan}
-                  disabled={creating || !newScanName.trim() || !newScanTarget.trim()}
+                  disabled={creating || !newScanName.trim() || !effectiveTarget.trim()}
                 >
                   {creating ? 'Creating...' : 'Start Scan'}
                 </Button>
               </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={volumeHelpOpen} onOpenChange={setVolumeHelpOpen}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Connect a local folder as a volume</DialogTitle>
+                <DialogDescription>
+                  So the scanner can read your repo without uploading. Requires restarting backend and worker.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                <p>From the project root run:</p>
+                <pre className="bg-muted p-3 rounded overflow-x-auto">
+                  ./add-volume &lt;name&gt; [path]
+                </pre>
+                <p className="text-muted-foreground">
+                  <strong>name</strong>: e.g. <code>myrepo</code> (mounts at /mnt/scan-volumes/myrepo).<br />
+                  <strong>path</strong>: host directory (default: current directory <code>.</code>).
+                </p>
+                <p>Example:</p>
+                <pre className="bg-muted p-3 rounded overflow-x-auto">
+                  ./add-volume myrepo /home/you/projects/my-app
+                </pre>
+                <p>Containers will restart. Then in the UI choose &quot;Volume folder&quot; and select the volume.</p>
+                <p>
+                  List volumes: <code className="bg-muted px-1 rounded">./list-volumes</code><br />
+                  Remove: <code className="bg-muted px-1 rounded">./remove-volume &lt;name&gt;</code>
+                </p>
+              </div>
             </DialogContent>
           </Dialog>
         </div>

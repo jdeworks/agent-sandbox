@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -e
+
+# Start only via containers. Clean slate: stop containers, remove volumes, build (cached), then start.
+# Use --rebuild or -r to force a full rebuild with no cache.
+# Run from repo root: ./start  or  ./start --rebuild
+
+cd "$(dirname "$0")"
+
+FORCE_REBUILD=false
+for arg in "$@"; do
+  case "$arg" in
+    --rebuild|-r) FORCE_REBUILD=true ;;
+  esac
+done
+
+if ! command -v docker &>/dev/null; then
+  echo "Error: Docker is not installed or not on PATH. This project must be started with containers only."
+  echo "Install Docker and try again: ./start"
+  exit 1
+fi
+
+if ! docker info &>/dev/null; then
+  echo "Error: Docker daemon is not running. Start Docker, then run: ./start"
+  exit 1
+fi
+
+if ! docker compose version &>/dev/null; then
+  echo "Error: Docker Compose is not available. This project must be started with containers only."
+  echo "Install Docker Compose (or use Docker Desktop) and try again."
+  exit 1
+fi
+
+if [[ ! -f docker-compose.yml ]]; then
+  echo "Error: docker-compose.yml not found. Run this script from the repo root: ./start"
+  exit 1
+fi
+
+echo "Starting via containers only (no local servers)."
+
+echo "Stopping containers and removing volumes..."
+docker compose down -v
+
+if [[ "$FORCE_REBUILD" == true ]]; then
+  echo "Force rebuilding all images (no cache)..."
+  docker compose build --no-cache
+else
+  echo "Building images (using cache)..."
+  docker compose build
+fi
+
+echo "Starting all services..."
+docker compose up -d
+
+echo "Done. Frontend: http://localhost:${FRONTEND_PORT:-5173}  Backend API: http://localhost:${BACKEND_PORT:-3000}"
+echo "Logs: docker compose logs -f"
