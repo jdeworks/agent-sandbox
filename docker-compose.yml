@@ -45,6 +45,14 @@ services:
       PORT: ${BACKEND_PORT:-3000}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
+      # PostgreSQL connection vars for pg library
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: ${POSTGRES_USER:-security_analyzer}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      PGDATABASE: ${POSTGRES_DB:-security_analyzer}
+      UPLOAD_DIR: /uploads
+      # Legacy vars (kept for compatibility)
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-security_analyzer}
@@ -52,18 +60,19 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-security_analyzer}
     ports:
       - "${BACKEND_PORT:-3000}:3000"
-    volumes:
-      - .:/app
-      - /app/node_modules
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - uploads:/uploads
     networks:
       - app-network
+
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -79,15 +88,12 @@ services:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
     ports:
       - "${FRONTEND_PORT:-5173}:80"
-    volumes:
-      - .:/app
-      - /app/node_modules
     depends_on:
       - backend
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -106,16 +112,16 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-security_analyzer}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       REDIS_HOST: redis
-    volumes:
-      - .:/app
-      - /app/node_modules
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - uploads:/uploads
     networks:
       - app-network
+
     restart: unless-stopped
 
 networks:
@@ -125,3 +131,4 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  uploads:

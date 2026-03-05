@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS vulnerabilities (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_vulnerabilities_scan_result_id ON vulnerabilities(scan_result_id);
-CREATE INDEX idx_vulnerabilities_severity ON vulnerabilities(severity);
-CREATE INDEX idx_vulnerabilities_status ON vulnerabilities(status);
-CREATE INDEX idx_vulnerabilities_cve_id ON vulnerabilities(cve_id);
+CREATE INDEX IF NOT EXISTS idx_vulnerabilities_scan_result_id ON vulnerabilities(scan_result_id);
+CREATE INDEX IF NOT EXISTS idx_vulnerabilities_severity ON vulnerabilities(severity);
+CREATE INDEX IF NOT EXISTS idx_vulnerabilities_status ON vulnerabilities(status);
+CREATE INDEX IF NOT EXISTS idx_vulnerabilities_cve_id ON vulnerabilities(cve_id);

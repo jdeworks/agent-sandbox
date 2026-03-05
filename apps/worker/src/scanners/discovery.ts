@@ -119,28 +119,31 @@ export class PluginDiscovery {
    */
   private async loadPluginFile(filePath: string, types: ScannerType[]): Promise<void> {
     try {
-      // Clear require cache to allow hot reload
       delete require.cache[require.resolve(filePath)];
 
-      // Dynamic import of the scanner module
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const module = require(filePath);
-
-      // Look for scanner exports in the module
       const exports = module.exports || module;
 
-      // Handle different export formats
-      const scannerExports = Array.isArray(exports) ? exports : [exports];
+      // Collect potential plugin objects from exports
+      const candidates: unknown[] = [];
+      if (Array.isArray(exports)) {
+        candidates.push(...exports);
+      } else {
+        candidates.push(exports);
+        // Also check all property values in case the plugin is nested
+        for (const value of Object.values(exports)) {
+          candidates.push(value);
+        }
+      }
 
-      for (const scannerExport of scannerExports) {
-        if (this.isValidScannerExport(scannerExport)) {
+      for (const candidate of candidates) {
+        if (this.isValidScannerExport(candidate)) {
           // Filter by type if specified
-          if (types.length > 0 && !types.includes(scannerExport.type)) {
-            console.log(`[PluginDiscovery] Skipping "${scannerExport.name}" (type not in filter)`);
+          if (types.length > 0 && !types.includes(candidate.type)) {
+            console.log(`[PluginDiscovery] Skipping "${candidate.name}" (type not in filter)`);
             continue;
           }
-
-          this.registerPlugin(scannerExport);
+          this.registerPlugin(candidate);
         }
       }
     } catch (error) {
@@ -255,12 +258,16 @@ export function createScannerPlugin(
 export async function autoDiscoverScanners(registry: ScannerRegistry): Promise<void> {
   const discovery = new PluginDiscovery(registry);
 
-  // Get the base directory (src/scanners)
-  const baseDir = path.join(__dirname, '..');
+  // Get the scanners directory (this directory)
+  const pluginsDir = __dirname;
+
+  // Choose file pattern based on whether we're running from dist (compiled) or src (dev)
+  const isCompiled = __dirname.includes('dist');
+  const pattern = isCompiled ? '*.scanner.js' : '*.scanner.ts';
 
   await discovery.discover({
-    pluginsDir: baseDir,
-    pattern: '*.scanner.ts',
+    pluginsDir,
+    pattern,
     recursive: false,
   });
 }

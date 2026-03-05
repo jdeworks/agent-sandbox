@@ -15,5 +15,5 @@ CREATE TABLE IF NOT EXISTS scan_results (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_scan_results_scan_id ON scan_results(scan_id);
-CREATE INDEX idx_scan_results_severity ON scan_results(severity);
+CREATE INDEX IF NOT EXISTS idx_scan_results_scan_id ON scan_results(scan_id);
+CREATE INDEX IF NOT EXISTS idx_scan_results_severity ON scan_results(severity);

@@ -14,5 +14,5 @@ CREATE TABLE IF NOT EXISTS scans (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_scans_status ON scans(status);
-CREATE INDEX idx_scans_created_at ON scans(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_scans_status ON scans(status);
+CREATE INDEX IF NOT EXISTS idx_scans_created_at ON scans(created_at DESC);

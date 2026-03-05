@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,8 +21,8 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Plus, Search, Eye, Trash2, RefreshCw } from 'lucide-react';
-import { getScans, createScan, deleteScan, getScanResults } from '@/lib/api';
-import type { Scan, ScanResult, CreateScanInput } from '@security-analyzer/types';
+import { getScans, createScan, deleteScan, getScanResults, uploadFolder, getScanners } from '@/lib/api';
+import type { Scan, ScanResult, CreateScanInput, ScannerMetadata } from '@security-analyzer/types';
 
 // Polling interval for scan progress (in ms)
 const POLL_INTERVAL = 3000;
@@ -52,7 +52,11 @@ export default function ScansPage() {
   const [selectedScan, setSelectedScan] = useState<Scan | null>(null);
   const [scanResults, setScanResults] = useState<ScanResult | null>(null);
   const [resultsLoading, setResultsLoading] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+    const [detailsOpen, setDetailsOpen] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [uploading, setUploading] = useState(false);
+const [availableScanners, setAvailableScanners] = useState<ScannerMetadata[]>([]);
+const [selectedScanners, setSelectedScanners] = useState<string[]>([]);
 
   const fetchScans = useCallback(async () => {
     try {
@@ -80,7 +84,27 @@ export default function ScansPage() {
     }, POLL_INTERVAL);
 
     return () => clearInterval(interval);
-  }, [fetchScans, scans]);
+    }, [fetchScans, scans]);
+
+  useEffect(() => {
+    if (fileInputRef.current) {
+      fileInputRef.current.setAttribute('webkitdirectory', '');
+      fileInputRef.current.setAttribute('directory', '');
+    }
+  }, []);
+  useEffect(() => {
+    const fetchScannersList = async () => {
+      try {
+        const scanners = await getScanners();
+        setAvailableScanners(scanners);
+        // By default select all scanners
+        setSelectedScanners(scanners.map(s => s.name));
+      } catch (err) {
+        console.error('Failed to fetch scanners:', err);
+      }
+    };
+    fetchScannersList();
+  }, []);
 
   const filteredScans = scans.filter(
     (scan) =>
@@ -96,6 +120,8 @@ export default function ScansPage() {
       const scanData: CreateScanInput = {
         name: newScanName,
         target: newScanTarget,
+        scanners: selectedScanners.map(name => ({ name, enabled: true })),
+        scanMode: newScanTarget.startsWith('http') ? 'url' : 'local',
       };
       await createScan(scanData);
       setNewScanName('');
@@ -138,6 +164,30 @@ export default function ScansPage() {
     }
   };
 
+  const handleUploadFolder = async () => {
+    fileInputRef.current?.click();
+  };
+
+  const onFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      Array.from(files).forEach(file => {
+        formData.append('files', file, file.webkitRelativePath || file.name);
+      });
+      const result = await uploadFolder(formData);
+      setNewScanTarget(result.target);
+    } catch (err) {
+      console.error('Failed to upload folder', err);
+      setError('Failed to upload folder');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
   };
@@ -175,11 +225,50 @@ export default function ScansPage() {
                 </div>
                 <div className="grid gap-2">
                   <Input
-                    placeholder="Target (URL, repo, container)"
+                    placeholder="Target (URL, repo, container, or local path)"
                     value={newScanTarget}
                     onChange={(e) => setNewScanTarget(e.target.value)}
                   />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleUploadFolder}
+                    disabled={uploading}
+                  >
+                    {uploading ? 'Uploading...' : 'Upload Folder'}
+                  </Button>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    style={{ display: 'none' }}
+                    onChange={onFileChange}
+                    multiple
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter a URL (e.g., https://example.com) or upload a local folder.
+                  </p>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium">Select Scanners</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {availableScanners.map((scanner) => (
+                    <label key={scanner.name} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedScanners.includes(scanner.name)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedScanners([...selectedScanners, scanner.name]);
+                          } else {
+                            setSelectedScanners(selectedScanners.filter((name) => name !== scanner.name));
+                          }
+                        }}
+                      />
+                      <span className="text-sm">{scanner.name}</span>
+                    </label>
+                  ))}
                 </div>
+              </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsNewScanOpen(false)}>

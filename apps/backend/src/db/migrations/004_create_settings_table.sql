@@ -12,4 +12,4 @@ CREATE TABLE IF NOT EXISTS settings (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_settings_key ON settings(key);
+CREATE INDEX IF NOT EXISTS idx_settings_key ON settings(key);

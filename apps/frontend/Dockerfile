@@ -24,6 +24,8 @@ FROM nginx:alpine
 COPY --from=builder /app/apps/frontend/dist /usr/share/nginx/html
 COPY --from=builder /app/apps/frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
+# Install curl for healthcheck
+RUN apk add --no-cache curl
 # Expose port
 EXPOSE 80
 

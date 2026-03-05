@@ -38,8 +38,8 @@ docker-compose down
 
 | Service     | URL                   | Description              |
 | ----------- | --------------------- | ------------------------ |
-| Frontend    | http://localhost:3000 | React dashboard          |
-| Backend API | http://localhost:5000 | REST API                 |
+| Frontend    | http://localhost:5173 | React dashboard          |
+| Backend API | http://localhost:3000 | REST API                 |
 | Worker      | Internal              | Background job processor |
 | PostgreSQL  | localhost:5432        | Database                 |
 | Redis       | localhost:6379        | Queue backend            |
@@ -83,7 +83,7 @@ docker-compose down
 
 ```bash
 # Create a new scan
-curl -X POST http://localhost:5000/api/scans \
+curl -X POST http://localhost:3000/api/scans \
   -H "Content-Type: application/json" \
   -d '{
     "name": "My Security Scan",
@@ -95,23 +95,51 @@ curl -X POST http://localhost:5000/api/scans \
   }'
 
 # Get all scans
-curl http://localhost:5000/api/scans
+curl http://localhost:3000/api/scans
 
 # Get scan results
-curl http://localhost:5000/api/scans/{scanId}/results
+curl http://localhost:3000/api/scans/{scanId}/results
 
 # Delete a scan
-curl -X DELETE http://localhost:5000/api/scans/{scanId}
+curl -X DELETE http://localhost:3000/api/scans/{scanId}
 ```
 
 ### Settings
 
 ```bash
 # Get settings
-curl http://localhost:5000/api/settings
+curl http://localhost:3000/api/settings
 
 # Update settings
-curl -X PUT http://localhost:5000/api/settings \
+curl -X PATCH http://localhost:3000/api/settings \
+  -H "Content-Type: application/json" \
+  -d '{"maxConcurrentScans": 5}'
+
+# Get scanner configurations
+curl http://localhost:3000/api/settings/scanners
+
+# Update scanner configurations
+curl -X PUT http://localhost:3000/api/settings/scanners \
+  -H "Content-Type: application/json" \
+  -d '[
+    {"name": "bandit", "enabled": true, "timeout": 300000, "args": "", "category": "SAST"},
+    {"name": "nuclei", "enabled": true, "timeout": 300000, "args": "", "category": "DAST"}
+  ]'
+```
+
+### Scanners
+
+```bash
+# Get all available scanners
+curl http://localhost:3000/api/scanners
+```
+
+```bash
+# Get settings
+curl http://localhost:3000/api/settings
+
+# Update settings
+curl -X PUT http://localhost:3000/api/settings \
   -H "Content-Type: application/json" \
   -d '{"maxConcurrentScans": 5}'
 ```
@@ -130,11 +158,11 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/security_analyzer
 REDIS_URL=redis://localhost:6379
 
 # API
-API_PORT=5000
+API_PORT=3000
 NODE_ENV=development
 
 # Frontend
-VITE_API_URL=http://localhost:5000
+VITE_API_URL=http://localhost:3000
 
 # Scanner Settings
 SCANNER_TIMEOUT=300000
@@ -142,6 +170,19 @@ MAX_CONCURRENT_SCANS=3
 ```
 
 ### Scanner Configuration
+
+Scanners can be configured through the Settings UI or API:
+
+```bash
+# Scanner configuration via API
+curl http://localhost:3000/api/settings/scanners
+```
+
+Each scanner supports:
+- **enabled**: Enable or disable the scanner
+- **timeout**: Timeout in milliseconds
+- **args**: Additional command-line arguments
+- **category**: Scanner category (SAST, DAST, Network, Secrets, Container, Dependency, IaC, Mobile, Test)
 
 Scanners can be configured in `apps/worker/src/scanners/config.ts`:
 
@@ -245,12 +286,12 @@ npm run test:coverage
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      Frontend (React)                        │
-│                  http://localhost:3000                       │
+│                  http://localhost:5173                       │
 └─────────────────────────┬───────────────────────────────────┘
                           │ REST API
 ┌─────────────────────────▼───────────────────────────────────┐
 │                      Backend (Express)                        │
-│                  http://localhost:5000                       │
+│                  http://localhost:3000                      │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
 │  │   Routes    │  │   Models    │  │   Queue     │        │
 │  └─────────────┘  └─────────────┘  └──────┬──────┘        │
@@ -329,8 +370,11 @@ Ensure the scanner binary is available in the container:
 
 ```dockerfile
 # Add to worker Dockerfile
-RUN pip install checkov trivy bandit
+RUN pip install checkov trivy bandit semgrep
 RUN go install github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
+RUN curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+RUN curl -sfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+RUN go install github.com/anchore/grype/cmd/grype@latest
 ```
 
 ### Database Connection Issues

@@ -13,6 +13,7 @@ import { BaseScanner, ScannerConfig, ScanResult, ScannerType, ScannerMetadata } 
 import { ScannerRegistry, getGlobalRegistry } from './registry';
 import { ScannerPlugin } from './discovery';
 import { Vulnerability } from '@security-analyzer/types';
+import * as fs from 'fs';
 
 /**
  * Bandit JSON output interfaces
@@ -328,6 +329,14 @@ export class BanditScanner extends BaseScanner {
   }
 
   canHandle(target: string): boolean {
+    // If target is a directory, bandit can scan it recursively
+    try {
+      if (fs.existsSync(target) && fs.statSync(target).isDirectory()) {
+        return true;
+      }
+    } catch {
+      // If stat fails, fall back to extension check
+    }
     // Bandit handles Python files
     return target.endsWith('.py') || target.includes('.py:') || target.includes('**/*.py');
   }

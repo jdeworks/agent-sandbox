@@ -8,6 +8,7 @@ import type {
   UpdateSettingsInput,
   PaginationParams,
   PaginatedResponse,
+  ScannerSetting,
 } from '@security-analyzer/types';
 
 /**
@@ -95,6 +96,22 @@ export class SecurityAnalyzerClient {
    */
   async updateSettings(data: UpdateSettingsInput): Promise<Settings> {
     const response = await this.client.patch<Settings>('/settings', data);
+    return response.data;
+  }
+
+  /**
+   * Get scanner configurations
+   */
+  async getScannerConfigs(): Promise<ScannerSetting[]> {
+    const response = await this.client.get<ScannerSetting[]>('/settings/scanners');
+    return response.data;
+  }
+
+  /**
+   * Update scanner configurations
+   */
+  async updateScannerConfigs(configs: ScannerSetting[]): Promise<ScannerSetting[]> {
+    const response = await this.client.put<ScannerSetting[]>('/settings/scanners', configs);
     return response.data;
   }
 }

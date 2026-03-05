@@ -38,6 +38,8 @@ export interface Scan {
   completedAt?: string;
   createdAt: string;
   updatedAt: string;
+  config?: ScannerConfig[];
+  scanMode?: 'url' | 'local';
 }
 
 /**
@@ -59,6 +61,17 @@ export interface ScanResult {
 }
 
 /**
+ * Scanner-specific configuration
+ */
+export interface ScannerSetting {
+  name: string;
+  enabled: boolean;
+  timeout: number; // in milliseconds
+  args?: string; // additional arguments
+  category?: string;
+}
+
+/**
  * Application settings
  */
 export interface Settings {
@@ -69,6 +82,7 @@ export interface Settings {
   notificationEmail?: string;
   enableNotifications: boolean;
   theme: 'light' | 'dark' | 'auto';
+  scannerConfigs?: ScannerSetting[];
   createdAt: string;
   updatedAt: string;
 }
@@ -76,15 +90,15 @@ export interface Settings {
 /**
  * Scanner type
  */
-export type ScannerType = 
-  | 'static'       // SAST - Static code analysis
-  | 'dynamic'     // DAST - Dynamic/runtime analysis
-  | 'dependency'  // SCA - Dependency vulnerability scanning
-  | 'secret'      // Secret detection
+export type ScannerType =
+  | 'static' // SAST - Static code analysis
+  | 'dynamic' // DAST - Dynamic/runtime analysis
+  | 'dependency' // SCA - Dependency vulnerability scanning
+  | 'secret' // Secret detection
   | 'composition' // Software composition analysis
-  | 'iac'         // Infrastructure as Code scanning
-  | 'mobile'      // Mobile application security
-  | 'container';  // Container security
+  | 'iac' // Infrastructure as Code scanning
+  | 'mobile' // Mobile application security
+  | 'container'; // Container security
 
 /**
  * Scanner metadata
@@ -116,14 +130,9 @@ export interface CreateScanInput {
   name: string;
   target: string;
   scanners?: ScannerConfig[];
-}
-
-/**
- * Input for creating a new scan
- */
-export interface CreateScanInput {
-  name: string;
-  target: string;
+  scanMode?: 'url' | 'local';
+  scanType?: string;
+  options?: Record<string, unknown>;
 }
 
 /**
