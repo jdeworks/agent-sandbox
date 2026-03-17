@@ -1,20 +1,58 @@
 {
+  "_doc": "Plugin registry. Install = baked into Docker image. Enable = added to agent config at project level. Custom plugins can be added via 'custom_install' in profile.json.",
+
   "oh-my-openagent": {
     "agent": "opencode",
     "install": "npm install -g oh-my-openagent @code-yeongyu/comment-checker",
-    "description": "Multi-model orchestration with Sisyphus, Oracle, Librarian agents and ultrawork mode",
-    "conflicts": []
+    "enable": { "file": "opencode.json", "field": "plugin", "type": "array-add" },
+    "description": "Multi-model orchestration with Sisyphus, Oracle, Librarian agents and ultrawork mode"
   },
   "dcp": {
     "agent": "opencode",
     "install": "npm install -g @tarquinen/opencode-dcp",
-    "description": "Dynamic context pruning — optimizes token usage by pruning obsolete tool outputs",
-    "conflicts": []
+    "enable": { "file": "opencode.json", "field": "plugin", "type": "array-add" },
+    "description": "Dynamic context pruning — optimizes token usage by removing obsolete tool outputs"
   },
   "speckit": {
     "agent": "opencode",
     "install": "npm install -g speckit-opencode-plugin",
-    "description": "Specification-driven development workflow (spec-kit/specify)",
-    "conflicts": []
+    "enable": { "file": "opencode.json", "field": "plugin", "type": "array-add" },
+    "description": "Specification-driven development workflow (spec-kit/specify)"
+  },
+  "opencode-scheduler": {
+    "agent": "opencode",
+    "install": "npm install -g opencode-scheduler",
+    "enable": { "file": "opencode.json", "field": "plugin", "type": "array-add" },
+    "description": "Scheduling recurring jobs using launchd (Mac) or systemd (Linux)"
+  },
+  "opencode-gitlab-duo": {
+    "agent": "opencode",
+    "install": "npm install -g opencode-gitlab-duo-agentic",
+    "enable": { "file": "opencode.json", "field": "plugin", "type": "array-add" },
+    "description": "GitLab Duo Agentic workflows integration"
+  },
+  "claude-code-review": {
+    "agent": "claude",
+    "install": "claude plugins install code-review@claude-plugins-official",
+    "enable": { "type": "marketplace", "marketplace": "claude-plugins-official" },
+    "description": "Automated code review with Claude Code"
+  },
+  "claude-security-guidance": {
+    "agent": "claude",
+    "install": "claude plugins install security-guidance@claude-plugins-official",
+    "enable": { "type": "marketplace", "marketplace": "claude-plugins-official" },
+    "description": "Security best practices and vulnerability guidance"
+  },
+  "claude-pr-review": {
+    "agent": "claude",
+    "install": "claude plugins install pr-review-toolkit@claude-plugins-official",
+    "enable": { "type": "marketplace", "marketplace": "claude-plugins-official" },
+    "description": "PR review toolkit with structured feedback"
+  },
+  "claude-hookify": {
+    "agent": "claude",
+    "install": "claude plugins install hookify@claude-plugins-official",
+    "enable": { "type": "marketplace", "marketplace": "claude-plugins-official" },
+    "description": "Git hooks integration for Claude Code"
   }
 }

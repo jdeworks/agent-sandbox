@@ -97,19 +97,44 @@ Agent definitions (commands, install scripts, auth files, env vars) are in `src/
 
 ## Plugins
 
-Plugins extend the agents with additional capabilities. During `sandbox-setup` you can select plugins for each agent. Definitions are in `src/sandbox/plugins.json`.
+Plugins extend the agents with additional capabilities. During `sandbox-setup` you choose which to install (baked into the Docker image) and enable (added to agent config). Definitions are in `src/sandbox/plugins.json`.
 
-| Plugin | Agent | Description |
-|--------|-------|-------------|
-| [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) | OpenCode | Multi-model orchestration with Sisyphus, Oracle, Librarian agents and `ultrawork` mode |
-| [@tarquinen/opencode-dcp](https://www.npmjs.com/package/@tarquinen/opencode-dcp) | OpenCode | Dynamic context pruning — optimizes token usage by removing obsolete tool outputs |
-| [speckit-opencode-plugin](https://www.npmjs.com/package/speckit-opencode-plugin) | OpenCode | Specification-driven development workflow |
+### OpenCode plugins
 
-### oh-my-openagent
+| Plugin | Description |
+|--------|-------------|
+| [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) | Multi-model orchestration with Sisyphus, Oracle, Librarian agents and `ultrawork` mode |
+| [@tarquinen/opencode-dcp](https://www.npmjs.com/package/@tarquinen/opencode-dcp) | Dynamic context pruning — optimizes token usage |
+| [speckit-opencode-plugin](https://www.npmjs.com/package/speckit-opencode-plugin) | Specification-driven development workflow |
+| [opencode-scheduler](https://www.npmjs.com/package/opencode-scheduler) | Scheduling recurring jobs (launchd/systemd) |
+| [opencode-gitlab-duo-agentic](https://www.npmjs.com/package/opencode-gitlab-duo-agentic) | GitLab Duo Agentic workflows |
 
-Enabled by default for OpenCode profiles. Provides multi-model orchestration with specialized agents and the `ultrawork` keyword for intensive autonomous coding sessions.
+OpenCode plugins are enabled by adding them to the `"plugin"` array in `opencode.json`. To disable, remove from the array.
 
-To disable for a project, remove `"oh-my-openagent"` from the `plugin` array in that project's `opencode_data/opencode.json`.
+### Claude Code plugins
+
+| Plugin | Description |
+|--------|-------------|
+| code-review | Automated code review |
+| security-guidance | Security best practices and vulnerability detection |
+| pr-review-toolkit | PR review with structured feedback |
+| hookify | Git hooks integration |
+
+Claude Code plugins are managed via the built-in marketplace (`claude plugins install <name>@claude-plugins-official`).
+
+### Custom plugins
+
+You can add any npm package as a custom plugin. The install command is added to the Dockerfile so it's baked into the image:
+
+```bash
+# During sandbox-setup, add custom install commands to the profile
+# These get added as RUN lines in the Dockerfile
+
+# Example: add a custom OpenCode plugin
+npm install -g my-custom-opencode-plugin
+```
+
+To enable a custom OpenCode plugin, add it to the `"plugin"` array in the project's `opencode_data/opencode.json`.
 
 ## Available Languages
 
