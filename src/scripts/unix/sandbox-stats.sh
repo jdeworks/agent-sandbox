@@ -17,7 +17,7 @@ while IFS= read -r img; do
     if [ "$img_size" != "0" ]; then
         echo "  $img  $(numfmt --to=iec "$img_size")"
     fi
-done < <(docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep '^agent-sandbox-' || true)
+done < <(docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -E '^agent-sandbox[-/]' || true)
 
 if ! $found_images; then
     echo "  (none built)"

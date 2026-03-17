@@ -104,6 +104,19 @@ internal static class Cli
 
                 Console.WriteLine($"  [setup] Creating profile '{lang.Key}' ({lang.Value.Label})...");
                 ProfileGenerator.Generate(spec, languages);
+
+                // Write profile.json so the GUI can read profile metadata (reuse profileDir from line 86)
+                var manifest = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    name = spec.Name,
+                    agents = spec.Agents,
+                    plugins = spec.Plugins,
+                    languages = spec.Languages,
+                    mcp_servers = spec.McpServers,
+                    created = DateTime.Now.ToString("O")
+                }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                ResourceManager.WriteLf(Path.Combine(profileDir, "profile.json"), manifest);
+
                 Console.WriteLine($"    -> ready. Use: agent-sandbox sandbox --profile {lang.Key} <path>");
             }
         }
@@ -208,6 +221,20 @@ internal static class Cli
         };
 
         ProfileGenerator.Generate(spec, languages);
+
+        // Write profile.json so the GUI can read profile metadata
+        var profileDir = Path.Combine(ResourceManager.PreparedDir, spec.Name);
+        var manifest = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            name = spec.Name,
+            agents = spec.Agents,
+            plugins = spec.Plugins,
+            languages = spec.Languages,
+            mcp_servers = spec.McpServers,
+            created = DateTime.Now.ToString("O")
+        }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        ResourceManager.WriteLf(Path.Combine(profileDir, "profile.json"), manifest);
+
         Console.WriteLine($"Profile '{profileName}' generated in {ResourceManager.PreparedDir}");
         return 0;
     }
@@ -864,8 +891,9 @@ internal static class Cli
             if (Console.ReadLine()?.Trim().ToLower() != "y")
                 return 0;
 
+            DockerRunner.RemoveImage($"agent-sandbox-{name}:latest");
             Directory.Delete(dir, true);
-            Console.WriteLine($"Profile '{name}' deleted.");
+            Console.WriteLine($"Profile '{name}' deleted (directory and Docker image removed).");
             return 0;
         }
 

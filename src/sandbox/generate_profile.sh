@@ -254,9 +254,11 @@ generate_agents_md() {
         fi
     done
 
-    if [ ${#PORTS[@]} -gt 0 ]; then
-        local port_list
-        port_list=$(printf '%s' "${PORTS[0]}"; printf ', %s' "${PORTS[@]:1}")
+    if [ ${#PORTS[@]} -gt 0 ] && [ -n "${PORTS[0]}" ]; then
+        local port_list="${PORTS[0]}"
+        if [ ${#PORTS[@]} -gt 1 ]; then
+            port_list+=$(printf ', %s' "${PORTS[@]:1}")
+        fi
         cat >> "$PROFILE_DIR/AGENTS.md" <<EOF
 
 ## Available Ports

@@ -392,6 +392,15 @@ public sealed class WizardForm : Form
         _btnEditUserEnv.ForeColor = AccentBlue;
         _btnEditUserEnv.Click += OnEditUserEnvClicked;
 
+        var btnSettings = new Button
+        {
+            Text = "Settings...",
+            Location = new Point(360, 355),
+            Size = new Size(100, 35)
+        };
+        StyleFlatButton(btnSettings, Color.Gray);
+        btnSettings.Click += (_, _) => new SettingsForm().ShowDialog(this);
+
         _txtLog = new TextBox
         {
             Location = new Point(30, 400),
@@ -427,7 +436,7 @@ public sealed class WizardForm : Form
 
         _stepLaunch.Controls.AddRange([title, lblPath, _txtPath, _btnBrowse,
             lblRecent, _lstRecent, lblProfile, _cboProfile,
-            _btnLaunch, _btnBackToProfiles, _btnEditUserEnv,
+            _btnLaunch, _btnBackToProfiles, _btnEditUserEnv, btnSettings,
             _txtLog, _btnBackOverview, _btnClose]);
         Controls.Add(_stepLaunch);
 
@@ -579,6 +588,11 @@ public sealed class WizardForm : Form
         try
         {
             var profileDir = Path.Combine(ResourceManager.PreparedDir, profileName);
+            if (!Directory.Exists(profileDir))
+            {
+                Log($"[sandbox] Error: profile directory not found: {profileDir}");
+                return;
+            }
             var projectName = ProjectScaffolder.ResolveProjectName(workspacePath);
             var projectDir = ProjectScaffolder.GetProjectDir(projectName);
             var tag = $"agent-sandbox-{profileName}:latest";
@@ -664,21 +678,17 @@ public sealed class WizardForm : Form
                 // Update last started
                 ProjectScaffolder.UpdateLastStarted(projectName);
 
-                // Launch agent in new window
+                // Launch agent in new window (returns immediately — agent runs in separate cmd.exe)
                 var containerTarget = containerId ?? $"{projectName}-agent-1";
                 var agentCmd = ProjectScaffolder.GetAgentCommand(projectName);
                 Log($"[sandbox] Launching agent: {agentCmd}");
                 DockerRunner.ExecInteractive(containerTarget, agentCmd, newWindow: true);
 
-                // Check for Dockerfile extension after agent exits
-                if (ProjectScaffolder.HasDockerfileExtension(projectName))
-                {
-                    Log("[sandbox] Agent created a Dockerfile.extension. Baking into project image...");
-                    ProjectScaffolder.BakeDockerfileExtension(projectName);
-                    Log("[sandbox] Extension baked. It will be applied on next container start.");
-                }
+                // Note: Dockerfile.extension check cannot run here because the agent is
+                // still running in a new window. It will be checked on next launch instead
+                // (RefreshFromProfile path in the existing project branch above).
 
-                Log("[sandbox] Done.");
+                Log("[sandbox] Agent launched in new window.");
             });
 
             // Show completion buttons

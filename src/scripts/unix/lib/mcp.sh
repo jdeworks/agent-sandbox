@@ -78,5 +78,5 @@ mcp_list_compatible() {
         .value.compatible_agents as $compat |
         ($ARGS.positional | any(. as $agent | $compat | index($agent)))
     ) | "\(.key)\t\(.value.description)"' \
-        --jsonargs "${agents[@]}" "$mcp_servers_json"
+        "$mcp_servers_json" --jsonargs "${agents[@]}"
 }

@@ -296,10 +296,11 @@ public static class ProjectScaffolder
             }
         }
         
+        // runtime.env is injected into Docker containers via env_file.
+        // Values MUST be plaintext — containers cannot decrypt DPAPI-protected data.
         foreach (var kvp in allVars)
         {
-            var encryptedValue = SecureStorage.Encrypt(kvp.Value);
-            sb.AppendLine($"{kvp.Key}={encryptedValue}");
+            sb.AppendLine($"{kvp.Key}={kvp.Value}");
         }
         
         ResourceManager.WriteLf(envPath, sb.ToString());

@@ -39,6 +39,7 @@ After copying files to `tools/AgentSandbox/Resources/`, bump the `VersionStamp` 
 - `src/sandbox/agents.json` -> also copy to `tools/AgentSandbox/Resources/agents.json`
 - `src/sandbox/plugins.json` -> also copy to `tools/AgentSandbox/Resources/plugins.json`
 - `src/sandbox/mcp-servers.json` -> also copy to `tools/AgentSandbox/Resources/mcp-servers.json`
+- `src/sandbox/config-mirrors.json` -> also copy to `tools/AgentSandbox/Resources/config-mirrors.json`
 - `src/templates/opencode.json` -> also copy to `tools/AgentSandbox/Resources/templates/opencode.json`
 - `src/templates/oh-my-openagent.json` -> also copy to `tools/AgentSandbox/Resources/templates/oh-my-openagent.json`
 - `src/templates/agent-config.json` -> also copy to `tools/AgentSandbox/Resources/templates/agent-config.json`

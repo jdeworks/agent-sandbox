@@ -140,19 +140,19 @@ To enable a custom OpenCode plugin, add it to the `"plugin"` array in the projec
 
 | Language | Detection files | What it adds |
 |---|---|---|
-| C/C++ | `CMakeLists.txt`, `meson.build`, `*.c`, `*.cpp` | CMake, Ninja, GDB, pkg-config |
-| C# / .NET | `*.csproj`, `*.sln`, `global.json` | .NET SDK 8.0; auto-runs `dotnet restore` |
-| Dart | `pubspec.yaml`, `*.dart` | Dart SDK; auto-runs `dart pub get` |
+| C/C++ | `CMakeLists.txt`, `meson.build`, `configure.ac`, `conanfile.txt`, `vcpkg.json`, `*.c`, `*.cpp`, `*.h`, `*.hpp` | CMake, Ninja, GDB, pkg-config |
+| C# / .NET | `*.csproj`, `*.sln`, `*.fsproj`, `global.json`, `*.cs`, `*.fs` | .NET SDK 8.0; auto-runs `dotnet restore` |
+| Dart | `pubspec.yaml`, `pubspec.lock`, `*.dart` | Dart SDK; auto-runs `dart pub get` |
 | Flutter | `pubspec.yaml` (with `flutter:`) | Flutter SDK + Android SDK (~2GB); auto-runs `flutter pub get` |
 | Go | `go.mod`, `go.sum`, `*.go` | golang-go; auto-runs `go mod download` |
-| Java | `pom.xml`, `build.gradle`, `*.java` | OpenJDK 21, Maven; auto-resolves deps |
+| Java | `pom.xml`, `build.gradle`, `build.gradle.kts`, `gradlew`, `mvnw`, `*.java` | OpenJDK 21, Maven; auto-resolves deps |
 | Kotlin | `*.kt`, `*.kts` | OpenJDK 21 + Gradle; auto-resolves deps |
-| Node.js | `package.json`, `*.js`, `*.ts` | npm dependency auto-install (always included in base image) |
-| PHP | `composer.json`, `*.php` | PHP + extensions, Composer; auto-runs `composer install` |
-| Python 3 | `requirements.txt`, `pyproject.toml`, `*.py` | python3, venv, pip; auto-installs from requirements.txt |
+| Node.js | `package.json`, `*.js`, `*.ts`, `*.jsx`, `*.tsx` | npm dependency auto-install (always included in base image) |
+| PHP | `composer.json`, `composer.lock`, `artisan`, `*.php` | PHP + extensions, Composer; auto-runs `composer install` |
+| Python 3 | `requirements.txt`, `setup.py`, `pyproject.toml`, `Pipfile`, `*.py` | python3, venv, pip; auto-installs from requirements.txt |
 | React Native | `package.json` (with `react-native`) | React Native CLI; JS/TS dev and Metro bundler |
-| Ruby | `Gemfile`, `*.rb` | Ruby, Bundler; auto-runs `bundle install` |
-| Rust | `Cargo.toml`, `*.rs` | rustup toolchain; auto-runs `cargo fetch` |
+| Ruby | `Gemfile`, `Gemfile.lock`, `Rakefile`, `*.gemspec`, `*.rb` | Ruby, Bundler; auto-runs `bundle install` |
+| Rust | `Cargo.toml`, `Cargo.lock`, `*.rs` | rustup toolchain; auto-runs `cargo fetch` |
 
 Language definitions are in `src/sandbox/languages.json`. Fragments live in `src/sandbox/fragments/languages/`.
 

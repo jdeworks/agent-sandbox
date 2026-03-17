@@ -120,19 +120,22 @@ public class SetupForm : Form
         // ── Languages ──
         AddLabel("Languages (Node.js always included)", ref y, bold: true);
         _langList = new CheckedListBox { Left = 20, Top = y, Width = 540, Height = 180, CheckOnClick = true };
+
+        // Read size_warning fields once (not per-language)
+        JsonDocument? langDoc = null;
+        try
+        {
+            langDoc = JsonDocument.Parse(File.ReadAllText(Path.Combine(ResourceManager.SandboxDir, "languages.json")));
+        }
+        catch { /* ignore */ }
+
         foreach (var kvp in _languages.OrderBy(k => k.Key))
         {
             var sizeWarn = "";
-            // Check languages.json for size_warning field
-            try
-            {
-                var langJson = File.ReadAllText(Path.Combine(ResourceManager.SandboxDir, "languages.json"));
-                using var doc = JsonDocument.Parse(langJson);
-                if (doc.RootElement.TryGetProperty(kvp.Key, out var langEl) &&
-                    langEl.TryGetProperty("size_warning", out var sw))
-                    sizeWarn = $" — {sw.GetString()}";
-            }
-            catch { /* ignore */ }
+            if (langDoc != null &&
+                langDoc.RootElement.TryGetProperty(kvp.Key, out var langEl) &&
+                langEl.TryGetProperty("size_warning", out var sw))
+                sizeWarn = $" — {sw.GetString()}";
 
             var locked = kvp.Key == "node" ? " [required]" : "";
             _langKeys.Add(kvp.Key);
@@ -146,6 +149,7 @@ public class SetupForm : Form
             if (_langKeys[e.Index] == "node" && e.NewValue == CheckState.Unchecked)
                 e.NewValue = CheckState.Checked;
         };
+        langDoc?.Dispose();
         _mainPanel.Controls.Add(_langList);
         y += 185;
 
@@ -255,6 +259,12 @@ public class SetupForm : Form
         if (selectedAgents.Count == 0)
         {
             MessageBox.Show("Select at least one coding agent.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        if (!DockerRunner.IsDockerAvailable())
+        {
+            MessageBox.Show("Docker is not running. Start Docker Desktop and try again.", "Docker Required", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
 

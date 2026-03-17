@@ -264,9 +264,11 @@ public static class DockerRunner
             CreateNoWindow = true
         };
         using var proc = Process.Start(psi)!;
+        // Read stderr async to avoid deadlock when buffers fill
+        var stderrTask = proc.StandardError.ReadToEndAsync();
         var stdout = proc.StandardOutput.ReadToEnd();
-        var stderr = proc.StandardError.ReadToEnd();
         proc.WaitForExit();
+        var stderr = stderrTask.Result;
         return (proc.ExitCode, stdout, stderr);
     }
 }
