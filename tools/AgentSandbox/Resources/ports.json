@@ -246,5 +246,19 @@
         "patterns": ["rocket"]
       }
     }
+  },
+  "flutter": {
+    "default": [8080],
+    "frameworks": {}
+  },
+  "react-native": {
+    "default": [8081],
+    "frameworks": {
+      "expo": {
+        "ports": [8081, 19000, 19001, 19002],
+        "detect_in": "package.json",
+        "patterns": ["expo"]
+      }
+    }
   }
 }
