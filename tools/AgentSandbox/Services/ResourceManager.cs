@@ -24,13 +24,50 @@ public static class ResourceManager
     public static void EnsureExtracted()
     {
         var stampFile = Path.Combine(AppDataRoot, ".version");
-        if (File.Exists(stampFile) && File.ReadAllText(stampFile).Trim() == VersionStamp)
+        var oldVersion = File.Exists(stampFile) ? File.ReadAllText(stampFile).Trim() : "";
+        if (oldVersion == VersionStamp)
             return;
+
+        // Migrate from v1 to v2: clean stale project configurations
+        if (!string.IsNullOrEmpty(oldVersion) && oldVersion.StartsWith("1."))
+            MigrateFromV1();
 
         ExtractAll();
         Directory.CreateDirectory(PreparedDir);
         Directory.CreateDirectory(ProjectsDir);
         File.WriteAllText(stampFile, VersionStamp);
+    }
+
+    /// <summary>
+    /// Migrate from v1 data layout. Remove old prepared profiles and project
+    /// configs so they are cleanly regenerated under the v2 structure.
+    /// </summary>
+    private static void MigrateFromV1()
+    {
+        // Remove v1 prepared profiles (templates changed: volume names, env_file, etc.)
+        if (Directory.Exists(PreparedDir))
+        {
+            try { Directory.Delete(PreparedDir, true); } catch { /* best effort */ }
+        }
+
+        // Remove v1 project configs (compose files reference old volume names)
+        if (Directory.Exists(ProjectsDir))
+        {
+            foreach (var projectDir in Directory.GetDirectories(ProjectsDir))
+            {
+                // Delete generated files that will be regenerated.
+                // Preserve sandbox_data/ (user's Dockerfile.extension, changes.txt)
+                foreach (var f in new[] { "docker-compose.yml", "Dockerfile", "config.env", "runtime.env" })
+                {
+                    var path = Path.Combine(projectDir, f);
+                    if (File.Exists(path))
+                        try { File.Delete(path); } catch { /* best effort */ }
+                }
+            }
+        }
+
+        Console.WriteLine("[agent-sandbox] Migrated from v1 — old profiles and project configs removed.");
+        Console.WriteLine("  Profiles need to be recreated. Project data (sessions, logs) was preserved.");
     }
 
     private static void ExtractAll()

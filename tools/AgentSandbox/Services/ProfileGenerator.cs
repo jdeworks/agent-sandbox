@@ -131,8 +131,8 @@ public static class ProfileGenerator
 
             foreach (var (vname, mpath) in config.Volumes)
             {
-                volMounts.Add($"      - {vname}:{mpath}");
-                volDefs.Add($"  {vname}:");
+                volMounts.Add($"      - asb_{vname}:{mpath}");
+                volDefs.Add($"  asb_{vname}:");
             }
 
             if (lang != "node")
@@ -168,13 +168,17 @@ public static class ProfileGenerator
         sb.AppendLine("      - ./opencode_data:/workspace/.config/opencode");
         sb.AppendLine("      - ./opencode_sessions:/workspace/.local/share/opencode");
         sb.AppendLine("      - ./logs:/workspace/.local/share/opencode/log");
-        sb.AppendLine("      - opencode_cache_{{PROJECT_NAME}}:/workspace/.cache/opencode");
+        sb.AppendLine("      - asb_agent_config_{{PROJECT_NAME}}:/workspace/.agent-config");
+        sb.AppendLine("      - asb_agent_data_{{PROJECT_NAME}}:/workspace/.agent-data");
+        sb.AppendLine("      - asb_sandbox_data_{{PROJECT_NAME}}:/workspace/.sandbox-vol");
+        sb.AppendLine("      - asb_opencode_cache_{{PROJECT_NAME}}:/workspace/.cache/opencode");
         sb.AppendLine("      - ./sandbox_data:/workspace/.sandbox");
         sb.AppendLine("    ports:");
         foreach (var port in spec.Ports)
             sb.AppendLine($"      - \"{port}:{port}\"");
         sb.AppendLine("    env_file:");
         sb.AppendLine("      - ./runtime.env");
+        sb.AppendLine("      - ./user.env");
         sb.AppendLine("    stdin_open: true");
         sb.AppendLine("    tty: true");
         sb.AppendLine("    security_opt:");
@@ -183,7 +187,10 @@ public static class ProfileGenerator
         sb.AppendLine("volumes:");
         foreach (var vd in volDefs)
             sb.AppendLine(vd);
-        sb.Append("  opencode_cache_{{PROJECT_NAME}}:");
+        sb.AppendLine("  asb_agent_config_{{PROJECT_NAME}}:");
+        sb.AppendLine("  asb_agent_data_{{PROJECT_NAME}}:");
+        sb.AppendLine("  asb_sandbox_data_{{PROJECT_NAME}}:");
+        sb.Append("  asb_opencode_cache_{{PROJECT_NAME}}:");
 
         ResourceManager.WriteLf(Path.Combine(profileDir, "docker-compose.yml.tpl"), sb.ToString());
     }

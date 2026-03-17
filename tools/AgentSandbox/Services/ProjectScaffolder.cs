@@ -129,6 +129,15 @@ public static class ProjectScaffolder
         Directory.CreateDirectory(Path.Combine(projectDir, "opencode_sessions"));
         Directory.CreateDirectory(Path.Combine(projectDir, "logs"));
 
+        // Create user.env (referenced by env_file in docker-compose.yml, never overwritten)
+        var userEnvPath = Path.Combine(projectDir, "user.env");
+        if (!File.Exists(userEnvPath))
+        {
+            ResourceManager.WriteLf(userEnvPath,
+                "# User environment overrides (loaded after runtime.env)\n" +
+                "# Your values here override any auto-generated values.\n");
+        }
+
         var versionsEnvPath = Path.Combine(profileDir, "versions.env");
         var versionLines = "";
         if (File.Exists(versionsEnvPath))
@@ -191,6 +200,11 @@ public static class ProjectScaffolder
 
         // Ensure opencode_data directory exists before copying AGENTS.md
         Directory.CreateDirectory(Path.Combine(projectDir, "opencode_data"));
+
+        // Ensure user.env exists (compose references it via env_file)
+        var userEnvPath = Path.Combine(projectDir, "user.env");
+        if (!File.Exists(userEnvPath))
+            ResourceManager.WriteLf(userEnvPath, "# User environment overrides (loaded after runtime.env)\n");
 
 
         var agentsMd = Path.Combine(profileDir, "AGENTS.md");

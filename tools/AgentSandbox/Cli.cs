@@ -23,8 +23,8 @@ internal static class Cli
               agent-sandbox sandbox --profile <name> <path>  Launch with a specific profile
               agent-sandbox list                     CLI: list all projects
               agent-sandbox stats                    CLI: show disk usage
-              QJ|              agent-sandbox cleanup [project]       CLI: remove sandbox (interactive, --all)
-#NM|              agent-sandbox cleanup prepared   CLI: clean up prepared profiles
+              agent-sandbox cleanup [project]       CLI: remove sandbox (interactive, --all)
+              agent-sandbox cleanup prepared        CLI: clean up prepared profiles
               agent-sandbox profiles                 CLI: list prepared profiles
               agent-sandbox profiles delete <name>   CLI: delete a profile
               agent-sandbox help                     Show this help
