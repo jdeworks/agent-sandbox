@@ -144,6 +144,37 @@ case "${1:-}" in
         fi
         exit 0
         ;;
+    --cleanup-volumes)
+        echo "[sandbox-me] Scanning for orphaned asb_* volumes..."
+        orphans=()
+        while IFS= read -r vol; do
+            [ -z "$vol" ] && continue
+            # Extract project name: asb_<type>_<project-name>
+            proj=$(echo "$vol" | sed 's/^asb_[^_]*_//')
+            if [ ! -d "$SANDBOX_HOME/projects/$proj" ]; then
+                orphans+=("$vol")
+            fi
+        done < <(docker volume ls -q --filter "name=asb_" 2>/dev/null)
+
+        if [ ${#orphans[@]} -eq 0 ]; then
+            echo "[sandbox-me] No orphaned volumes found."
+            exit 0
+        fi
+
+        echo "Found ${#orphans[@]} orphaned volumes:"
+        for vol in "${orphans[@]}"; do
+            size=$(docker system df -v 2>/dev/null | grep "$vol" | awk '{print $NF}' || echo "unknown")
+            echo "  $vol ($size)"
+        done
+        echo ""
+        read -rp "Remove all orphaned volumes? [y/N]: " confirm
+        if [[ "$confirm" =~ ^[yY]$ ]]; then
+            for vol in "${orphans[@]}"; do
+                docker volume rm "$vol" 2>/dev/null && echo "  Removed $vol" || echo "  Failed to remove $vol"
+            done
+        fi
+        exit 0
+        ;;
     --edit-env)
         PROJECT_ROOT=$(config_find_project_root)
         PROJECT_NAME=$(config_derive_project_name "$PROJECT_ROOT" "$SANDBOX_HOME")
