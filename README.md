@@ -101,9 +101,9 @@ Plugins extend the agents with additional capabilities. During `sandbox-setup` y
 
 | Plugin | Agent | Description |
 |--------|-------|-------------|
-| [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) | OpenCode | Multi-model orchestration with specialized agents (Sisyphus, Oracle, Librarian), background tasks, and `ultrawork` / `ulw` mode |
-| [claude-code-hooks](https://github.com/anthropics/claude-code-hooks) | Claude Code | Git hooks and pre-commit integration |
-| [cursor-rules](https://github.com/cursor/rules-generator) | Cursor | Auto-generate `.cursorrules` from project structure |
+| [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) | OpenCode | Multi-model orchestration with Sisyphus, Oracle, Librarian agents and `ultrawork` mode |
+| [@tarquinen/opencode-dcp](https://www.npmjs.com/package/@tarquinen/opencode-dcp) | OpenCode | Dynamic context pruning — optimizes token usage by removing obsolete tool outputs |
+| [speckit-opencode-plugin](https://www.npmjs.com/package/speckit-opencode-plugin) | OpenCode | Specification-driven development workflow |
 
 ### oh-my-openagent
 

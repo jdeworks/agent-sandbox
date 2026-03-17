@@ -149,15 +149,24 @@ public class SetupForm : Form
         _mainPanel.Controls.Add(_langList);
         y += 185;
 
-        // ── MCP Servers ──
-        AddLabel("MCP Servers (baked into image, optional)", ref y, bold: true);
-        _mcpList = new CheckedListBox { Left = 20, Top = y, Width = 540, Height = 100, CheckOnClick = true };
+        // ── MCP Servers (advanced, collapsed by default) ──
+        var mcpCheck = new CheckBox
+        {
+            Text = "Include MCP servers (advanced)",
+            Left = 20, Top = y, Width = 300,
+            Font = new Font(Font.FontFamily, 9.5f, FontStyle.Bold)
+        };
+        _mainPanel.Controls.Add(mcpCheck);
+        y += 25;
+
+        _mcpList = new CheckedListBox { Left = 20, Top = y, Width = 540, Height = 100, CheckOnClick = true, Visible = false };
         foreach (var prop in _mcpDoc.RootElement.EnumerateObject())
         {
             var desc = prop.Value.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
             _mcpKeys.Add(prop.Name);
             _mcpList.Items.Add($"{prop.Name} — {desc}");
         }
+        mcpCheck.CheckedChanged += (_, _) => _mcpList.Visible = mcpCheck.Checked;
         _mainPanel.Controls.Add(_mcpList);
         y += 105;
 

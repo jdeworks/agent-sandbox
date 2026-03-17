@@ -2,19 +2,19 @@
   "oh-my-openagent": {
     "agent": "opencode",
     "install": "npm install -g oh-my-openagent @code-yeongyu/comment-checker",
-    "description": "Multi-model orchestration with specialized agents (Sisyphus, Oracle, Librarian) and ultrawork mode",
+    "description": "Multi-model orchestration with Sisyphus, Oracle, Librarian agents and ultrawork mode",
     "conflicts": []
   },
-  "claude-code-hooks": {
-    "agent": "claude",
-    "install": "npm install -g @anthropic/claude-code-hooks",
-    "description": "Git hooks and pre-commit integration for Claude Code",
+  "dcp": {
+    "agent": "opencode",
+    "install": "npm install -g @tarquinen/opencode-dcp",
+    "description": "Dynamic context pruning — optimizes token usage by pruning obsolete tool outputs",
     "conflicts": []
   },
-  "cursor-rules": {
-    "agent": "cursor",
-    "install": "npm install -g @cursor/rules-generator",
-    "description": "Auto-generate .cursorrules from project structure",
+  "speckit": {
+    "agent": "opencode",
+    "install": "npm install -g speckit-opencode-plugin",
+    "description": "Specification-driven development workflow (spec-kit/specify)",
     "conflicts": []
   }
 }

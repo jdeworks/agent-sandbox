@@ -260,11 +260,16 @@ for lang in "${selected_languages[@]}"; do
 done
 
 ########################################
-# MCP server selection
+# MCP server selection (advanced, opt-in)
 ########################################
 echo ""
+read -rp "Include MCP servers? (advanced, can also be added later) [y/N]: " mcp_opt_in
+mcp_opt_in="${mcp_opt_in:-N}"
+selected_mcp=()
+if [[ "$mcp_opt_in" =~ ^[yY]$ ]]; then
+echo ""
 echo "=== MCP Servers ==="
-echo "Select MCP servers to include (can also be added later):"
+echo "Select MCP servers to include:"
 
 mcp_keys=()
 while IFS='|' read -r key desc; do
@@ -285,6 +290,7 @@ if [ -n "$mcp_choice" ]; then
         fi
     done
 fi
+fi  # end mcp_opt_in
 
 ########################################
 # Config mirroring (driven by config-mirrors.json)
