@@ -267,7 +267,7 @@ if [ -z "$PROFILE_NAME" ]; then
 fi
 
 PROFILE_DIR="$SANDBOX_HOME/profiles/$PROFILE_NAME"
-BASE_IMAGE="agent-sandbox/${PROFILE_NAME}:latest"
+BASE_IMAGE="agent-sandbox-${PROFILE_NAME}:latest"
 
 ########################################
 # Derive project name
