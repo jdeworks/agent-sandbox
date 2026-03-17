@@ -180,8 +180,37 @@ public sealed class WizardForm : Form
         StyleFilledButton(_btnSkipSetup, Color.FromArgb(60, 60, 60), Color.White);
         _btnSkipSetup.Click += (_, _) => ShowStep(1);
 
+        var btnAdvancedSetup = new Button
+        {
+            Text = "Advanced Profile Setup...",
+            Location = new Point(30, 580),
+            Size = new Size(220, 36),
+            Font = new Font("Segoe UI", 9f)
+        };
+        StyleFlatButton(btnAdvancedSetup, Color.FromArgb(0, 120, 212));
+        btnAdvancedSetup.ForeColor = Color.FromArgb(0, 120, 212);
+        btnAdvancedSetup.Click += (_, _) =>
+        {
+            using var setupForm = new SetupForm(_languages, _portConfigs);
+            if (setupForm.ShowDialog(this) == DialogResult.OK)
+            {
+                _lblSetupStatus.Text = $"Profile '{setupForm.CreatedProfile?.Name}' created.";
+                RefreshSetupLanguageList();
+            }
+        };
+
+        var lblAdvanced = new Label
+        {
+            Text = "Create a profile with custom agents, plugins, MCP servers, and language combinations.",
+            ForeColor = Color.FromArgb(100, 100, 100),
+            Location = new Point(260, 585),
+            Size = new Size(380, 30),
+            Font = new Font(Font.FontFamily, 8f)
+        };
+
         _stepSetup.Controls.AddRange([title, subtitle, lblPick, _lstSetupLangs,
-            _lblSetupStatus, _btnBackSetup, _btnCreateProfiles, _btnSkipSetup]);
+            _lblSetupStatus, _btnBackSetup, _btnCreateProfiles, _btnSkipSetup,
+            btnAdvancedSetup, lblAdvanced]);
         Controls.Add(_stepSetup);
     }
 

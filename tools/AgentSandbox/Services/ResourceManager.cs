@@ -41,12 +41,22 @@ public static class ResourceManager
     /// <summary>
     /// Migrate from v1 data layout. Remove old prepared profiles and project
     /// configs so they are cleanly regenerated under the v2 structure.
+    /// Also attempts to remove old Docker images using the v1 naming convention.
     /// </summary>
     private static void MigrateFromV1()
     {
-        // Remove v1 prepared profiles (templates changed: volume names, env_file, etc.)
+        var removedProfiles = new List<string>();
+
+        // Remove v1 prepared profiles and their Docker images
         if (Directory.Exists(PreparedDir))
         {
+            foreach (var dir in Directory.GetDirectories(PreparedDir))
+            {
+                var profileName = Path.GetFileName(dir);
+                removedProfiles.Add(profileName);
+                // Try to remove the v1-style Docker image (agent-sandbox-<name>:latest)
+                TryRemoveDockerImage($"agent-sandbox-{profileName}:latest");
+            }
             try { Directory.Delete(PreparedDir, true); } catch { /* best effort */ }
         }
 
@@ -57,6 +67,8 @@ public static class ResourceManager
             {
                 // Delete generated files that will be regenerated.
                 // Preserve sandbox_data/ (user's Dockerfile.extension, changes.txt)
+                // Preserve opencode_data/ (user's customized opencode.json, oh-my-opencode.json)
+                // Preserve opencode_sessions/ and logs/
                 foreach (var f in new[] { "docker-compose.yml", "Dockerfile", "config.env", "runtime.env" })
                 {
                     var path = Path.Combine(projectDir, f);
@@ -66,8 +78,29 @@ public static class ResourceManager
             }
         }
 
-        Console.WriteLine("[agent-sandbox] Migrated from v1 — old profiles and project configs removed.");
-        Console.WriteLine("  Profiles need to be recreated. Project data (sessions, logs) was preserved.");
+        Console.WriteLine("[agent-sandbox] Upgraded from v1 to v2.");
+        if (removedProfiles.Count > 0)
+            Console.WriteLine($"  Removed {removedProfiles.Count} old profile(s): {string.Join(", ", removedProfiles)}");
+        Console.WriteLine("  Profiles need to be recreated (templates changed).");
+        Console.WriteLine("  Project data (sessions, logs, customizations) was preserved.");
+    }
+
+    /// <summary>Try to remove a Docker image. Fails silently if Docker is unavailable or image doesn't exist.</summary>
+    private static void TryRemoveDockerImage(string tag)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo("docker", $"rmi {tag}")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            var proc = System.Diagnostics.Process.Start(psi);
+            proc?.WaitForExit(5000);
+        }
+        catch { /* best effort — Docker may not be running */ }
     }
 
     private static void ExtractAll()
