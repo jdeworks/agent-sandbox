@@ -4,12 +4,12 @@
 
 This repo has two parallel implementations:
 
-- **Unix (Linux / macOS / WSL)**: Bash scripts in `agent-worker/scripts/unix/` that use `jq` to read JSON config and `generate_profile.sh` to assemble Docker profiles.
+- **Unix (Linux / macOS / WSL)**: Bash scripts in `src/scripts/unix/` that use `jq` to read JSON config and `generate_profile.sh` to assemble Docker profiles.
 - **Windows**: A self-contained C# exe in `tools/AgentSandbox/` that embeds all data files and replicates the same detection, generation, and Docker orchestration logic. It has two modes:
   - **GUI mode** (default / double-click): WinForms wizard with folder picker, language checkboxes, version/port editing. Entry: `UI/WizardForm.cs`.
   - **CLI mode** (explicit subcommands like `prepare`, `sandbox`, `list`): Console-based, same UX as the unix scripts. Entry: `Cli.cs`.
 
-Both implementations consume the same source-of-truth data files under `agent-worker/sandbox/`.
+Both implementations consume the same source-of-truth data files under `src/sandbox/`.
 
 ## Cross-Platform Sync Checklist
 
@@ -19,32 +19,32 @@ When making changes, always check whether the change touches a shared concern. U
 
 All of the following locations MUST be updated together:
 
-1. `agent-worker/sandbox/languages.json` -- language definition (detect, dockerfile, volumes, versions, etc.)
-2. `agent-worker/sandbox/fragments/<key>.sh` -- container startup fragment
-3. `agent-worker/sandbox/fragments/<key>.agents.md` -- agent instruction fragment
-4. `agent-worker/sandbox/ports.json` -- default ports and framework detection rules
+1. `src/sandbox/languages.json` -- language definition (detect, dockerfile, volumes, versions, etc.)
+2. `src/sandbox/fragments/languages/<key>.sh` -- container startup fragment
+3. `src/sandbox/fragments/languages/<key>.agents.md` -- agent instruction fragment
+4. `src/sandbox/ports.json` -- default ports and framework detection rules
 5. `tools/AgentSandbox/Resources/languages.json` -- copy of (1) for Windows embedding
 6. `tools/AgentSandbox/Resources/ports.json` -- copy of (4) for Windows embedding
 7. `tools/AgentSandbox/Resources/fragments/<key>.sh` -- copy of (2) for Windows embedding
 8. `tools/AgentSandbox/Resources/fragments/<key>.agents.md` -- copy of (3) for Windows embedding
-9. `agent-worker/sandbox/fragments/README.md` -- update the "Available languages" table
+9. `src/sandbox/fragments/README.md` -- update the "Available languages" table
 10. `README.md` -- update "Available Languages" table, "Supported frameworks" table, "How Dependencies Work" list
 
 After copying files to `tools/AgentSandbox/Resources/`, bump the `VersionStamp` in `tools/AgentSandbox/Services/ResourceManager.cs` so existing Windows installations re-extract.
 
 ### Modifying templates or config files
 
-- `agent-worker/sandbox/Dockerfile.base.tpl` -> also copy to `tools/AgentSandbox/Resources/Dockerfile.base.tpl`
-- `agent-worker/sandbox/AGENTS.md.base` -> also copy to `tools/AgentSandbox/Resources/AGENTS.md.base`
-- `agent-worker/templates/opencode.json` -> also copy to `tools/AgentSandbox/Resources/templates/opencode.json`
-- `agent-worker/templates/oh-my-opencode.json` -> also copy to `tools/AgentSandbox/Resources/templates/oh-my-opencode.json`
-- `agent-worker/templates/agent-config.json` -> also copy to `tools/AgentSandbox/Resources/templates/agent-config.json`
+- `src/sandbox/Dockerfile.base.tpl` -> also copy to `tools/AgentSandbox/Resources/Dockerfile.base.tpl`
+- `src/sandbox/AGENTS.md.base` -> also copy to `tools/AgentSandbox/Resources/AGENTS.md.base`
+- `src/templates/opencode.json` -> also copy to `tools/AgentSandbox/Resources/templates/opencode.json`
+- `src/templates/oh-my-opencode.json` -> also copy to `tools/AgentSandbox/Resources/templates/oh-my-opencode.json`
+- `src/templates/agent-config.json` -> also copy to `tools/AgentSandbox/Resources/templates/agent-config.json`
 
 ### Modifying profile generation logic
 
 The generation logic exists in two places:
 
-- `agent-worker/sandbox/generate_profile.sh` (bash, used by unix scripts)
+- `src/sandbox/generate_profile.sh` (bash, used by unix scripts)
 - `tools/AgentSandbox/Services/ProfileGenerator.cs` (C#, used by Windows exe)
 
 Changes to Dockerfile assembly, compose generation, install.sh assembly, or AGENTS.md assembly must be mirrored in both. The compose template and install.sh include `HOST_UID`/`HOST_GID` (Unix only) so the agent process runs as the host user and workspace files stay owned by the user; `sandbox.sh` substitutes these when writing docker-compose.yml, and `ProjectScaffolder.cs` replaces them with empty string on Windows.
@@ -53,36 +53,36 @@ Changes to Dockerfile assembly, compose generation, install.sh assembly, or AGEN
 
 Detection logic exists in two places:
 
-- `agent-worker/scripts/unix/prepare.sh` (bash)
+- `src/scripts/unix/prepare.sh` (bash)
 - `tools/AgentSandbox/Services/LanguageDetector.cs`, `VersionDetector.cs`, `PortDetector.cs` (C#)
 
 Changes to how languages, versions, or frameworks are detected must be mirrored in both.
 
 ### Modifying sandbox orchestration
 
-- `agent-worker/scripts/unix/sandbox.sh` (bash) -- container lifecycle, project scaffolding, Dockerfile.extension handling, recent-projects picker
+- `src/scripts/unix/sandbox.sh` (bash) -- container lifecycle, project scaffolding, Dockerfile.extension handling, recent-projects picker
 - `tools/AgentSandbox/UI/WizardForm.cs` (C# GUI) -- wizard steps, recent-projects panel, `RunCoreLaunch()`
 - `tools/AgentSandbox/Cli.cs` (C# CLI) -- `RunSandbox()` with recent-projects picker
 - `tools/AgentSandbox/Services/DockerRunner.cs`, `ProjectScaffolder.cs` (C#)
 
 ### Modifying helper commands (list, stats, cleanup)
 
-- `agent-worker/scripts/unix/sandbox-list.sh`, `sandbox-stats.sh`, `sandbox-cleanup.sh` (bash)
-- `agent-worker/scripts/unix/setup.sh` -- also registers `sandbox-cleanup-sudo`, `sandbox-cleanup-prepared`, `sandbox-cleanup-prepared-unused` (unused-only), `sandbox-cleanup-prepared-sudo`
+- `src/scripts/unix/sandbox-list.sh`, `sandbox-stats.sh`, `sandbox-cleanup.sh` (bash)
+- `src/scripts/unix/setup.sh` -- also registers `sandbox-cleanup-sudo`, `sandbox-cleanup-prepared`, `sandbox-cleanup-prepared-unused` (unused-only), `sandbox-cleanup-prepared-sudo`
 - `tools/AgentSandbox/Cli.cs` -- `RunList()`, `RunStats()`, `RunCleanup()`, `RunCleanupPrepared()` (C#); prepared cleanup supports `--unused-only`
 
 ### Modifying port detection
 
 Port detection always runs Node.js framework detection (since Node is in the base image). This is implemented in:
 
-- `agent-worker/scripts/unix/prepare.sh` (bash) -- `fw_detect_langs` always includes `node`
+- `src/scripts/unix/prepare.sh` (bash) -- `fw_detect_langs` always includes `node`
 - `tools/AgentSandbox/Services/PortDetector.cs` (C#) -- `fwDetectLangs` always includes `node`
 
 ### Modifying recent-projects / project memory
 
 Recent projects are discovered by scanning `projects/*/config.env` files (no separate registry). Implemented in:
 
-- `agent-worker/scripts/unix/sandbox.sh` (bash) -- scans when no path argument given, filters by current profile
+- `src/scripts/unix/sandbox.sh` (bash) -- scans when no path argument given, filters by current profile
 - `tools/AgentSandbox/Services/ProjectScaffolder.cs` (C#) -- `GetRecentProjects()` returns all projects sorted by `LAST_STARTED`
 - `tools/AgentSandbox/UI/WizardForm.cs` (C#) -- `PopulateRecentProjects()` fills the ListView; `OnContinueClicked()` quick-launches
 - `tools/AgentSandbox/Cli.cs` (C#) -- `RunSandbox()` shows picker when no path given
@@ -90,28 +90,28 @@ Recent projects are discovered by scanning `projects/*/config.env` files (no sep
 ## File Relationships
 
 ```
-SOURCE OF TRUTH (agent-worker/sandbox/)    WINDOWS COPY (tools/AgentSandbox/Resources/)
+SOURCE OF TRUTH (src/sandbox/)    WINDOWS COPY (tools/AgentSandbox/Resources/)
   languages.json             ─────────>      languages.json
   ports.json                 ─────────>      ports.json
   Dockerfile.base.tpl        ─────────>      Dockerfile.base.tpl
   AGENTS.md.base             ─────────>      AGENTS.md.base
-  fragments/*.sh             ─────────>      fragments/*.sh
-  fragments/*.agents.md      ─────────>      fragments/*.agents.md
+  fragments/languages/*.sh   ─────────>      fragments/*.sh
+  fragments/languages/*.agents.md ────>      fragments/*.agents.md
 
-SOURCE OF TRUTH (agent-worker/templates/)
+SOURCE OF TRUTH (src/templates/)
   opencode.json              ─────────>      templates/opencode.json
   oh-my-opencode.json        ─────────>      templates/oh-my-opencode.json
   agent-config.json          ─────────>      templates/agent-config.json
 ```
 
-The `agent-worker/sandbox/` directory is the canonical source. The `tools/AgentSandbox/Resources/` directory contains copies that are embedded into the exe at build time. Always edit the source first, then copy to Resources.
+The `src/sandbox/` directory is the canonical source. The `tools/AgentSandbox/Resources/` directory contains copies that are embedded into the exe at build time. Always edit the source first, then copy to Resources.
 
 ## Documentation
 
 Three documentation files must stay in sync with the codebase:
 
 - `README.md` -- top-level project docs (languages table, frameworks table, dependency list, project structure tree, adding-languages steps, file ownership (Unix), helper commands including sandbox-cleanup-sudo)
-- `agent-worker/sandbox/fragments/README.md` -- fragment conventions and per-language table
+- `src/sandbox/fragments/README.md` -- fragment conventions and per-language table
 - This file (`.cursorrules`) -- architecture notes and sync checklist
 
 ## Code Style

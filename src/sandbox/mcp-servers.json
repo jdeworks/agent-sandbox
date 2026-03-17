@@ -1,0 +1,50 @@
+{
+  "filesystem": {
+    "install": "npm install -g @anthropic/mcp-filesystem",
+    "command": "mcp-filesystem",
+    "args": ["/workspace/src"],
+    "env_vars": [],
+    "compatible_agents": ["claude", "opencode"],
+    "description": "Read/write access to project files via MCP"
+  },
+  "github": {
+    "install": "npm install -g @modelcontextprotocol/server-github",
+    "command": "mcp-server-github",
+    "args": [],
+    "env_vars": ["GITHUB_TOKEN"],
+    "compatible_agents": ["claude", "opencode"],
+    "description": "GitHub API access (issues, PRs, repos)"
+  },
+  "postgres": {
+    "install": "npm install -g @modelcontextprotocol/server-postgres",
+    "command": "mcp-server-postgres",
+    "args": [],
+    "env_vars": ["DATABASE_URL"],
+    "compatible_agents": ["claude", "opencode"],
+    "description": "PostgreSQL database access via MCP"
+  },
+  "sqlite": {
+    "install": "npm install -g @modelcontextprotocol/server-sqlite",
+    "command": "mcp-server-sqlite",
+    "args": [],
+    "env_vars": [],
+    "compatible_agents": ["claude", "opencode"],
+    "description": "SQLite database access via MCP"
+  },
+  "memory": {
+    "install": "npm install -g @modelcontextprotocol/server-memory",
+    "command": "mcp-server-memory",
+    "args": [],
+    "env_vars": [],
+    "compatible_agents": ["claude", "opencode"],
+    "description": "Persistent key-value memory for agents"
+  },
+  "fetch": {
+    "install": "npm install -g @modelcontextprotocol/server-fetch",
+    "command": "mcp-server-fetch",
+    "args": [],
+    "env_vars": [],
+    "compatible_agents": ["claude", "opencode"],
+    "description": "HTTP fetch capabilities for agents"
+  }
+}

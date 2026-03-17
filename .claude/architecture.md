@@ -2,11 +2,11 @@
 
 ## Dual Implementation
 
-Two parallel implementations consume the same source-of-truth data files under `agent-worker/sandbox/`:
+Two parallel implementations consume the same source-of-truth data files under `src/sandbox/`:
 
 ### Unix (Linux / macOS / WSL)
 
-Bash scripts in `agent-worker/scripts/unix/` using `jq` for JSON parsing.
+Bash scripts in `src/scripts/unix/` using `jq` for JSON parsing.
 
 | Script | Role |
 |--------|------|
@@ -17,7 +17,7 @@ Bash scripts in `agent-worker/scripts/unix/` using `jq` for JSON parsing.
 | `sandbox-stats.sh` | Disk usage stats |
 | `sandbox-cleanup.sh` | Remove projects, volumes, images |
 
-Profile generation: `agent-worker/sandbox/generate_profile.sh`
+Profile generation: `src/sandbox/generate_profile.sh`
 
 ### Windows (Self-contained C# exe)
 
@@ -57,15 +57,15 @@ User picks project folder
 ## File Relationships
 
 ```
-SOURCE OF TRUTH (agent-worker/sandbox/)    WINDOWS COPY (tools/AgentSandbox/Resources/)
+SOURCE OF TRUTH (src/sandbox/)    WINDOWS COPY (tools/AgentSandbox/Resources/)
   languages.json             ─────────>      languages.json
   ports.json                 ─────────>      ports.json
   Dockerfile.base.tpl        ─────────>      Dockerfile.base.tpl
   AGENTS.md.base             ─────────>      AGENTS.md.base
-  fragments/*.sh             ─────────>      fragments/*.sh
-  fragments/*.agents.md      ─────────>      fragments/*.agents.md
+  fragments/languages/*.sh   ─────────>      fragments/*.sh
+  fragments/languages/*.agents.md ────>      fragments/*.agents.md
 
-SOURCE OF TRUTH (agent-worker/templates/)
+SOURCE OF TRUTH (src/templates/)
   opencode.json              ─────────>      templates/opencode.json
   oh-my-opencode.json        ─────────>      templates/oh-my-opencode.json
   agent-config.json          ─────────>      templates/agent-config.json
@@ -81,12 +81,12 @@ C/C++, Dart, C#/.NET, Go, Java, Kotlin, Node.js, PHP, Python 3, Ruby, Rust
 
 ## Key Directories
 
-- `agent-worker/sandbox/` — Config source of truth (languages.json, ports.json, templates, fragments)
-- `agent-worker/sandbox/fragments/` — Per-language startup scripts (.sh) and agent instructions (.agents.md)
-- `agent-worker/scripts/unix/` — Host-side bash scripts
-- `agent-worker/templates/` — OpenCode agent config templates
-- `agent-worker/prepared/` — Generated profiles (gitignored output)
-- `agent-worker/projects/` — Per-project runtime data (gitignored output)
+- `src/sandbox/` — Config source of truth (languages.json, ports.json, templates, fragments)
+- `src/sandbox/fragments/languages/` — Per-language startup scripts (.sh) and agent instructions (.agents.md)
+- `src/scripts/unix/` — Host-side bash scripts
+- `src/templates/` — OpenCode agent config templates
+- `src/prepared/` — Generated profiles (gitignored output)
+- `src/projects/` — Per-project runtime data (gitignored output)
 - `tools/AgentSandbox/` — Windows C# implementation
 - `tools/AgentSandbox/Resources/` — Embedded copies of sandbox/ files for Windows exe
 - `tests/` — Test suite

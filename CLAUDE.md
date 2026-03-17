@@ -5,8 +5,8 @@ Docker sandbox environment for AI coding agents (OpenCode, Claude Code, Cursor C
 ## Quick Reference
 
 - **Run tests**: `./tests/run-tests.sh`
-- **Source of truth**: `agent-worker/sandbox/` (config, templates, fragments)
-- **Unix scripts**: `agent-worker/scripts/unix/`
+- **Source of truth**: `src/sandbox/` (config, templates, fragments)
+- **Unix scripts**: `src/scripts/unix/`
 - **Windows app**: `tools/AgentSandbox/` (C# .NET 8.0)
 
 ## Key Principle

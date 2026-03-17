@@ -1,0 +1,8 @@
+{
+  "oh-my-opencode": {
+    "agent": "opencode",
+    "install": "npm install -g oh-my-opencode @code-yeongyu/comment-checker",
+    "description": "Multi-model orchestration with specialized agents (Sisyphus, Oracle, Librarian) and ultrawork mode",
+    "conflicts": []
+  }
+}

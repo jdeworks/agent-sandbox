@@ -16,7 +16,7 @@ IFS=',' read -ra SELECTED <<< "$4"
 IFS=',' read -ra PORTS <<< "${5:-}"
 
 LANGUAGES_JSON="$SANDBOX_DIR/languages.json"
-FRAGMENTS_DIR="$SANDBOX_DIR/fragments"
+FRAGMENTS_DIR="$SANDBOX_DIR/fragments/languages"
 
 # Parse version overrides into an associative array
 declare -A VERSIONS
@@ -237,7 +237,7 @@ FOOTER
 # Generate AGENTS.md
 ########################################
 generate_agents_md() {
-    cp "$SANDBOX_DIR/AGENTS.md.base" "$PROFILE_DIR/AGENTS.md"
+    cp "$SANDBOX_DIR/instructions.base.md" "$PROFILE_DIR/AGENTS.md"
     cp "$SANDBOX_DIR/socratic.md" "$PROFILE_DIR/socratic.md"
 
     for lang in "${SELECTED[@]}"; do

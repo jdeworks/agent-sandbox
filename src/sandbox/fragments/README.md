@@ -8,11 +8,18 @@ During `prepare`, the profile generator (`generate_profile.sh`) reads the select
 
 ```
 prepare (host)
-  └─ generate_profile.sh reads fragments/python.sh + fragments/node.sh
+  └─ generate_profile.sh reads fragments/languages/python.sh + fragments/languages/node.sh
        └─ writes prepared/<profile>/install.sh
             └─ Dockerfile.base: COPY install.sh /install.sh
                  └─ container startup: /install.sh runs inside the container
 ```
+
+## Directory structure
+
+| Directory    | Contents                                                  |
+|--------------|-----------------------------------------------------------|
+| `languages/` | Per-language fragments (`<lang>.sh` and `<lang>.agents.md`) |
+| `agents/`    | Agent configuration fragments (`agents-config.sh`)        |
 
 ## File types
 
@@ -55,8 +62,8 @@ Each `.agents.md` fragment should:
 
 ## Adding a new language
 
-1. Create `<key>.sh` in this directory matching the key in `languages.json`
-2. Create `<key>.agents.md` with environment instructions for the AI agent
+1. Create `<key>.sh` in the `languages/` subdirectory matching the key in `languages.json`
+2. Create `<key>.agents.md` in the `languages/` subdirectory with environment instructions for the AI agent
 3. Add the corresponding entry in `../languages.json` with `label`, `detect`, `default_version`, `version_detect`, `dockerfile` (and optionally `version_dockerfile`), `volumes`, and `path_prepend`
 4. Add default ports and any framework entries in `../ports.json`
 5. Copy the new/changed files to the Windows embedded resources:

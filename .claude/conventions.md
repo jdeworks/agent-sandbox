@@ -18,7 +18,7 @@
 
 ## Fragment Conventions
 
-Fragments live in `agent-worker/sandbox/fragments/` and run **inside the Docker container** at startup (not on the host).
+Fragments live in `src/sandbox/fragments/languages/` and run **inside the Docker container** at startup (not on the host).
 
 ### Shell fragments (`<key>.sh`)
 
@@ -32,7 +32,7 @@ Fragments live in `agent-worker/sandbox/fragments/` and run **inside the Docker 
 
 - Start with a `## <Language> Environment` heading
 - Tell the AI agent what it needs to know about the language setup in this sandbox
-- Do not repeat information already in `AGENTS.md.base`
+- Do not repeat information already in `instructions.base.md`
 
 ## Generated File Assembly
 
@@ -40,7 +40,7 @@ During `prepare`, the profile generator reads fragment files and assembles them:
 
 ```
 fragments/python.sh + fragments/node.sh  →  prepared/<profile>/install.sh
-AGENTS.md.base + python.agents.md        →  prepared/<profile>/AGENTS.md
+instructions.base.md + python.agents.md        →  prepared/<profile>/AGENTS.md
 Dockerfile.base.tpl + language blocks     →  prepared/<profile>/Dockerfile.base
 ```
 

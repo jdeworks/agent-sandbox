@@ -6,10 +6,10 @@ set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-SANDBOX_CORE="$REPO_DIR/agent-worker/sandbox"
-SANDBOX_SCRIPTS="$REPO_DIR/agent-worker/scripts/unix"
-SANDBOX_DIR="$REPO_DIR/agent-worker"
-PREPARED_DIR="$REPO_DIR/agent-worker/prepared"
+SANDBOX_CORE="$REPO_DIR/src/sandbox"
+SANDBOX_SCRIPTS="$REPO_DIR/src/scripts/unix"
+SANDBOX_DIR="$REPO_DIR/src"
+PREPARED_DIR="$REPO_DIR/src/prepared"
 TEMP_DIR="/tmp/sandbox-test-$$"
 
 RED='\033[0;31m'
@@ -199,7 +199,7 @@ PORTS_JSON="$SANDBOX_CORE/ports.json"
 # ----- TEST 3.3: Templates -----
 log_section "3.3 Template Files"
 
-TEMPLATES_DIR="$REPO_DIR/agent-worker/templates"
+TEMPLATES_DIR="$REPO_DIR/src/templates"
 for tpl in "opencode.json" "oh-my-opencode.json" "agent-config.json"; do
     [ -f "$TEMPLATES_DIR/$tpl" ] && \
         log_pass "Template $tpl exists" || log_fail "Template $tpl missing"
@@ -343,7 +343,7 @@ log_section "SECTION 7: Resource Files & Fragments"
 # ----- TEST 7.1: Fragments -----
 log_section "7.1 Language Fragments"
 
-FRAGMENTS="$SANDBOX_CORE/fragments"
+FRAGMENTS="$SANDBOX_CORE/fragments/languages"
 for lang in "python.sh" "node.sh" "go.sh" "rust.sh"; do
     [ -f "$FRAGMENTS/$lang" ] && \
         log_pass "Fragment $lang exists" || log_fail "Fragment $lang missing"

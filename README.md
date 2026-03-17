@@ -43,7 +43,7 @@ All commands in one place. Details are in the sections below.
 
 | Action | Linux / macOS / WSL | Windows (CLI) |
 |--------|---------------------|---------------|
-| **Setup** | `./agent-worker/scripts/unix/setup.sh` then `source ~/.bash_aliases` | `agent-sandbox setup` |
+| **Setup** | `./src/scripts/unix/setup.sh` then `source ~/.bash_aliases` | `agent-sandbox setup` |
 | **Prepare profile** | `prepare` (interactive) | `agent-sandbox prepare C:\path` |
 | **List prepared profiles** | `prepare --list` | `agent-sandbox profiles` |
 | **Delete a profile** | `prepare --delete <name>` | `agent-sandbox profiles delete <name>` |
@@ -72,7 +72,7 @@ On Windows you can also use the **GUI**: double-click the exe for a wizard (fold
 
 ```bash
 # 1. One-time setup (installs aliases, optionally creates default profiles)
-./agent-worker/scripts/unix/setup.sh
+./src/scripts/unix/setup.sh
 source ~/.bash_aliases
 
 # 2. Sandbox any project
@@ -173,7 +173,7 @@ sandbox-python-node
 On **first run** for a project:
 
 1. Builds the profile's base image (cached if unchanged)
-2. Scaffolds a project folder under `agent-worker/projects/<name>/` with all config
+2. Scaffolds a project folder under `src/projects/<name>/` with all config
 3. If any configured port is already in use (e.g. another sandbox), it is **remapped** to the next free port and a message is printed (e.g. `Port 3000 in use -> remapped to 3001:3000`). This applies on both Unix and Windows.
 4. Starts the container, **waits for it to be ready**, then launches OpenCode. Readiness is detected by checking container logs for `[sandbox] Ready.` (and falling back to a file check), so the wait is reliable even when `docker exec` is flaky (e.g. on WSL2). To skip the wait (e.g. for debugging), set `SANDBOX_SKIP_READY=1` in the environment before launching.
 
@@ -197,7 +197,7 @@ Running without a path shows **recent projects** for that profile, sorted by las
 | Ruby | `Gemfile`, `Gemfile.lock`, `Rakefile`, `*.gemspec`, `*.rb` | Ruby, Bundler; auto-runs `bundle install` |
 | Rust | `Cargo.toml`, `Cargo.lock`, `*.rs` | rustup toolchain; auto-runs `cargo fetch` |
 
-New languages can be added by editing `agent-worker/sandbox/languages.json` and adding matching fragments in `agent-worker/sandbox/fragments/` (see the [fragments README](agent-worker/sandbox/fragments/README.md) for details).
+New languages can be added by editing `src/sandbox/languages.json` and adding matching fragments in `src/sandbox/fragments/languages/` (see the [fragments README](src/sandbox/fragments/README.md) for details).
 
 ## Ports
 
@@ -228,7 +228,7 @@ Ports are **dynamically selected** during profile creation based on the language
 | Ruby | Rails, Sinatra, Hanami | 3000, 4567, 2300 |
 | Rust | Actix, Axum, Rocket | 8080, 3000, 8000 |
 
-To add framework entries, edit `agent-worker/sandbox/ports.json`.
+To add framework entries, edit `src/sandbox/ports.json`.
 
 ## Multiple Sandboxes
 
@@ -348,7 +348,7 @@ All dependency installs are fingerprinted with md5 checksums so they are skipped
 OpenCode log files are persisted in the project's `logs/` directory. After a session:
 
 ```bash
-ls agent-worker/projects/<name>/logs/
+ls src/projects/<name>/logs/
 ```
 
 For more verbose output, run OpenCode with `opencode --log-level DEBUG`.
@@ -374,17 +374,23 @@ If a project was first run from **Windows** (or without `HOST_UID`/`HOST_GID`), 
 ## Project Structure
 
 ```
-agent-worker/
+src/
   sandbox/                           # Language registry, port lookup, templates
     Dockerfile.base.tpl              #   Minimal base: Ubuntu + Node + OpenCode
     languages.json                   #   Language definitions (Dockerfile, volumes, detection)
     ports.json                       #   Framework-to-port lookup for smart detection
-    AGENTS.md.base                   #   Base agent instructions (language-independent)
+    agents.json                      #   Agent definitions (command, install, auth, plugins)
+    plugins.json                     #   Plugin definitions (install, conflicts)
+    mcp-servers.json                 #   MCP server registry (install, command, env_vars)
+    instructions.base.md             #   Base agent instructions (language-independent)
     generate_profile.sh              #   Assembles profile from templates + selections
     fragments/                       #   Container startup snippets per language
       README.md                      #     How fragments work and how to add new ones
-      <lang>.sh                      #     Container startup (dep install, PATH, etc.)
-      <lang>.agents.md               #     AI agent instructions for the language
+      languages/                     #     Language-specific fragments
+        <lang>.sh                    #       Container startup (dep install, PATH, etc.)
+        <lang>.agents.md             #       AI agent instructions for the language
+      agents/                        #     Agent configuration fragments
+        agents-config.sh             #       CLI agent PATH and auth setup
   prepared/                          # Generated profiles (one per language combo)
     <profile>/
       Dockerfile.base                #   Assembled base image
@@ -404,6 +410,12 @@ agent-worker/
       sandbox-list.sh                #   List all projects with status and profile
       sandbox-stats.sh               #   Disk usage and statistics (dynamic volume discovery)
       sandbox-cleanup.sh             #   Remove projects, containers, volumes (sandbox-cleanup-sudo for full cleanup)
+      lib/                           #   Shared bash library (independently usable)
+        prereqs.sh                   #     Docker, Compose, jq checks
+        config.sh                    #     Profile and project config helpers
+        detect.sh                    #     Language, version, port detection
+        ui.sh                        #     Terminal UI helpers (info, warn, confirm, prompt)
+        docker.sh                    #     Docker port, build, runtime helpers
   projects/                          # Auto-generated per-project data
     <name>/
       docker-compose.yml, Dockerfile, config.env, runtime.env
@@ -426,14 +438,14 @@ tools/
 
 The sandbox ships with 11 languages. To add more:
 
-1. Add an entry to `agent-worker/sandbox/languages.json` with the language key, label, detection files, `default_version`, `version_detect` rules, Dockerfile commands, volume definitions, and PATH additions.
-2. Create a matching install fragment at `agent-worker/sandbox/fragments/<key>.sh` with the container startup logic (dependency installation, PATH setup, etc.).
-3. Create `agent-worker/sandbox/fragments/<key>.agents.md` with agent instructions for the new language.
-4. Add default ports and any framework entries to `agent-worker/sandbox/ports.json`.
+1. Add an entry to `src/sandbox/languages.json` with the language key, label, detection files, `default_version`, `version_detect` rules, Dockerfile commands, volume definitions, and PATH additions.
+2. Create a matching install fragment at `src/sandbox/fragments/languages/<key>.sh` with the container startup logic (dependency installation, PATH setup, etc.).
+3. Create `src/sandbox/fragments/languages/<key>.agents.md` with agent instructions for the new language.
+4. Add default ports and any framework entries to `src/sandbox/ports.json`.
 5. Copy the new/changed files to the Windows embedded resources under `tools/AgentSandbox/Resources/` (languages.json, ports.json, fragments).
 6. Bump the `VersionStamp` in `tools/AgentSandbox/Services/ResourceManager.cs`.
 7. Update this README (languages table, frameworks table, dependencies list).
-8. See `agent-worker/sandbox/fragments/README.md` for conventions and the [`.cursorrules`](.cursorrules) file for the full cross-platform sync checklist.
+8. See `src/sandbox/fragments/README.md` for conventions and the [`.cursorrules`](.cursorrules) file for the full cross-platform sync checklist.
 9. Run `prepare` (unix) or `agent-sandbox prepare` (Windows) to generate a new profile that includes the language.
 
 ## Windows Support
