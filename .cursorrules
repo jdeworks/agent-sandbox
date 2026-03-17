@@ -90,18 +90,21 @@ Recent projects are discovered by scanning `projects/*/config.env` files (no sep
 ## File Relationships
 
 ```
-SOURCE OF TRUTH (src/sandbox/)    WINDOWS COPY (tools/AgentSandbox/Resources/)
-  languages.json             ─────────>      languages.json
-  ports.json                 ─────────>      ports.json
-  Dockerfile.base.tpl        ─────────>      Dockerfile.base.tpl
-  AGENTS.md.base             ─────────>      AGENTS.md.base
-  fragments/languages/*.sh   ─────────>      fragments/*.sh
-  fragments/languages/*.agents.md ────>      fragments/*.agents.md
+SOURCE OF TRUTH (src/sandbox/)              WINDOWS COPY (tools/AgentSandbox/Resources/)
+  languages.json                ─────────>    languages.json
+  ports.json                    ─────────>    ports.json
+  agents.json                   ─────────>    agents.json
+  plugins.json                  ─────────>    plugins.json
+  mcp-servers.json              ─────────>    mcp-servers.json
+  Dockerfile.base.tpl           ─────────>    Dockerfile.base.tpl
+  instructions.base.md          ─────────>    AGENTS.md.base
+  fragments/languages/*.sh      ─────────>    fragments/*.sh
+  fragments/languages/*.agents.md ────────>   fragments/*.agents.md
 
 SOURCE OF TRUTH (src/templates/)
-  opencode.json              ─────────>      templates/opencode.json
-  oh-my-opencode.json        ─────────>      templates/oh-my-opencode.json
-  agent-config.json          ─────────>      templates/agent-config.json
+  opencode.json                 ─────────>    templates/opencode.json
+  oh-my-opencode.json           ─────────>    templates/oh-my-opencode.json
+  agent-config.json             ─────────>    templates/agent-config.json
 ```
 
 The `src/sandbox/` directory is the canonical source. The `tools/AgentSandbox/Resources/` directory contains copies that are embedded into the exe at build time. Always edit the source first, then copy to Resources.

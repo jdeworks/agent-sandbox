@@ -35,12 +35,14 @@ prepare (host)
 | `cpp`    | C/C++            | _(CMake hint only)_        |
 | `dart`   | Dart             | `pubspec.yaml`             |
 | `dotnet` | C# / .NET        | `*.csproj` / `*.fsproj`    |
+| `flutter`| Flutter          | `pubspec.yaml` (flutter:)  |
 | `go`     | Go               | `go.sum`                   |
 | `java`   | Java             | `pom.xml` / `build.gradle` |
 | `kotlin` | Kotlin           | `build.gradle(.kts)`       |
 | `node`   | Node.js          | `package.json`             |
 | `php`    | PHP              | `composer.json`            |
 | `python` | Python 3         | `requirements.txt`         |
+| `react-native` | React Native | `package.json` (react-native) |
 | `ruby`   | Ruby             | `Gemfile`                  |
 | `rust`   | Rust             | `Cargo.lock`               |
 
