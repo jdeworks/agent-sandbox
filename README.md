@@ -190,12 +190,36 @@ All named Docker volumes are prefixed with `asb_` to avoid collisions:
 - `asb_opencode_cache_<project>` — OpenCode cache
 - Language-specific volumes (e.g. `asb_venv_<project>`, `asb_cargo_registry_<project>`)
 
+## Config Mirroring
+
+During `sandbox-setup` you choose which host configs to share with the sandbox. Two strategies are used depending on whether the container needs to modify the config:
+
+| Strategy | Behavior | Use case |
+|----------|----------|----------|
+| **bind-ro** | Read-only bind mount. Host changes reflect instantly. Container cannot modify. | Git config, SSH keys, shell aliases |
+| **seed** | Copied into named volume on first run (or when host file is newer). Container can modify its own copy. | Agent auth tokens, agent configs, session data |
+
+### Available mirrors
+
+| Config | Strategy | Security | Description |
+|--------|----------|----------|-------------|
+| Git config | bind-ro | Low | `~/.gitconfig` — user identity, aliases |
+| Global gitignore | bind-ro | Low | `~/.gitignore_global` |
+| SSH keys | bind-ro | **High** | `~/.ssh/` — grants sandbox network access |
+| Shell aliases | bind-ro | Low | `~/.bash_aliases` |
+| npm config | bind-ro | Medium | `~/.npmrc` — may contain registry auth tokens |
+| GitHub CLI | seed | **High** | `~/.config/gh/` — OAuth tokens |
+| OpenCode config | seed | Medium | `~/.config/opencode/` — settings, model config |
+| OpenCode auth | seed | Medium | `~/.local/share/opencode/` — session data |
+| Claude Code config | seed | Medium | `~/.claude/` — settings, history, plugins |
+| Cursor config | seed | Medium | `~/.cursor/` — CLI settings, chat history |
+
+Only items found on the host are shown during setup. Agent-specific mirrors are filtered by selected agents. Config definitions are in `src/sandbox/config-mirrors.json`.
+
 ## Authentication & API Keys
 
 **API key passthrough:** Host environment variables are forwarded via `runtime.env`:
 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CURSOR_API_KEY`, `GITHUB_COPILOT_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, `GEMINI_API_KEY`
-
-**Auth sync:** OpenCode auth is synced from the host on every startup.
 
 **User overrides:** Add project-specific keys to `user.env` (loaded last, overrides `runtime.env`).
 

@@ -1,0 +1,115 @@
+{
+  "_doc": "Config items that can be shared from host into the sandbox container.",
+  "_strategies": {
+    "bind-ro": "Read-only bind mount. Host is source of truth. Container cannot modify.",
+    "seed": "Copied into named volume on first run (or when host is newer). Container can modify its copy."
+  },
+
+  "git": {
+    "label": "Git config",
+    "description": "User identity, aliases, credential helpers",
+    "host_path": "~/.gitconfig",
+    "container_path": "/home/dev/.gitconfig",
+    "strategy": "bind-ro",
+    "security": "low",
+    "recommended": true,
+    "detect": "file"
+  },
+  "git-ignore": {
+    "label": "Global gitignore",
+    "description": "Global .gitignore patterns",
+    "host_path": "~/.gitignore_global",
+    "container_path": "/home/dev/.gitignore_global",
+    "strategy": "bind-ro",
+    "security": "low",
+    "recommended": true,
+    "detect": "file"
+  },
+  "ssh": {
+    "label": "SSH keys",
+    "description": "SSH private keys, config, known_hosts",
+    "host_path": "~/.ssh",
+    "container_path": "/home/dev/.ssh",
+    "strategy": "bind-ro",
+    "security": "high",
+    "recommended": false,
+    "detect": "directory",
+    "warning": "Grants the sandbox network access to any host you can SSH to"
+  },
+  "shell-aliases": {
+    "label": "Shell aliases",
+    "description": "Custom bash aliases",
+    "host_path": "~/.bash_aliases",
+    "container_path": "/home/dev/.bash_aliases",
+    "strategy": "bind-ro",
+    "security": "low",
+    "recommended": true,
+    "detect": "file"
+  },
+  "npmrc": {
+    "label": "npm config",
+    "description": "Registry URLs, auth tokens, config flags",
+    "host_path": "~/.npmrc",
+    "container_path": "/home/dev/.npmrc",
+    "strategy": "bind-ro",
+    "security": "medium",
+    "recommended": false,
+    "detect": "file",
+    "warning": "May contain registry auth tokens"
+  },
+  "gh-cli": {
+    "label": "GitHub CLI config",
+    "description": "gh CLI settings and OAuth tokens",
+    "host_path": "~/.config/gh",
+    "container_path": "/home/dev/.config/gh",
+    "strategy": "seed",
+    "security": "high",
+    "recommended": false,
+    "detect": "directory",
+    "warning": "Contains GitHub API tokens — the sandbox can act as you on GitHub"
+  },
+  "opencode-config": {
+    "label": "OpenCode config",
+    "description": "OpenCode settings, model config, plugin config",
+    "host_path": "~/.config/opencode",
+    "container_path": "/home/dev/.config/opencode",
+    "strategy": "seed",
+    "security": "medium",
+    "recommended": true,
+    "detect": "directory",
+    "agents": ["opencode"]
+  },
+  "opencode-auth": {
+    "label": "OpenCode auth",
+    "description": "OpenCode authentication and session data",
+    "host_path": "~/.local/share/opencode",
+    "container_path": "/home/dev/.local/share/opencode",
+    "strategy": "seed",
+    "security": "medium",
+    "recommended": true,
+    "detect": "directory",
+    "agents": ["opencode"]
+  },
+  "claude-config": {
+    "label": "Claude Code config",
+    "description": "Claude Code settings, permissions, history",
+    "host_path": "~/.claude",
+    "container_path": "/home/dev/.claude",
+    "strategy": "seed",
+    "security": "medium",
+    "recommended": true,
+    "detect": "directory",
+    "agents": ["claude"]
+  },
+  "cursor-config": {
+    "label": "Cursor config",
+    "description": "Cursor CLI settings, chat history, project data",
+    "host_path": "~/.cursor",
+    "container_path": "/home/dev/.cursor",
+    "strategy": "seed",
+    "security": "medium",
+    "recommended": true,
+    "detect": "directory",
+    "agents": ["cursor"]
+  }
+}

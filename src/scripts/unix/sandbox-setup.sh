@@ -287,31 +287,59 @@ if [ -n "$mcp_choice" ]; then
 fi
 
 ########################################
-# Config mirroring
+# Config mirroring (driven by config-mirrors.json)
 ########################################
 echo ""
 echo "=== Config Mirroring ==="
 echo "Which host configs should be available inside the sandbox?"
+echo ""
+echo "  Strategy:"
+echo "    bind-ro = read-only mount (host is source of truth)"
+echo "    seed    = copied into container volume on first run (container can modify)"
+echo ""
 
-declare -A mirror_options
-[ -f "$HOME/.gitconfig" ] && mirror_options["gitconfig"]="recommended"
-[ -d "$HOME/.ssh" ] && mirror_options["ssh_keys"]="warning"
-[ -d "$HOME/.gnupg" ] && mirror_options["gpg_keys"]="warning"
-[ -f "$HOME/.bash_aliases" ] && mirror_options["shell_aliases"]="recommended"
-
+CONFIG_MIRRORS_JSON="$SANDBOX_DIR/config-mirrors.json"
 selected_mirrors=()
-idx=1
-mirror_names=()
-for key in "${!mirror_options[@]}"; do
-    level="${mirror_options[$key]}"
-    warn=""
-    [ "$level" = "warning" ] && warn=" (grants sandbox access)"
-    printf "  %d) %s%s\n" "$idx" "$key" "$warn"
-    mirror_names+=("$key")
-    ((idx++))
-done
+mirror_keys=()
+mirror_idx=1
 
-if [ ${#mirror_names[@]} -gt 0 ]; then
+# Build list of available mirrors (only show items that exist on host)
+while IFS='|' read -r key label host_path strategy security recommended warning agents_filter; do
+    # Expand ~ to $HOME
+    expanded_path="${host_path/#\~/$HOME}"
+
+    # Check if item exists on host
+    detect_type=$(jq -r ".\"$key\".detect" "$CONFIG_MIRRORS_JSON")
+    if [ "$detect_type" = "file" ] && [ ! -f "$expanded_path" ]; then continue; fi
+    if [ "$detect_type" = "directory" ] && [ ! -d "$expanded_path" ]; then continue; fi
+
+    # Filter by selected agents (if agents field is set)
+    if [ "$agents_filter" != "null" ] && [ -n "$agents_filter" ]; then
+        agent_match=false
+        for sa in "${selected_agents[@]}"; do
+            if echo "$agents_filter" | jq -e "index(\"$sa\")" >/dev/null 2>&1; then
+                agent_match=true
+                break
+            fi
+        done
+        $agent_match || continue
+    fi
+
+    # Display
+    marker=""
+    [ "$recommended" = "true" ] && marker=" [recommended]"
+    warn_text=""
+    [ "$warning" != "null" ] && [ -n "$warning" ] && warn_text=" -- $warning"
+    sec_text=""
+    [ "$security" = "high" ] && sec_text=" [!]"
+
+    printf "  %2d) %-22s %-8s %s%s%s\n" "$mirror_idx" "$label" "($strategy)" "$host_path" "$marker" "$sec_text"
+    [ -n "$warn_text" ] && printf "      %s\n" "$warn_text"
+    mirror_keys+=("$key")
+    ((mirror_idx++))
+done < <(jq -r 'to_entries[] | select(.key != "_doc" and .key != "_strategies") | "\(.key)|\(.value.label)|\(.value.host_path)|\(.value.strategy)|\(.value.security)|\(.value.recommended)|\(.value.warning // "null")|\(.value.agents // "null")"' "$CONFIG_MIRRORS_JSON")
+
+if [ ${#mirror_keys[@]} -gt 0 ]; then
     echo ""
     read -rp "Select (comma-separated, or Enter to skip): " mirror_choice
     if [ -n "$mirror_choice" ]; then
@@ -319,11 +347,13 @@ if [ ${#mirror_names[@]} -gt 0 ]; then
         for mi in "${midx[@]}"; do
             mi=$(echo "$mi" | tr -d ' ')
             arr_mi=$((mi - 1))
-            if [ "$arr_mi" -ge 0 ] && [ "$arr_mi" -lt "${#mirror_names[@]}" ]; then
-                selected_mirrors+=("${mirror_names[$arr_mi]}")
+            if [ "$arr_mi" -ge 0 ] && [ "$arr_mi" -lt "${#mirror_keys[@]}" ]; then
+                selected_mirrors+=("${mirror_keys[$arr_mi]}")
             fi
         done
     fi
+else
+    echo "  (no mirrorable configs found on this host)"
 fi
 
 ########################################
@@ -354,7 +384,12 @@ agents_json_arr=$(printf '%s\n' "${selected_agents[@]}" | jq -R . | jq -s .)
 plugins_json_arr=$(printf '%s\n' "${selected_plugins[@]}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
 langs_json_arr=$(printf '%s\n' "${selected_languages[@]}" | jq -R . | jq -s .)
 mcp_json_arr=$(printf '%s\n' "${selected_mcp[@]}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
-mirrors_json_arr=$(printf '%s\n' "${selected_mirrors[@]}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
+# Build mirrors object with full config (strategy, paths)
+mirrors_json_obj="{}"
+for mkey in "${selected_mirrors[@]}"; do
+    mirror_entry=$(jq ".\"$mkey\" | {strategy, host_path, container_path}" "$CONFIG_MIRRORS_JSON")
+    mirrors_json_obj=$(echo "$mirrors_json_obj" | jq --arg k "$mkey" --argjson v "$mirror_entry" '.[$k] = $v')
+done
 
 # Build versions object
 versions_json="{"
@@ -375,7 +410,7 @@ jq -n \
     --argjson languages "$langs_json_arr" \
     --argjson versions "$versions_json" \
     --argjson mcp_servers "$mcp_json_arr" \
-    --argjson config_mirrors "$mirrors_json_arr" \
+    --argjson config_mirrors "$mirrors_json_obj" \
     '{
         name: $name,
         agents: $agents,
