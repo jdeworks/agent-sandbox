@@ -465,6 +465,10 @@ mkdir -p "$PROJECT_DIR/opencode_data"
 mkdir -p "$PROJECT_DIR/opencode_sessions"
 mkdir -p "$PROJECT_DIR/logs"
 mkdir -p "$PROJECT_DIR/sandbox_data"
+# Ensure user.env exists (compose references it via env_file)
+if [ ! -f "$PROJECT_DIR/user.env" ]; then
+    echo "# User environment overrides (loaded after runtime.env)" > "$PROJECT_DIR/user.env"
+fi
 # Ensure agent-config.json exists so agent selection prompt can run (e.g. existing projects created before it was added)
 if [ ! -f "$PROJECT_DIR/sandbox_data/agent-config.json" ] && [ -f "$TEMPLATES_DIR/agent-config.json" ]; then
     cp "$TEMPLATES_DIR/agent-config.json" "$PROJECT_DIR/sandbox_data/agent-config.json"

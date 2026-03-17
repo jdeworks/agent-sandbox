@@ -113,8 +113,8 @@ generate_compose() {
             [ -z "$vname" ] && continue
             local mpath
             mpath=$(jq -r ".\"$lang\".volumes.\"$vname\"" "$LANGUAGES_JSON")
-            vol_mounts+=$'\n'"      - ${vname}:${mpath}"
-            vol_defs+="  ${vname}:"$'\n'
+            vol_mounts+=$'\n'"      - asb_${vname}:${mpath}"
+            vol_defs+="  asb_${vname}:"$'\n'
         done <<< "$vol_keys"
 
         # Add version env vars (skip node — handled separately as base image version)
@@ -158,19 +158,26 @@ ${env_lines}    volumes:
       - ./opencode_data:/workspace/.config/opencode
       - ./opencode_sessions:/workspace/.local/share/opencode
       - ./logs:/workspace/.local/share/opencode/log
-      - opencode_cache_{{PROJECT_NAME}}:/workspace/.cache/opencode
+      - asb_agent_config_{{PROJECT_NAME}}:/workspace/.agent-config
+      - asb_agent_data_{{PROJECT_NAME}}:/workspace/.agent-data
+      - asb_sandbox_data_{{PROJECT_NAME}}:/workspace/.sandbox-vol
+      - asb_opencode_cache_{{PROJECT_NAME}}:/workspace/.cache/opencode
       - ./sandbox_data:/workspace/.sandbox
     ports:
 ${port_lines}
     env_file:
       - ./runtime.env
+      - ./user.env
     stdin_open: true
     tty: true
     security_opt:
       - no-new-privileges:true
 
 volumes:
-${vol_defs}  opencode_cache_{{PROJECT_NAME}}:
+${vol_defs}  asb_agent_config_{{PROJECT_NAME}}:
+  asb_agent_data_{{PROJECT_NAME}}:
+  asb_sandbox_data_{{PROJECT_NAME}}:
+  asb_opencode_cache_{{PROJECT_NAME}}:
 YAML
 }
 
