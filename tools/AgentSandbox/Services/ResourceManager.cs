@@ -67,7 +67,7 @@ public static class ResourceManager
             {
                 // Delete generated files that will be regenerated.
                 // Preserve sandbox_data/ (user's Dockerfile.extension, changes.txt)
-                // Preserve opencode_data/ (user's customized opencode.json, oh-my-opencode.json)
+                // Preserve opencode_data/ (user's customized opencode.json, oh-my-openagent.json)
                 // Preserve opencode_sessions/ and logs/
                 foreach (var f in new[] { "docker-compose.yml", "Dockerfile", "config.env", "runtime.env" })
                 {

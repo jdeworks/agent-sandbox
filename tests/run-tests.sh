@@ -200,7 +200,7 @@ PORTS_JSON="$SANDBOX_CORE/ports.json"
 log_section "3.3 Template Files"
 
 TEMPLATES_DIR="$REPO_DIR/src/templates"
-for tpl in "opencode.json" "oh-my-opencode.json" "agent-config.json"; do
+for tpl in "opencode.json" "oh-my-openagent.json" "agent-config.json"; do
     [ -f "$TEMPLATES_DIR/$tpl" ] && \
         log_pass "Template $tpl exists" || log_fail "Template $tpl missing"
 done
@@ -554,8 +554,8 @@ done
 jq -e '.flutter.size_warning' "$SANDBOX_CORE/languages.json" >/dev/null 2>&1 && \
     log_pass "Flutter has size_warning" || log_fail "Flutter missing size_warning"
 
-jq -e '."react-native".size_warning' "$SANDBOX_CORE/languages.json" >/dev/null 2>&1 && \
-    log_pass "React Native has size_warning" || log_fail "React Native missing size_warning"
+jq -e '."react-native"' "$SANDBOX_CORE/languages.json" >/dev/null 2>&1 && \
+    log_pass "React Native defined (lightweight, no Android SDK)" || log_fail "React Native missing"
 
 # ----- TEST 10.7: Volume naming -----
 log_section "10.7 Volume Naming (asb_ prefix)"

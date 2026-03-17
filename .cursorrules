@@ -40,7 +40,7 @@ After copying files to `tools/AgentSandbox/Resources/`, bump the `VersionStamp` 
 - `src/sandbox/plugins.json` -> also copy to `tools/AgentSandbox/Resources/plugins.json`
 - `src/sandbox/mcp-servers.json` -> also copy to `tools/AgentSandbox/Resources/mcp-servers.json`
 - `src/templates/opencode.json` -> also copy to `tools/AgentSandbox/Resources/templates/opencode.json`
-- `src/templates/oh-my-opencode.json` -> also copy to `tools/AgentSandbox/Resources/templates/oh-my-opencode.json`
+- `src/templates/oh-my-openagent.json` -> also copy to `tools/AgentSandbox/Resources/templates/oh-my-openagent.json`
 - `src/templates/agent-config.json` -> also copy to `tools/AgentSandbox/Resources/templates/agent-config.json`
 
 ### Adding or modifying an agent
@@ -116,7 +116,7 @@ SOURCE OF TRUTH (src/sandbox/)              WINDOWS COPY (tools/AgentSandbox/Res
 
 SOURCE OF TRUTH (src/templates/)
   opencode.json                 ─────────>    templates/opencode.json
-  oh-my-opencode.json           ─────────>    templates/oh-my-opencode.json
+  oh-my-openagent.json           ─────────>    templates/oh-my-openagent.json
   agent-config.json             ─────────>    templates/agent-config.json
 ```
 

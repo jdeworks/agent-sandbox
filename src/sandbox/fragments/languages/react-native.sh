@@ -13,4 +13,3 @@ if [ -f "/workspace/src/package.json" ] && grep -q "react-native" /workspace/src
     fi
 fi
 
-export PATH="/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:$PATH"

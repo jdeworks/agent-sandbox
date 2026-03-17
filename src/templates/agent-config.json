@@ -10,7 +10,7 @@
     "opencode": {
       "command": "opencode",
       "args": [],
-      "description": "OpenCode with oh-my-opencode plugin"
+      "description": "OpenCode with oh-my-openagent plugin"
     },
     "claude": {
       "command": "claude",

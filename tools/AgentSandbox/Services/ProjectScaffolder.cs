@@ -117,8 +117,8 @@ public static class ProjectScaffolder
             Path.Combine(ResourceManager.TemplatesDir, "opencode.json"),
             Path.Combine(projectDir, "opencode_data", "opencode.json"), true);
         File.Copy(
-            Path.Combine(ResourceManager.TemplatesDir, "oh-my-opencode.json"),
-            Path.Combine(projectDir, "opencode_data", "oh-my-opencode.json"), true);
+            Path.Combine(ResourceManager.TemplatesDir, "oh-my-openagent.json"),
+            Path.Combine(projectDir, "opencode_data", "oh-my-openagent.json"), true);
         File.Copy(
             Path.Combine(profileDir, "AGENTS.md"),
             Path.Combine(projectDir, "opencode_data", "AGENTS.md"), true);
@@ -162,7 +162,7 @@ public static class ProjectScaffolder
     /// Regenerate docker-compose.yml and AGENTS.md from the current profile
     /// template so that port/volume/instruction changes from re-prepare are
     /// picked up automatically on existing projects. User-editable configs
-    /// (opencode.json, oh-my-opencode.json) are NOT overwritten.
+    /// (opencode.json, oh-my-openagent.json) are NOT overwritten.
     /// </summary>
     public static void RefreshFromProfile(string projectName, string workspacePath, string profileDir)
     {

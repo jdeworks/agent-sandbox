@@ -74,7 +74,7 @@ SOURCE OF TRUTH (src/sandbox/)              WINDOWS COPY (tools/AgentSandbox/Res
 
 SOURCE OF TRUTH (src/templates/)
   opencode.json                 ─────────>    templates/opencode.json
-  oh-my-opencode.json           ─────────>    templates/oh-my-opencode.json
+  oh-my-openagent.json           ─────────>    templates/oh-my-openagent.json
   agent-config.json             ─────────>    templates/agent-config.json
 ```
 

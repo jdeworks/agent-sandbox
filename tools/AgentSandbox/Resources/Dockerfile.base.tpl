@@ -27,8 +27,8 @@ RUN curl -fsSL https://opencode.ai/install | bash \
     && ln -sf /opt/opencode/bin/opencode /usr/local/bin/opencode
 ENV PATH="/opt/opencode/bin:${PATH}"
 
-# Oh My OpenCode
-RUN npm install -g oh-my-opencode @code-yeongyu/comment-checker
+# Oh My OpenAgent (OpenCode plugin)
+RUN npm install -g oh-my-openagent @code-yeongyu/comment-checker
 
 # Claude Code CLI (install may put binary in ~/.claude/bin or ~/.local/bin)
 RUN curl -fsSL https://claude.ai/install.sh | bash \

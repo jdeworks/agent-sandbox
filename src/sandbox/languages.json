@@ -303,33 +303,14 @@
     },
     "default_version": "latest",
     "version_detect": [],
-    "includes": ["java-jdk"],
     "dedup_with": ["node"],
-    "size_warning": "~4GB (Android SDK + NDK + JDK)",
     "dockerfile": [
-      "# React Native CLI + build tools",
-      "RUN npm install -g react-native-cli @react-native-community/cli",
-      "",
-      "# Java JDK (required for Android builds)",
-      "RUN apt-get update && apt-get install -y openjdk-17-jdk-headless && rm -rf /var/lib/apt/lists/*",
-      "ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64",
-      "",
-      "# Android SDK (build-only)",
-      "ENV ANDROID_HOME=/opt/android-sdk",
-      "ENV ANDROID_SDK_ROOT=$ANDROID_HOME",
-      "RUN mkdir -p $ANDROID_HOME/cmdline-tools && \\",
-      "    curl -fsSL https://dl.google.com/android/repository/commandlinetools-linux-latest.zip -o /tmp/cmdtools.zip && \\",
-      "    unzip -q /tmp/cmdtools.zip -d $ANDROID_HOME/cmdline-tools && \\",
-      "    mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest && \\",
-      "    rm /tmp/cmdtools.zip",
-      "ENV PATH=\"$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH\"",
-      "RUN yes | sdkmanager --licenses > /dev/null 2>&1 && \\",
-      "    sdkmanager 'platform-tools' 'platforms;android-34' 'build-tools;34.0.0' 'ndk;26.1.10909125'"
+      "# React Native CLI",
+      "RUN npm install -g react-native-cli @react-native-community/cli"
     ],
     "volumes": {
-      "gradle_cache_{{PROJECT_NAME}}": "/root/.gradle",
       "npm_cache_{{PROJECT_NAME}}": "/root/.npm"
     },
-    "path_prepend": "/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools"
+    "path_prepend": ""
   }
 }

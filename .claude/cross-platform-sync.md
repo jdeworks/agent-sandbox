@@ -41,7 +41,7 @@ Each source file must be copied to its Windows Resources counterpart:
 | `src/sandbox/plugins.json` | `tools/AgentSandbox/Resources/plugins.json` |
 | `src/sandbox/mcp-servers.json` | `tools/AgentSandbox/Resources/mcp-servers.json` |
 | `src/templates/opencode.json` | `tools/AgentSandbox/Resources/templates/opencode.json` |
-| `src/templates/oh-my-opencode.json` | `tools/AgentSandbox/Resources/templates/oh-my-opencode.json` |
+| `src/templates/oh-my-openagent.json` | `tools/AgentSandbox/Resources/templates/oh-my-openagent.json` |
 | `src/templates/agent-config.json` | `tools/AgentSandbox/Resources/templates/agent-config.json` |
 
 ## Modifying Profile Generation Logic

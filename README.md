@@ -88,12 +88,28 @@ The sandbox supports multiple CLI coding agents. During `sandbox-setup` you choo
 
 | Agent | Command | Description |
 |-------|---------|-------------|
-| OpenCode | `opencode` | Default agent with oh-my-opencode orchestration |
+| OpenCode | `opencode` | Default agent with oh-my-openagent orchestration |
 | Claude Code | `claude` | Anthropic's CLI agent |
 | Cursor CLI | `agent` | Cursor's CLI agent |
 | GitHub Copilot | `gh copilot agent` | GitHub Copilot CLI |
 
-Agent definitions (commands, install scripts, auth files, env vars) are in `src/sandbox/agents.json`. Plugins (oh-my-opencode) are in `src/sandbox/plugins.json`.
+Agent definitions (commands, install scripts, auth files, env vars) are in `src/sandbox/agents.json`.
+
+## Plugins
+
+Plugins extend the agents with additional capabilities. During `sandbox-setup` you can select plugins for each agent. Definitions are in `src/sandbox/plugins.json`.
+
+| Plugin | Agent | Description |
+|--------|-------|-------------|
+| [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) | OpenCode | Multi-model orchestration with specialized agents (Sisyphus, Oracle, Librarian), background tasks, and `ultrawork` / `ulw` mode |
+| [claude-code-hooks](https://github.com/anthropics/claude-code-hooks) | Claude Code | Git hooks and pre-commit integration |
+| [cursor-rules](https://github.com/cursor/rules-generator) | Cursor | Auto-generate `.cursorrules` from project structure |
+
+### oh-my-openagent
+
+Enabled by default for OpenCode profiles. Provides multi-model orchestration with specialized agents and the `ultrawork` keyword for intensive autonomous coding sessions.
+
+To disable for a project, remove `"oh-my-openagent"` from the `plugin` array in that project's `opencode_data/opencode.json`.
 
 ## Available Languages
 
@@ -109,7 +125,7 @@ Agent definitions (commands, install scripts, auth files, env vars) are in `src/
 | Node.js | `package.json`, `*.js`, `*.ts` | npm dependency auto-install (always included in base image) |
 | PHP | `composer.json`, `*.php` | PHP + extensions, Composer; auto-runs `composer install` |
 | Python 3 | `requirements.txt`, `pyproject.toml`, `*.py` | python3, venv, pip; auto-installs from requirements.txt |
-| React Native | `package.json` (with `react-native`) | Android SDK + NDK + JDK 17 (~4GB) |
+| React Native | `package.json` (with `react-native`) | React Native CLI; JS/TS dev and Metro bundler |
 | Ruby | `Gemfile`, `*.rb` | Ruby, Bundler; auto-runs `bundle install` |
 | Rust | `Cargo.toml`, `*.rs` | rustup toolchain; auto-runs `cargo fetch` |
 
@@ -257,7 +273,7 @@ tools/
       agents.json, plugins.json, mcp-servers.json
       languages.json, ports.json, Dockerfile.base.tpl, AGENTS.md.base
       fragments/                     #   *.sh and *.agents.md
-      templates/                     #   opencode.json, oh-my-opencode.json
+      templates/                     #   opencode.json, oh-my-openagent.json
 ```
 
 ## Adding Languages
@@ -299,7 +315,7 @@ Profiles need to be recreated after migration.
   .version                   # Version stamp (triggers re-extraction on update)
   sandbox/                   # Extracted: languages.json, ports.json, agents.json, etc.
     fragments/               # Shell fragments and agent instructions
-  templates/                 # opencode.json, oh-my-opencode.json, agent-config.json
+  templates/                 # opencode.json, oh-my-openagent.json, agent-config.json
   prepared/                  # Generated profiles
   projects/                  # Per-project data
 ```
@@ -307,8 +323,6 @@ Profiles need to be recreated after migration.
 ## Security
 
 - No Docker socket mounted
-- No privileged mode
-- `no-new-privileges` enabled
 - Agent can only see the bind-mounted workspace
 - Container isolation is the security boundary
 - SSH/GPG key mirroring is opt-in with warnings

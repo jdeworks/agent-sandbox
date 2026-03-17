@@ -405,7 +405,7 @@ if [ ! -d "$PROJECT_DIR" ]; then
     fi
     mkdir -p "$PROJECT_DIR/opencode_data"
     cp "$TEMPLATES_DIR/opencode.json" "$PROJECT_DIR/opencode_data/opencode.json"
-    cp "$TEMPLATES_DIR/oh-my-opencode.json" "$PROJECT_DIR/opencode_data/oh-my-opencode.json"
+    cp "$TEMPLATES_DIR/oh-my-openagent.json" "$PROJECT_DIR/opencode_data/oh-my-openagent.json"
     cp "$SANDBOX_PROFILE_DIR/AGENTS.md" "$PROJECT_DIR/opencode_data/AGENTS.md"
     cp "$SANDBOX_PROFILE_DIR/socratic.md" "$PROJECT_DIR/opencode_data/socratic.md"
     mkdir -p "$PROJECT_DIR/opencode_sessions"
@@ -429,7 +429,7 @@ else
 
     # Regenerate compose and AGENTS.md from current profile so port/volume
     # changes from re-prepare are picked up. User-editable configs
-    # (opencode.json, oh-my-opencode.json) are NOT overwritten to preserve
+    # (opencode.json, oh-my-openagent.json) are NOT overwritten to preserve
     # customizations made inside the project.
     sed \
         -e "s|{{PROJECT_NAME}}|${PROJECT_NAME}|g" \

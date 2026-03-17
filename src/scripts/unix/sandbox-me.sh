@@ -381,7 +381,7 @@ if [ -f "$PROFILE_DIR/socratic.md" ]; then
     cp "$PROFILE_DIR/socratic.md" "$PROJECT_DIR/opencode_data/socratic.md"
 fi
 # Copy templates if not already present (preserve user edits)
-for tpl in opencode.json oh-my-opencode.json; do
+for tpl in opencode.json oh-my-openagent.json; do
     if [ ! -f "$PROJECT_DIR/opencode_data/$tpl" ] && [ -f "$TEMPLATES_DIR/$tpl" ]; then
         cp "$TEMPLATES_DIR/$tpl" "$PROJECT_DIR/opencode_data/$tpl"
     fi

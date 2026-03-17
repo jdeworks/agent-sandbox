@@ -8,7 +8,7 @@
     "config_dirs": ["/workspace/.config/opencode"],
     "env_vars": ["OPENCODE_API_KEY", "OPENROUTER_API_KEY"],
     "instruction_file": "AGENTS.md",
-    "plugins": ["oh-my-opencode"]
+    "plugins": ["oh-my-openagent"]
   },
   "claude": {
     "label": "Claude Code",

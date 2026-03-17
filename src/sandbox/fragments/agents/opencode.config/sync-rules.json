@@ -10,6 +10,6 @@
   },
   "config_files": [
     { "template": "opencode.json.tpl", "dest": "/home/dev/.agent-config/opencode/opencode.json", "overwrite": false },
-    { "template": "oh-my-opencode.json.tpl", "dest": "/home/dev/.agent-config/opencode/oh-my-opencode.json", "overwrite": false }
+    { "template": "oh-my-openagent.json.tpl", "dest": "/home/dev/.agent-config/opencode/oh-my-openagent.json", "overwrite": false }
   ]
 }
