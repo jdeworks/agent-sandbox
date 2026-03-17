@@ -35,10 +35,23 @@ After copying files to `tools/AgentSandbox/Resources/`, bump the `VersionStamp` 
 ### Modifying templates or config files
 
 - `src/sandbox/Dockerfile.base.tpl` -> also copy to `tools/AgentSandbox/Resources/Dockerfile.base.tpl`
-- `src/sandbox/AGENTS.md.base` -> also copy to `tools/AgentSandbox/Resources/AGENTS.md.base`
+- `src/sandbox/instructions.base.md` -> also copy to `tools/AgentSandbox/Resources/AGENTS.md.base`
+- `src/sandbox/agents.json` -> also copy to `tools/AgentSandbox/Resources/agents.json`
+- `src/sandbox/plugins.json` -> also copy to `tools/AgentSandbox/Resources/plugins.json`
+- `src/sandbox/mcp-servers.json` -> also copy to `tools/AgentSandbox/Resources/mcp-servers.json`
 - `src/templates/opencode.json` -> also copy to `tools/AgentSandbox/Resources/templates/opencode.json`
 - `src/templates/oh-my-opencode.json` -> also copy to `tools/AgentSandbox/Resources/templates/oh-my-opencode.json`
 - `src/templates/agent-config.json` -> also copy to `tools/AgentSandbox/Resources/templates/agent-config.json`
+
+### Adding or modifying an agent
+
+1. `src/sandbox/agents.json` — agent definition (command, install, auth_files, env_vars, plugins)
+2. `src/sandbox/fragments/agents/<agent>.sh` — Dockerfile install commands
+3. `src/sandbox/fragments/agents/<agent>.config/sync-rules.json` — auth/config sync rules
+4. `tools/AgentSandbox/Resources/agents.json` — copy of (1) for Windows embedding
+5. `tools/AgentSandbox/Resources/fragments/<agent>.sh` — copy of (2) for Windows embedding
+
+After copying, bump `VersionStamp` in `ResourceManager.cs`.
 
 ### Modifying profile generation logic
 

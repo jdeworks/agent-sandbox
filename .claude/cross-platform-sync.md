@@ -19,6 +19,16 @@ All of the following locations MUST be updated together:
 
 After copying to `tools/AgentSandbox/Resources/`, bump `VersionStamp` in `tools/AgentSandbox/Services/ResourceManager.cs`.
 
+## Adding or Modifying an Agent
+
+1. `src/sandbox/agents.json` — agent definition
+2. `src/sandbox/fragments/agents/<agent>.sh` — Dockerfile install commands
+3. `src/sandbox/fragments/agents/<agent>.config/sync-rules.json` — auth/config sync rules
+4. `tools/AgentSandbox/Resources/agents.json` — copy of (1)
+5. `tools/AgentSandbox/Resources/fragments/<agent>.sh` — copy of (2)
+
+After copying, bump `VersionStamp` in `ResourceManager.cs`.
+
 ## Modifying Templates or Config Files
 
 Each source file must be copied to its Windows Resources counterpart:
@@ -27,6 +37,9 @@ Each source file must be copied to its Windows Resources counterpart:
 |--------|-------------|
 | `src/sandbox/Dockerfile.base.tpl` | `tools/AgentSandbox/Resources/Dockerfile.base.tpl` |
 | `src/sandbox/instructions.base.md` | `tools/AgentSandbox/Resources/AGENTS.md.base` |
+| `src/sandbox/agents.json` | `tools/AgentSandbox/Resources/agents.json` |
+| `src/sandbox/plugins.json` | `tools/AgentSandbox/Resources/plugins.json` |
+| `src/sandbox/mcp-servers.json` | `tools/AgentSandbox/Resources/mcp-servers.json` |
 | `src/templates/opencode.json` | `tools/AgentSandbox/Resources/templates/opencode.json` |
 | `src/templates/oh-my-opencode.json` | `tools/AgentSandbox/Resources/templates/oh-my-opencode.json` |
 | `src/templates/agent-config.json` | `tools/AgentSandbox/Resources/templates/agent-config.json` |

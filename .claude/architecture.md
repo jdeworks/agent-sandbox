@@ -84,7 +84,21 @@ Always edit the source first, then copy to Resources.
 
 Defined in `languages.json` with detection patterns, default versions, Dockerfile commands, volumes, and PATH setup:
 
-C/C++, Dart, C#/.NET, Flutter, Go, Java, Kotlin, Node.js, PHP, Python 3, React Native, Ruby, Rust
+| Key | Label |
+|-----|-------|
+| `cpp` | C/C++ |
+| `dart` | Dart |
+| `dotnet` | C# / .NET |
+| `flutter` | Flutter (+ Android SDK, ~2GB) |
+| `go` | Go |
+| `java` | Java |
+| `kotlin` | Kotlin |
+| `node` | Node.js (always included) |
+| `php` | PHP |
+| `python` | Python 3 |
+| `react-native` | React Native (+ Android SDK + NDK, ~4GB) |
+| `ruby` | Ruby |
+| `rust` | Rust |
 
 ## Key Directories
 

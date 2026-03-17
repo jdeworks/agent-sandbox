@@ -86,11 +86,6 @@ config_profile_write() {
     fi
 }
 
-config_derive_project_name() {
-    local workspace_path="$1"
-    basename "$workspace_path"
-}
-
 config_project_read() {
     local project_dir="$1"
     local key="$2"
