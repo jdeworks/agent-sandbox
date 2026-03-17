@@ -206,6 +206,15 @@ for agent in "${selected_agents[@]}"; do
     fi
 done
 
+# Custom plugins (free text — any npm package)
+custom_plugins=()
+echo ""
+read -rp "Install additional npm packages? (space-separated, Enter to skip): " custom_input
+if [ -n "$custom_input" ]; then
+    read -ra custom_plugins <<< "$custom_input"
+    echo "  -> custom: ${custom_plugins[*]}"
+fi
+
 ########################################
 # Language selection (streamlined)
 ########################################
@@ -358,6 +367,7 @@ fi
 ########################################
 agents_json_arr=$(printf '%s\n' "${selected_agents[@]}" | jq -R . | jq -s .)
 plugins_json_arr=$(printf '%s\n' "${selected_plugins[@]}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
+custom_json_arr=$(printf '%s\n' "${custom_plugins[@]}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
 langs_json_arr=$(printf '%s\n' "${selected_languages[@]}" | jq -R . | jq -s .)
 mcp_json_arr=$(printf '%s\n' "${selected_mcp[@]}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
 
@@ -386,10 +396,12 @@ jq -n \
     --argjson versions "$versions_json" \
     --argjson mcp_servers "$mcp_json_arr" \
     --argjson config_mirrors "$mirrors_json_obj" \
+    --argjson custom_plugins "$custom_json_arr" \
     '{
         name: $name,
         agents: $agents,
         plugins: $plugins,
+        custom_plugins: $custom_plugins,
         languages: $languages,
         versions: $versions,
         mcp_servers: $mcp_servers,
@@ -429,6 +441,16 @@ for lang in "${selected_languages[@]}"; do
 done
 
 "$SANDBOX_DIR/generate_profile.sh" "$SANDBOX_DIR" "$PROFILE_DIR" "$profile_name" "$selected_csv" "$ports_csv" "$versions_csv"
+
+# Append custom npm packages to Dockerfile
+if [ ${#custom_plugins[@]} -gt 0 ]; then
+    # Insert before the last few lines (WORKDIR, COPY, HEALTHCHECK, ENTRYPOINT)
+    # Simpler: just append RUN lines before the ENTRYPOINT
+    for pkg in "${custom_plugins[@]}"; do
+        # Insert before ENTRYPOINT line
+        sed -i "/^ENTRYPOINT/i RUN npm install -g $pkg" "$PROFILE_DIR/Dockerfile.base"
+    done
+fi
 
 ########################################
 # Build Docker image

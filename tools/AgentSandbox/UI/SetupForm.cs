@@ -20,6 +20,7 @@ public class SetupForm : Form
 
     // UI controls
     private TextBox _nameBox = null!;
+    private TextBox _txtCustomPlugins = null!;
     private Label _nameError = null!;
     private CheckedListBox _agentList = null!;
     private CheckedListBox _pluginList = null!;
@@ -153,6 +154,13 @@ public class SetupForm : Form
         _mainPanel.Controls.Add(_langList);
         y += 185;
 
+        // ── Custom npm packages ──
+        AddLabel("Additional npm packages (optional)", ref y, bold: true);
+        _txtCustomPlugins = new TextBox { Left = 20, Top = y, Width = 540, Height = 24 };
+        _mainPanel.Controls.Add(_txtCustomPlugins);
+        y += 28;
+        AddLabel("Space-separated. Example: my-opencode-plugin @org/tool", ref y, muted: true);
+
         // ── MCP Servers (advanced, collapsed by default) ──
         var mcpCheck = new CheckBox
         {
@@ -273,6 +281,11 @@ public class SetupForm : Form
         if (!selectedLangs.Contains("node")) selectedLangs.Insert(0, "node");
         var selectedMcp = GetCheckedKeys(_mcpList, _mcpKeys);
 
+        // Parse custom npm packages
+        var customPlugins = _txtCustomPlugins.Text.Trim()
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .ToList();
+
         // Compute ports
         var ports = new HashSet<int>();
         if (_portConfigs.TryGetValue("base", out var baseCfg))
@@ -324,15 +337,26 @@ public class SetupForm : Form
                     name,
                     agents = selectedAgents,
                     plugins = selectedPlugins,
+                    custom_plugins = customPlugins,
                     languages = selectedLangs,
                     mcp_servers = selectedMcp,
                     created = DateTime.Now.ToString("O")
                 }, new JsonSerializerOptions { WriteIndented = true });
                 ResourceManager.WriteLf(Path.Combine(profileDir, "profile.json"), manifest);
 
+                // Append custom npm packages to Dockerfile
+                var dockerfilePath = Path.Combine(profileDir, "Dockerfile.base");
+                if (customPlugins.Count > 0)
+                {
+                    var df = File.ReadAllText(dockerfilePath);
+                    var installLines = string.Join("\n",
+                        customPlugins.Select(p => $"RUN npm install -g {p}"));
+                    df = df.Replace("ENTRYPOINT", installLines + "\n\nENTRYPOINT");
+                    ResourceManager.WriteLf(dockerfilePath, df);
+                }
+
                 Log("[setup] Building Docker image...");
                 var tag = $"agent-sandbox-{name}:latest";
-                var dockerfilePath = Path.Combine(profileDir, "Dockerfile.base");
                 var exitCode = DockerRunner.Build(dockerfilePath, tag, profileDir, Log);
 
                 if (exitCode != 0)

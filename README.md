@@ -124,17 +124,20 @@ Claude Code plugins are managed via the built-in marketplace (`claude plugins in
 
 ### Custom plugins
 
-You can add any npm package as a custom plugin. The install command is added to the Dockerfile so it's baked into the image:
+During `sandbox-setup` (Unix) or profile creation (Windows GUI), you can enter additional npm packages in the free-text field. These are baked into the Docker image alongside the registry plugins.
 
-```bash
-# During sandbox-setup, add custom install commands to the profile
-# These get added as RUN lines in the Dockerfile
-
-# Example: add a custom OpenCode plugin
-npm install -g my-custom-opencode-plugin
+```
+Install additional npm packages? (space-separated, Enter to skip): my-opencode-plugin @org/tool
 ```
 
-To enable a custom OpenCode plugin, add it to the `"plugin"` array in the project's `opencode_data/opencode.json`.
+You can also add packages to an existing profile without recreating it:
+
+```bash
+sandbox-setup --add-plugin my-dev my-custom-package
+sandbox-setup --rebuild my-dev
+```
+
+To enable a custom OpenCode plugin after installation, add it to the `"plugin"` array in the project's `opencode_data/opencode.json`.
 
 ## Available Languages
 
