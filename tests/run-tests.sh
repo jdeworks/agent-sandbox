@@ -419,6 +419,201 @@ for svc in "${SERVICES[@]}"; do
 done
 
 # ==============================================================================
+# SECTION 10: v2 Architecture
+# ==============================================================================
+log_section "SECTION 10: v2 Architecture"
+
+# ----- TEST 10.1: New JSON configs -----
+log_section "10.1 v2 JSON Config Files"
+
+for cfg in "agents.json" "plugins.json" "mcp-servers.json"; do
+    [ -f "$SANDBOX_CORE/$cfg" ] && \
+        log_pass "v2 config $cfg exists" || log_fail "v2 config $cfg missing"
+done
+
+# Validate JSON
+for cfg in "agents.json" "plugins.json" "mcp-servers.json"; do
+    jq . "$SANDBOX_CORE/$cfg" >/dev/null 2>&1 && \
+        log_pass "v2 config $cfg is valid JSON" || log_fail "v2 config $cfg invalid JSON"
+done
+
+# Check agents.json has expected agents
+for agent in "opencode" "claude" "cursor" "copilot"; do
+    jq -e ".\"$agent\"" "$SANDBOX_CORE/agents.json" >/dev/null 2>&1 && \
+        log_pass "agents.json: $agent defined" || log_fail "agents.json: $agent missing"
+done
+
+# ----- TEST 10.2: Fragment directory structure -----
+log_section "10.2 Fragment Directory Structure"
+
+[ -d "$SANDBOX_CORE/fragments/languages" ] && \
+    log_pass "fragments/languages/ directory exists" || log_fail "fragments/languages/ missing"
+
+[ -d "$SANDBOX_CORE/fragments/agents" ] && \
+    log_pass "fragments/agents/ directory exists" || log_fail "fragments/agents/ missing"
+
+# Agent install fragments
+for agent in "claude.sh" "opencode.sh" "cursor.sh" "copilot.sh"; do
+    [ -f "$SANDBOX_CORE/fragments/agents/$agent" ] && \
+        log_pass "Agent fragment $agent exists" || log_fail "Agent fragment $agent missing"
+done
+
+# Agent config directories
+for agent in "claude" "opencode" "cursor" "copilot"; do
+    [ -f "$SANDBOX_CORE/fragments/agents/$agent.config/sync-rules.json" ] && \
+        log_pass "Agent config sync-rules.json for $agent" || log_fail "Agent config for $agent missing"
+done
+
+# ----- TEST 10.3: Shared bash library -----
+log_section "10.3 Shared Bash Library"
+
+LIB_DIR="$SANDBOX_SCRIPTS/lib"
+for lib in "prereqs.sh" "config.sh" "detect.sh" "ui.sh" "docker.sh" "mcp.sh"; do
+    [ -f "$LIB_DIR/$lib" ] && \
+        log_pass "lib/$lib exists" || log_fail "lib/$lib missing"
+done
+
+# Syntax check all lib files
+for lib in "$LIB_DIR"/*.sh; do
+    bash -n "$lib" 2>/dev/null && \
+        log_pass "$(basename "$lib"): valid syntax" || log_fail "$(basename "$lib"): syntax error"
+done
+
+# ----- TEST 10.4: v2 scripts -----
+log_section "10.4 v2 Scripts"
+
+[ -f "$SANDBOX_SCRIPTS/sandbox-setup.sh" ] && \
+    log_pass "sandbox-setup.sh exists" || log_fail "sandbox-setup.sh missing"
+
+[ -f "$SANDBOX_SCRIPTS/sandbox-me.sh" ] && \
+    log_pass "sandbox-me.sh exists" || log_fail "sandbox-me.sh missing"
+
+[ -x "$SANDBOX_SCRIPTS/sandbox-setup.sh" ] && \
+    log_pass "sandbox-setup.sh is executable" || log_fail "sandbox-setup.sh not executable"
+
+[ -x "$SANDBOX_SCRIPTS/sandbox-me.sh" ] && \
+    log_pass "sandbox-me.sh is executable" || log_fail "sandbox-me.sh not executable"
+
+bash -n "$SANDBOX_SCRIPTS/sandbox-setup.sh" 2>/dev/null && \
+    log_pass "sandbox-setup.sh: valid syntax" || log_fail "sandbox-setup.sh: syntax error"
+
+bash -n "$SANDBOX_SCRIPTS/sandbox-me.sh" 2>/dev/null && \
+    log_pass "sandbox-me.sh: valid syntax" || log_fail "sandbox-me.sh: syntax error"
+
+# Check key functions
+grep -q 'config_validate_profile_name' "$SANDBOX_SCRIPTS/sandbox-setup.sh" 2>/dev/null && \
+    log_pass "sandbox-setup.sh: uses profile name validation" || log_fail "sandbox-setup.sh: no name validation"
+
+grep -q 'config_find_project_root' "$SANDBOX_SCRIPTS/sandbox-me.sh" 2>/dev/null && \
+    log_pass "sandbox-me.sh: uses project root detection" || log_fail "sandbox-me.sh: no root detection"
+
+grep -q 'docker_remap_compose_ports' "$SANDBOX_SCRIPTS/sandbox-me.sh" 2>/dev/null && \
+    log_pass "sandbox-me.sh: uses port remapping" || log_fail "sandbox-me.sh: no port remapping"
+
+# ----- TEST 10.5: Profile name validation -----
+log_section "10.5 Profile Name Validation (Unit)"
+
+source "$LIB_DIR/config.sh"
+
+config_validate_profile_name "my-dev" >/dev/null 2>&1 && \
+    log_pass "Profile name: 'my-dev' accepted" || log_fail "Profile name: 'my-dev' rejected"
+
+config_validate_profile_name "ab" >/dev/null 2>&1 && \
+    log_pass "Profile name: 'ab' (min length) accepted" || log_fail "Profile name: 'ab' rejected"
+
+config_validate_profile_name "a" >/dev/null 2>&1 && \
+    log_fail "Profile name: 'a' should be rejected" || log_pass "Profile name: 'a' correctly rejected (too short)"
+
+config_validate_profile_name "My-Dev" >/dev/null 2>&1 && \
+    log_fail "Profile name: 'My-Dev' should be rejected" || log_pass "Profile name: 'My-Dev' correctly rejected (uppercase)"
+
+config_validate_profile_name "my--dev" >/dev/null 2>&1 && \
+    log_fail "Profile name: 'my--dev' should be rejected" || log_pass "Profile name: 'my--dev' correctly rejected (consecutive hyphens)"
+
+config_validate_profile_name "sandbox-me" >/dev/null 2>&1 && \
+    log_fail "Profile name: 'sandbox-me' should be rejected" || log_pass "Profile name: 'sandbox-me' correctly rejected (reserved)"
+
+config_validate_profile_name "-leading" >/dev/null 2>&1 && \
+    log_fail "Profile name: '-leading' should be rejected" || log_pass "Profile name: '-leading' correctly rejected (leading hyphen)"
+
+# ----- TEST 10.6: Mobile development support -----
+log_section "10.6 Mobile Development"
+
+for lang in "flutter" "react-native"; do
+    jq -e ".\"$lang\"" "$SANDBOX_CORE/languages.json" >/dev/null 2>&1 && \
+        log_pass "languages.json: $lang defined" || log_fail "languages.json: $lang missing"
+done
+
+[ -f "$SANDBOX_CORE/fragments/languages/flutter.sh" ] && \
+    log_pass "Flutter fragment exists" || log_fail "Flutter fragment missing"
+
+[ -f "$SANDBOX_CORE/fragments/languages/react-native.sh" ] && \
+    log_pass "React Native fragment exists" || log_fail "React Native fragment missing"
+
+# Check size warnings
+jq -e '.flutter.size_warning' "$SANDBOX_CORE/languages.json" >/dev/null 2>&1 && \
+    log_pass "Flutter has size_warning" || log_fail "Flutter missing size_warning"
+
+jq -e '."react-native".size_warning' "$SANDBOX_CORE/languages.json" >/dev/null 2>&1 && \
+    log_pass "React Native has size_warning" || log_fail "React Native missing size_warning"
+
+# ----- TEST 10.7: Volume naming -----
+log_section "10.7 Volume Naming (asb_ prefix)"
+
+grep -q 'asb_' "$SANDBOX_CORE/generate_profile.sh" 2>/dev/null && \
+    log_pass "generate_profile.sh: uses asb_ volume prefix" || log_fail "generate_profile.sh: no asb_ prefix"
+
+# ----- TEST 10.8: instructions.base.md rename -----
+log_section "10.8 File Renames"
+
+[ -f "$SANDBOX_CORE/instructions.base.md" ] && \
+    log_pass "instructions.base.md exists" || log_fail "instructions.base.md missing"
+
+[ ! -f "$SANDBOX_CORE/AGENTS.md.base" ] && \
+    log_pass "Old AGENTS.md.base removed" || log_fail "Old AGENTS.md.base still exists"
+
+# ----- TEST 10.9: Windows resource sync -----
+log_section "10.9 Windows Resource Sync"
+
+WIN_RES="$REPO_DIR/tools/AgentSandbox/Resources"
+for cfg in "agents.json" "plugins.json" "mcp-servers.json"; do
+    [ -f "$WIN_RES/$cfg" ] && \
+        log_pass "Windows resource $cfg exists" || log_fail "Windows resource $cfg missing"
+done
+
+grep -q '2.0.0' "$CSHARP_DIR/Services/ResourceManager.cs" 2>/dev/null && \
+    log_pass "ResourceManager: VersionStamp bumped to 2.0.0" || log_fail "ResourceManager: VersionStamp not updated"
+
+# ----- TEST 10.10: Profile generation with new paths -----
+log_section "10.10 Profile Generation Test"
+
+TEST_PROFILE_DIR="$TEMP_DIR/test-gen-profile"
+bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$TEST_PROFILE_DIR" "test-gen" "python,node" "3000,8080" "python:3.12,node:20" >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+    log_pass "generate_profile.sh runs successfully"
+
+    [ -f "$TEST_PROFILE_DIR/Dockerfile.base" ] && \
+        log_pass "Generated Dockerfile.base" || log_fail "No Dockerfile.base generated"
+
+    [ -f "$TEST_PROFILE_DIR/docker-compose.yml.tpl" ] && \
+        log_pass "Generated docker-compose.yml.tpl" || log_fail "No docker-compose.yml.tpl generated"
+
+    [ -f "$TEST_PROFILE_DIR/install.sh" ] && \
+        log_pass "Generated install.sh" || log_fail "No install.sh generated"
+
+    [ -f "$TEST_PROFILE_DIR/AGENTS.md" ] && \
+        log_pass "Generated AGENTS.md" || log_fail "No AGENTS.md generated"
+
+    grep -q 'user.env' "$TEST_PROFILE_DIR/docker-compose.yml.tpl" 2>/dev/null && \
+        log_pass "Compose template includes user.env" || log_fail "Compose template missing user.env"
+
+    grep -q 'asb_' "$TEST_PROFILE_DIR/docker-compose.yml.tpl" 2>/dev/null && \
+        log_pass "Compose template uses asb_ volume prefix" || log_fail "Compose template missing asb_ prefix"
+else
+    log_fail "generate_profile.sh failed to run"
+fi
+
+# ==============================================================================
 # SUMMARY
 # ==============================================================================
 echo ""
