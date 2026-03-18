@@ -12,6 +12,7 @@ internal static class Program
     static int Main(string[] args)
     {
         ResourceManager.EnsureExtracted();
+        ProjectScaffolder.CleanupCorruptProjects();
 
         // CLI subcommand -> attach console and run text mode
         if (args.Length > 0 && CliCommands.Contains(args[0].ToLowerInvariant()))

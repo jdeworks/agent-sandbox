@@ -46,6 +46,39 @@ public static class ProjectScaffolder
     public static bool Exists(string projectName) =>
         Directory.Exists(GetProjectDir(projectName));
 
+    /// <summary>
+    /// Remove project dirs that have no config.env or a config.env with
+    /// indented keys (created by a bug in earlier versions).
+    /// </summary>
+    public static void CleanupCorruptProjects()
+    {
+        if (!Directory.Exists(ResourceManager.ProjectsDir))
+            return;
+
+        foreach (var dir in Directory.GetDirectories(ResourceManager.ProjectsDir))
+        {
+            var configPath = Path.Combine(dir, "config.env");
+
+            // No config.env at all — not a valid project
+            if (!File.Exists(configPath))
+            {
+                try { Directory.Delete(dir, true); } catch { /* best effort */ }
+                continue;
+            }
+
+            // Check for indented keys (bug: raw string literal added leading spaces)
+            try
+            {
+                var firstLine = File.ReadLines(configPath).FirstOrDefault() ?? "";
+                if (firstLine.Length > 0 && firstLine[0] == ' ')
+                {
+                    Directory.Delete(dir, true);
+                }
+            }
+            catch { /* best effort */ }
+        }
+    }
+
     public static List<RecentProject> GetRecentProjects()
     {
         var result = new List<RecentProject>();
