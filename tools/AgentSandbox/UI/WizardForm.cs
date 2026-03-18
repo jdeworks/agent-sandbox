@@ -154,6 +154,15 @@ public sealed class WizardForm : Form
         StyleFlatButton(_btnDeleteProfile, DangerRed);
         _btnDeleteProfile.Click += OnDeleteProfileClicked;
 
+        var btnRebuildProfile = new Button
+        {
+            Text = "Rebuild Image",
+            Location = new Point(152, 504),
+            Size = new Size(136, 44)
+        };
+        StyleFlatButton(btnRebuildProfile, TextPrimary);
+        btnRebuildProfile.Click += OnRebuildProfileClicked;
+
         _btnContinueToProject = new Button
         {
             Text = "Continue to Project Selection \u2192",
@@ -170,7 +179,7 @@ public sealed class WizardForm : Form
         };
 
         _stepProfiles.Controls.AddRange([headerPanel, _btnCreateProfile, _lstProfiles,
-            _lblNoProfiles, _btnDeleteProfile, _btnContinueToProject]);
+            _lblNoProfiles, _btnDeleteProfile, btnRebuildProfile, _btnContinueToProject]);
         Controls.Add(_stepProfiles);
 
         RefreshProfileList();
@@ -214,6 +223,56 @@ public sealed class WizardForm : Form
             MessageBox.Show($"Error deleting profile: {ex.Message}", "Error",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+
+        RefreshProfileList();
+    }
+
+    private async void OnRebuildProfileClicked(object? sender, EventArgs e)
+    {
+        if (_lstProfiles.SelectedItems.Count == 0)
+        {
+            MessageBox.Show("Select a profile to rebuild.", "Rebuild Image",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var name = _lstProfiles.SelectedItems[0].Text;
+        var profileDir = Path.Combine(ResourceManager.PreparedDir, name);
+        var dockerfilePath = Path.Combine(profileDir, "Dockerfile.base");
+
+        if (!File.Exists(dockerfilePath))
+        {
+            MessageBox.Show($"Profile '{name}' is missing Dockerfile.base. Delete and recreate it.",
+                "Rebuild Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            $"Rebuild Docker image for '{name}' from scratch (no cache)?\n\nThis may take several minutes.",
+            "Rebuild Image", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (confirm != DialogResult.Yes) return;
+
+        var tag = $"agent-sandbox-{name}:latest";
+        _btnCreateProfile.Enabled = false;
+        _btnDeleteProfile.Enabled = false;
+        _btnContinueToProject.Enabled = false;
+        _lstProfiles.Enabled = false;
+
+        var success = false;
+        await Task.Run(() =>
+        {
+            success = DockerRunner.Build(dockerfilePath, tag, profileDir, noCache: true) == 0;
+        });
+
+        _btnCreateProfile.Enabled = true;
+        _btnDeleteProfile.Enabled = true;
+        _btnContinueToProject.Enabled = true;
+        _lstProfiles.Enabled = true;
+
+        MessageBox.Show(
+            success ? $"Image '{tag}' rebuilt successfully." : $"Image rebuild failed. Check Docker output.",
+            "Rebuild Image", MessageBoxButtons.OK,
+            success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
 
         RefreshProfileList();
     }
