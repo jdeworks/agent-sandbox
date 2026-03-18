@@ -72,6 +72,8 @@ public static class ProjectScaffolder
     private static Dictionary<string, string> ParseConfigEnv(string path)
     {
         var dict = new Dictionary<string, string>();
+        if (!File.Exists(path))
+            return dict;
         foreach (var line in File.ReadAllLines(path))
         {
             var eq = line.IndexOf('=');
