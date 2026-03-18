@@ -39,6 +39,11 @@ public class SetupForm : Form
 
     public ProfileSpec? CreatedProfile { get; private set; }
 
+    private static readonly Color AccentBlue = Color.FromArgb(0, 120, 212);
+    private static readonly Color TextPrimary = Color.FromArgb(24, 24, 27);
+    private static readonly Color TextMuted = Color.FromArgb(113, 113, 122);
+    private static readonly Color SurfaceLight = Color.FromArgb(250, 250, 250);
+
     public SetupForm(Dictionary<string, LanguageConfig> languages, Dictionary<string, PortConfig> portConfigs)
     {
         _languages = languages;
@@ -54,39 +59,43 @@ public class SetupForm : Form
         _mcpDoc = File.Exists(mcpPath) ? JsonDocument.Parse(File.ReadAllText(mcpPath)) : JsonDocument.Parse("{}");
 
         Text = "Agent Sandbox — Profile Setup";
-        Size = new Size(600, 750);
+        Size = new Size(620, 780);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
+        Font = new Font("Segoe UI", 10f);
+        BackColor = Color.White;
 
         BuildUI();
     }
 
     private void BuildUI()
     {
-        _mainPanel = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(20) };
+        _mainPanel = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(24) };
         Controls.Add(_mainPanel);
 
-        var y = 10;
+        var y = 8;
+        const int left = 24;
+        const int fieldWidth = 548;
 
         // ── Profile Name ──
         AddLabel("Profile Name", ref y, bold: true);
-        _nameBox = new TextBox { Left = 20, Top = y, Width = 300 };
+        _nameBox = new TextBox { Left = left, Top = y, Width = 320, Font = new Font("Segoe UI", 10f) };
         _nameBox.TextChanged += (_, _) => ValidateName();
         _mainPanel.Controls.Add(_nameBox);
-        _nameError = new Label { Left = 330, Top = y + 2, Width = 220, ForeColor = Color.Red, Font = new Font(Font.FontFamily, 8f) };
+        _nameError = new Label { Left = 352, Top = y + 3, Width = 220, ForeColor = Color.FromArgb(220, 38, 38), Font = new Font("Segoe UI", 8.5f) };
         _mainPanel.Controls.Add(_nameError);
-        y += 30;
+        y += 32;
         AddLabel("Lowercase alphanumeric + hyphens, min 2 chars", ref y, muted: true);
+        y += 8;
 
         // ── Agents ──
         AddLabel("Coding Agents", ref y, bold: true);
-        _agentList = new CheckedListBox { Left = 20, Top = y, Width = 540, Height = 90, CheckOnClick = true };
+        _agentList = new CheckedListBox { Left = left, Top = y, Width = fieldWidth, Height = 96, CheckOnClick = true, BorderStyle = BorderStyle.FixedSingle };
         foreach (var prop in _agentsDoc.RootElement.EnumerateObject())
         {
             var label = prop.Value.TryGetProperty("label", out var l) ? l.GetString() ?? prop.Name : prop.Name;
-            // Check if env var is found
             var envHint = "";
             if (prop.Value.TryGetProperty("env_vars", out var evArr))
             {
@@ -104,11 +113,11 @@ public class SetupForm : Form
             _agentList.Items.Add($"{label}{envHint}");
         }
         _mainPanel.Controls.Add(_agentList);
-        y += 95;
+        y += 104;
 
         // ── Plugins ──
         AddLabel("Plugins", ref y, bold: true);
-        _pluginList = new CheckedListBox { Left = 20, Top = y, Width = 540, Height = 60, CheckOnClick = true };
+        _pluginList = new CheckedListBox { Left = left, Top = y, Width = fieldWidth, Height = 64, CheckOnClick = true, BorderStyle = BorderStyle.FixedSingle };
         foreach (var prop in _pluginsDoc.RootElement.EnumerateObject())
         {
             var desc = prop.Value.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
@@ -116,13 +125,12 @@ public class SetupForm : Form
             _pluginList.Items.Add($"{prop.Name} — {desc}");
         }
         _mainPanel.Controls.Add(_pluginList);
-        y += 65;
+        y += 72;
 
         // ── Languages ──
         AddLabel("Languages (Node.js always included)", ref y, bold: true);
-        _langList = new CheckedListBox { Left = 20, Top = y, Width = 540, Height = 180, CheckOnClick = true };
+        _langList = new CheckedListBox { Left = left, Top = y, Width = fieldWidth, Height = 184, CheckOnClick = true, BorderStyle = BorderStyle.FixedSingle };
 
-        // Read size_warning fields once (not per-language)
         JsonDocument? langDoc = null;
         try
         {
@@ -146,32 +154,33 @@ public class SetupForm : Form
         }
         _langList.ItemCheck += (_, e) =>
         {
-            // Prevent unchecking Node.js
             if (_langKeys[e.Index] == "node" && e.NewValue == CheckState.Unchecked)
                 e.NewValue = CheckState.Checked;
         };
         langDoc?.Dispose();
         _mainPanel.Controls.Add(_langList);
-        y += 185;
+        y += 192;
 
         // ── Custom npm packages ──
         AddLabel("Additional npm packages (optional)", ref y, bold: true);
-        _txtCustomPlugins = new TextBox { Left = 20, Top = y, Width = 540, Height = 24 };
+        _txtCustomPlugins = new TextBox { Left = left, Top = y, Width = fieldWidth, Height = 28, Font = new Font("Segoe UI", 10f) };
         _mainPanel.Controls.Add(_txtCustomPlugins);
-        y += 28;
+        y += 32;
         AddLabel("Space-separated. Example: my-opencode-plugin @org/tool", ref y, muted: true);
+        y += 8;
 
         // ── MCP Servers (advanced, collapsed by default) ──
         var mcpCheck = new CheckBox
         {
             Text = "Include MCP servers (advanced)",
-            Left = 20, Top = y, Width = 300,
-            Font = new Font(Font.FontFamily, 9.5f, FontStyle.Bold)
+            Left = left, Top = y, Width = 320,
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            ForeColor = TextPrimary
         };
         _mainPanel.Controls.Add(mcpCheck);
-        y += 25;
+        y += 28;
 
-        _mcpList = new CheckedListBox { Left = 20, Top = y, Width = 540, Height = 100, CheckOnClick = true, Visible = false };
+        _mcpList = new CheckedListBox { Left = left, Top = y, Width = fieldWidth, Height = 104, CheckOnClick = true, Visible = false, BorderStyle = BorderStyle.FixedSingle };
         foreach (var prop in _mcpDoc.RootElement.EnumerateObject())
         {
             var desc = prop.Value.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
@@ -180,36 +189,47 @@ public class SetupForm : Form
         }
         mcpCheck.CheckedChanged += (_, _) => _mcpList.Visible = mcpCheck.Checked;
         _mainPanel.Controls.Add(_mcpList);
-        y += 105;
+        y += 112;
 
         // ── Buttons ──
         _buildBtn = new Button
         {
             Text = "Create Profile",
-            Left = 20, Top = y, Width = 150, Height = 35,
-            BackColor = Color.FromArgb(0, 120, 212),
+            Left = left, Top = y, Width = 160, Height = 44,
+            BackColor = AccentBlue,
             ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 10f, FontStyle.Bold),
+            Cursor = Cursors.Hand
         };
+        _buildBtn.FlatAppearance.BorderColor = AccentBlue;
+        _buildBtn.FlatAppearance.MouseOverBackColor = ControlPaint.Light(AccentBlue, 0.15f);
+        _buildBtn.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(AccentBlue, 0.1f);
         _buildBtn.Click += OnBuildClicked;
         _mainPanel.Controls.Add(_buildBtn);
 
         _cancelBtn = new Button
         {
             Text = "Cancel",
-            Left = 180, Top = y, Width = 100, Height = 35
+            Left = left + 176, Top = y, Width = 104, Height = 44,
+            FlatStyle = FlatStyle.Flat,
+            ForeColor = TextMuted,
+            Cursor = Cursors.Hand
         };
+        _cancelBtn.FlatAppearance.BorderColor = Color.FromArgb(228, 228, 231);
+        _cancelBtn.FlatAppearance.MouseOverBackColor = Color.FromArgb(244, 244, 245);
+        _cancelBtn.FlatAppearance.MouseDownBackColor = Color.FromArgb(228, 228, 231);
         _cancelBtn.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
         _mainPanel.Controls.Add(_cancelBtn);
-        y += 45;
+        y += 56;
 
         // ── Log area (hidden until build starts) ──
         _logBox = new TextBox
         {
-            Left = 20, Top = y, Width = 540, Height = 120,
+            Left = left, Top = y, Width = fieldWidth, Height = 128,
             Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical,
-            BackColor = Color.FromArgb(30, 30, 30), ForeColor = Color.FromArgb(0, 200, 80),
-            Font = new Font("Consolas", 9f),
+            BackColor = Color.FromArgb(24, 24, 27), ForeColor = Color.FromArgb(74, 222, 128),
+            Font = new Font("Consolas", 9.5f),
             Visible = false
         };
         _mainPanel.Controls.Add(_logBox);
@@ -220,13 +240,13 @@ public class SetupForm : Form
         var lbl = new Label
         {
             Text = text,
-            Left = 20, Top = y,
-            Width = 540, Height = 18,
-            Font = bold ? new Font(Font.FontFamily, 9.5f, FontStyle.Bold) : Font,
-            ForeColor = muted ? Color.Gray : Color.FromArgb(40, 40, 40)
+            Left = 24, Top = y,
+            Width = 548, Height = 20,
+            Font = bold ? new Font("Segoe UI", 9.5f, FontStyle.Bold) : new Font("Segoe UI", 9f),
+            ForeColor = muted ? TextMuted : TextPrimary
         };
         _mainPanel.Controls.Add(lbl);
-        y += 20;
+        y += 22;
     }
 
     private void ValidateName()
@@ -374,12 +394,17 @@ public class SetupForm : Form
                 var doneBtn = new Button
                 {
                     Text = "Done",
-                    Width = 100, Height = 35,
-                    Left = 20, Top = _logBox.Bottom + 10,
-                    BackColor = Color.FromArgb(0, 120, 212),
+                    Width = 104, Height = 44,
+                    Left = 24, Top = _logBox.Bottom + 12,
+                    BackColor = AccentBlue,
                     ForeColor = Color.White,
-                    FlatStyle = FlatStyle.Flat
+                    FlatStyle = FlatStyle.Flat,
+                    Font = new Font("Segoe UI", 10f, FontStyle.Bold),
+                    Cursor = Cursors.Hand
                 };
+                doneBtn.FlatAppearance.BorderColor = AccentBlue;
+                doneBtn.FlatAppearance.MouseOverBackColor = ControlPaint.Light(AccentBlue, 0.15f);
+                doneBtn.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(AccentBlue, 0.1f);
                 doneBtn.Click += (_, _) => { DialogResult = DialogResult.OK; Close(); };
                 _mainPanel.Controls.Add(doneBtn);
             });

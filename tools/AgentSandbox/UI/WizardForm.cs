@@ -8,6 +8,10 @@ namespace AgentSandbox.UI;
 public sealed class WizardForm : Form
 {
     private static readonly Color AccentBlue = Color.FromArgb(0, 120, 212);
+    private static readonly Color TextPrimary = Color.FromArgb(24, 24, 27);
+    private static readonly Color TextMuted = Color.FromArgb(113, 113, 122);
+    private static readonly Color SurfaceLight = Color.FromArgb(250, 250, 250);
+    private static readonly Color DangerRed = Color.FromArgb(220, 38, 38);
 
     private readonly Dictionary<string, LanguageConfig> _languages;
     private readonly Dictionary<string, PortConfig> _portConfigs;
@@ -41,7 +45,7 @@ public sealed class WizardForm : Form
         _portConfigs = ConfigLoader.LoadPorts();
 
         Text = "Agent Sandbox";
-        Size = new Size(700, 650);
+        Size = new Size(720, 680);
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -74,20 +78,36 @@ public sealed class WizardForm : Form
     {
         _stepProfiles = new Panel { Dock = DockStyle.Fill, Visible = false };
 
+        // Header area
+        var headerPanel = new Panel
+        {
+            Location = new Point(0, 0),
+            Size = new Size(720, 80),
+            BackColor = SurfaceLight
+        };
         var title = new Label
         {
             Text = "Agent Sandbox",
-            Font = new Font("Segoe UI", 18f, FontStyle.Bold),
-            ForeColor = Color.FromArgb(30, 30, 30),
-            Location = new Point(30, 20),
+            Font = new Font("Segoe UI", 20f, FontStyle.Bold),
+            ForeColor = TextPrimary,
+            Location = new Point(32, 16),
             AutoSize = true
         };
+        var subtitle = new Label
+        {
+            Text = "Manage your sandbox profiles",
+            Font = new Font("Segoe UI", 10f),
+            ForeColor = TextMuted,
+            Location = new Point(32, 50),
+            AutoSize = true
+        };
+        headerPanel.Controls.AddRange([title, subtitle]);
 
         _btnCreateProfile = new Button
         {
-            Text = "Create New Profile",
-            Location = new Point(30, 65),
-            Size = new Size(200, 40),
+            Text = "+ New Profile",
+            Location = new Point(32, 96),
+            Size = new Size(160, 44),
             Font = new Font("Segoe UI", 10f, FontStyle.Bold)
         };
         StyleFilledButton(_btnCreateProfile, AccentBlue, Color.White);
@@ -95,26 +115,26 @@ public sealed class WizardForm : Form
 
         _lstProfiles = new ListView
         {
-            Location = new Point(30, 120),
-            Size = new Size(620, 380),
+            Location = new Point(32, 152),
+            Size = new Size(640, 376),
             View = View.Details,
             FullRowSelect = true,
-            GridLines = true,
+            GridLines = false,
             MultiSelect = false,
             BorderStyle = BorderStyle.FixedSingle
         };
-        _lstProfiles.Columns.Add("Name", 160);
-        _lstProfiles.Columns.Add("Agents", 180);
-        _lstProfiles.Columns.Add("Languages", 160);
+        _lstProfiles.Columns.Add("Name", 170);
+        _lstProfiles.Columns.Add("Agents", 190);
+        _lstProfiles.Columns.Add("Languages", 170);
         _lstProfiles.Columns.Add("Image Size", 100);
 
         _lblNoProfiles = new Label
         {
-            Text = "No profiles yet. Create one to get started.",
-            ForeColor = Color.FromArgb(120, 120, 120),
+            Text = "No profiles yet — click \"+ New Profile\" to get started.",
+            ForeColor = TextMuted,
             Font = new Font("Segoe UI", 10f, FontStyle.Italic),
-            Location = new Point(30, 290),
-            Size = new Size(620, 30),
+            Location = new Point(32, 300),
+            Size = new Size(640, 40),
             TextAlign = ContentAlignment.MiddleCenter,
             Visible = false
         };
@@ -122,17 +142,17 @@ public sealed class WizardForm : Form
         _btnDeleteProfile = new Button
         {
             Text = "Delete",
-            Location = new Point(30, 515),
-            Size = new Size(100, 38)
+            Location = new Point(32, 540),
+            Size = new Size(104, 44)
         };
-        StyleFlatButton(_btnDeleteProfile, Color.FromArgb(200, 50, 50));
+        StyleFlatButton(_btnDeleteProfile, DangerRed);
         _btnDeleteProfile.Click += OnDeleteProfileClicked;
 
         _btnContinueToProject = new Button
         {
             Text = "Continue to Project Selection \u2192",
-            Location = new Point(380, 515),
-            Size = new Size(270, 40),
+            Location = new Point(408, 540),
+            Size = new Size(264, 44),
             Font = new Font("Segoe UI", 10f, FontStyle.Bold)
         };
         StyleFilledButton(_btnContinueToProject, AccentBlue, Color.White);
@@ -143,7 +163,7 @@ public sealed class WizardForm : Form
             ShowStep(1);
         };
 
-        _stepProfiles.Controls.AddRange([title, _btnCreateProfile, _lstProfiles,
+        _stepProfiles.Controls.AddRange([headerPanel, _btnCreateProfile, _lstProfiles,
             _lblNoProfiles, _btnDeleteProfile, _btnContinueToProject]);
         Controls.Add(_stepProfiles);
 
@@ -282,35 +302,54 @@ public sealed class WizardForm : Form
     {
         _stepLaunch = new Panel { Dock = DockStyle.Fill, Visible = false };
 
+        // Header area
+        var headerPanel = new Panel
+        {
+            Location = new Point(0, 0),
+            Size = new Size(720, 80),
+            BackColor = SurfaceLight
+        };
         var title = new Label
         {
             Text = "Launch Sandbox",
-            Font = new Font("Segoe UI", 18f, FontStyle.Bold),
-            ForeColor = Color.FromArgb(30, 30, 30),
-            Location = new Point(30, 20),
+            Font = new Font("Segoe UI", 20f, FontStyle.Bold),
+            ForeColor = TextPrimary,
+            Location = new Point(32, 16),
             AutoSize = true
         };
+        var subtitleLaunch = new Label
+        {
+            Text = "Select a project folder and profile to launch",
+            Font = new Font("Segoe UI", 10f),
+            ForeColor = TextMuted,
+            Location = new Point(32, 50),
+            AutoSize = true
+        };
+        headerPanel.Controls.AddRange([title, subtitleLaunch]);
 
         var lblPath = new Label
         {
-            Text = "Project folder:",
-            Location = new Point(30, 65),
+            Text = "Project folder",
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            ForeColor = TextPrimary,
+            Location = new Point(32, 96),
             AutoSize = true
         };
 
         _txtPath = new TextBox
         {
-            Location = new Point(30, 88),
-            Size = new Size(510, 28)
+            Location = new Point(32, 120),
+            Size = new Size(528, 28),
+            Font = new Font("Segoe UI", 10f)
         };
 
         _btnBrowse = new Button
         {
-            Text = "Browse...",
-            Location = new Point(550, 86),
-            Size = new Size(100, 30)
+            Text = "Browse\u2026",
+            Location = new Point(568, 118),
+            Size = new Size(104, 32)
         };
-        StyleFlatButton(_btnBrowse, Color.FromArgb(80, 80, 80));
+        StyleFlatButton(_btnBrowse, TextPrimary);
         _btnBrowse.Click += (_, _) =>
         {
             using var dlg = new FolderBrowserDialog
@@ -324,46 +363,51 @@ public sealed class WizardForm : Form
 
         var lblRecent = new Label
         {
-            Text = "Recent projects:",
-            Location = new Point(30, 125),
+            Text = "Recent projects",
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            ForeColor = TextPrimary,
+            Location = new Point(32, 160),
             AutoSize = true
         };
 
         _lstRecent = new ListView
         {
-            Location = new Point(30, 148),
-            Size = new Size(620, 150),
+            Location = new Point(32, 184),
+            Size = new Size(640, 152),
             View = View.Details,
             FullRowSelect = true,
-            GridLines = true,
+            GridLines = false,
             MultiSelect = false,
             BorderStyle = BorderStyle.FixedSingle
         };
-        _lstRecent.Columns.Add("Project", 150);
-        _lstRecent.Columns.Add("Profile", 120);
-        _lstRecent.Columns.Add("Last Used", 100);
-        _lstRecent.Columns.Add("Workspace Path", 230);
+        _lstRecent.Columns.Add("Project", 160);
+        _lstRecent.Columns.Add("Profile", 130);
+        _lstRecent.Columns.Add("Last Used", 110);
+        _lstRecent.Columns.Add("Workspace Path", 220);
         _lstRecent.SelectedIndexChanged += OnRecentProjectSelected;
 
         var lblProfile = new Label
         {
-            Text = "Profile:",
-            Location = new Point(30, 312),
+            Text = "Profile",
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            ForeColor = TextPrimary,
+            Location = new Point(32, 352),
             AutoSize = true
         };
 
         _cboProfile = new ComboBox
         {
-            Location = new Point(95, 309),
-            Size = new Size(250, 28),
-            DropDownStyle = ComboBoxStyle.DropDownList
+            Location = new Point(32, 376),
+            Size = new Size(264, 28),
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Font = new Font("Segoe UI", 10f)
         };
 
         _btnLaunch = new Button
         {
             Text = "Launch",
-            Location = new Point(490, 305),
-            Size = new Size(160, 38),
+            Location = new Point(504, 372),
+            Size = new Size(168, 44),
             Font = new Font("Segoe UI", 10f, FontStyle.Bold)
         };
         StyleFilledButton(_btnLaunch, AccentBlue, Color.White);
@@ -372,10 +416,10 @@ public sealed class WizardForm : Form
         _btnBackToProfiles = new Button
         {
             Text = "\u2190 Back to Profiles",
-            Location = new Point(30, 355),
-            Size = new Size(170, 35)
+            Location = new Point(32, 424),
+            Size = new Size(176, 40)
         };
-        StyleFlatButton(_btnBackToProfiles, Color.FromArgb(80, 80, 80));
+        StyleFlatButton(_btnBackToProfiles, TextMuted);
         _btnBackToProfiles.Click += (_, _) =>
         {
             RefreshProfileList();
@@ -385,8 +429,8 @@ public sealed class WizardForm : Form
         _btnEditUserEnv = new Button
         {
             Text = "Edit user.env",
-            Location = new Point(220, 355),
-            Size = new Size(130, 35)
+            Location = new Point(224, 424),
+            Size = new Size(136, 40)
         };
         StyleFlatButton(_btnEditUserEnv, AccentBlue);
         _btnEditUserEnv.ForeColor = AccentBlue;
@@ -394,47 +438,47 @@ public sealed class WizardForm : Form
 
         var btnSettings = new Button
         {
-            Text = "Settings...",
-            Location = new Point(360, 355),
-            Size = new Size(100, 35)
+            Text = "Settings\u2026",
+            Location = new Point(376, 424),
+            Size = new Size(104, 40)
         };
-        StyleFlatButton(btnSettings, Color.Gray);
+        StyleFlatButton(btnSettings, TextMuted);
         btnSettings.Click += (_, _) => new SettingsForm().ShowDialog(this);
 
         _txtLog = new TextBox
         {
-            Location = new Point(30, 400),
-            Size = new Size(620, 160),
+            Location = new Point(32, 480),
+            Size = new Size(640, 152),
             Multiline = true,
             ReadOnly = true,
             ScrollBars = ScrollBars.Vertical,
-            BackColor = Color.FromArgb(30, 30, 30),
-            ForeColor = Color.FromArgb(0, 200, 80),
-            Font = new Font("Consolas", 9f),
+            BackColor = Color.FromArgb(24, 24, 27),
+            ForeColor = Color.FromArgb(74, 222, 128),
+            Font = new Font("Consolas", 9.5f),
             Visible = false
         };
 
         _btnBackOverview = new Button
         {
             Text = "Back to overview",
-            Location = new Point(30, 568),
-            Size = new Size(160, 38),
+            Location = new Point(32, 640),
+            Size = new Size(168, 44),
             Visible = false
         };
-        StyleFlatButton(_btnBackOverview, Color.FromArgb(80, 80, 80));
+        StyleFlatButton(_btnBackOverview, TextPrimary);
         _btnBackOverview.Click += OnBackToOverviewClicked;
 
         _btnClose = new Button
         {
             Text = "Close",
-            Location = new Point(210, 568),
-            Size = new Size(100, 38),
+            Location = new Point(216, 640),
+            Size = new Size(104, 44),
             Visible = false
         };
-        StyleFilledButton(_btnClose, Color.FromArgb(60, 60, 60), Color.White);
+        StyleFilledButton(_btnClose, Color.FromArgb(63, 63, 70), Color.White);
         _btnClose.Click += (_, _) => Close();
 
-        _stepLaunch.Controls.AddRange([title, lblPath, _txtPath, _btnBrowse,
+        _stepLaunch.Controls.AddRange([headerPanel, lblPath, _txtPath, _btnBrowse,
             lblRecent, _lstRecent, lblProfile, _cboProfile,
             _btnLaunch, _btnBackToProfiles, _btnEditUserEnv, btnSettings,
             _txtLog, _btnBackOverview, _btnClose]);
@@ -739,9 +783,10 @@ public sealed class WizardForm : Form
     {
         btn.FlatStyle = FlatStyle.Flat;
         btn.ForeColor = fg;
-        btn.FlatAppearance.BorderColor = fg;
-        btn.FlatAppearance.MouseOverBackColor = hoverBg ?? Color.FromArgb(30, fg);
-        btn.FlatAppearance.MouseDownBackColor = Color.FromArgb(50, fg);
+        btn.FlatAppearance.BorderColor = Color.FromArgb(228, 228, 231);
+        btn.FlatAppearance.MouseOverBackColor = hoverBg ?? Color.FromArgb(244, 244, 245);
+        btn.FlatAppearance.MouseDownBackColor = Color.FromArgb(228, 228, 231);
+        btn.Cursor = Cursors.Hand;
     }
 
     private static void StyleFilledButton(Button btn, Color bg, Color fg, Color? hoverBg = null)
@@ -752,6 +797,7 @@ public sealed class WizardForm : Form
         btn.FlatAppearance.BorderColor = bg;
         btn.FlatAppearance.MouseOverBackColor = hoverBg ?? ControlPaint.Light(bg, 0.15f);
         btn.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(bg, 0.1f);
+        btn.Cursor = Cursors.Hand;
     }
 
     private static string FormatTimeAgo(string isoTimestamp)

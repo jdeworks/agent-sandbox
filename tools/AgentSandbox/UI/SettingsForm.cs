@@ -21,16 +21,16 @@ public sealed class SettingsForm : Form
         ("GitHub Copilot", "copilot")
     ];
 
-    private static readonly Color HeaderBg = Color.FromArgb(248, 250, 252);
-    private static readonly Color SectionBorder = Color.FromArgb(220, 224, 230);
+    private static readonly Color HeaderBg = Color.FromArgb(250, 250, 250);
+    private static readonly Color SectionBorder = Color.FromArgb(228, 228, 231);
     private static readonly Color AccentBlue = Color.FromArgb(0, 120, 212);
-    private static readonly Color TextMuted = Color.FromArgb(100, 100, 100);
-    private static readonly Color TextDark = Color.FromArgb(40, 40, 40);
+    private static readonly Color TextMuted = Color.FromArgb(113, 113, 122);
+    private static readonly Color TextDark = Color.FromArgb(24, 24, 27);
 
     public SettingsForm()
     {
         Text = "Settings";
-        Size = new Size(580, 730);
+        Size = new Size(600, 760);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -39,36 +39,36 @@ public sealed class SettingsForm : Form
         BackColor = Color.White;
         Padding = new Padding(0);
 
-        const int pad = 28;
+        const int pad = 32;
         int y = pad;
 
         // Header strip
         var header = new Panel
         {
             Location = new Point(0, 0),
-            Size = new Size(580, 72),
+            Size = new Size(600, 80),
             BackColor = HeaderBg,
             BorderStyle = BorderStyle.None
         };
         var title = new Label
         {
             Text = "Settings",
-            Font = new Font("Segoe UI", 18f, FontStyle.Bold),
+            Font = new Font("Segoe UI", 20f, FontStyle.Bold),
             ForeColor = TextDark,
-            Location = new Point(pad, 20),
+            Location = new Point(pad, 16),
             AutoSize = true
         };
         var subtitle = new Label
         {
             Text = "Default agent and saved environment variables",
-            Font = new Font("Segoe UI", 9.5f),
+            Font = new Font("Segoe UI", 10f),
             ForeColor = TextMuted,
-            Location = new Point(pad, 48),
+            Location = new Point(pad, 50),
             AutoSize = true
         };
         header.Controls.AddRange([title, subtitle]);
         Controls.Add(header);
-        y = 72 + 20;
+        y = 80 + 24;
 
         // ─── Default agent section ───
         var lblAgentSection = new Label
@@ -79,20 +79,21 @@ public sealed class SettingsForm : Form
             Location = new Point(pad, y),
             AutoSize = true
         };
-        y += 24;
+        y += 26;
         var lblAgentHint = new Label
         {
             Text = "Used for new sandboxes. You can change the agent per project later.",
             ForeColor = TextMuted,
+            Font = new Font("Segoe UI", 9f),
             Location = new Point(pad, y),
-            Size = new Size(500, 18),
+            Size = new Size(520, 20),
             AutoEllipsis = true
         };
-        y += 26;
+        y += 28;
         _cboDefaultAgent = new ComboBox
         {
             Location = new Point(pad, y),
-            Size = new Size(320, 30),
+            Size = new Size(320, 32),
             DropDownStyle = ComboBoxStyle.DropDownList,
             Font = new Font("Segoe UI", 10f)
         };
@@ -111,7 +112,7 @@ public sealed class SettingsForm : Form
         }
         if (_cboDefaultAgent.SelectedIndex < 0)
             _cboDefaultAgent.SelectedIndex = 0;
-        y += 44;
+        y += 48;
 
         // ─── Environment variables section (bordered panel) ───
         var envSectionLabel = new Label
@@ -122,25 +123,26 @@ public sealed class SettingsForm : Form
             Location = new Point(pad, y),
             AutoSize = true
         };
-        y += 24;
+        y += 26;
         var envSectionHint = new Label
         {
             Text = "Stored encrypted. Used as defaults when launching sandboxes.",
             ForeColor = TextMuted,
+            Font = new Font("Segoe UI", 9f),
             Location = new Point(pad, y),
-            Size = new Size(500, 18),
+            Size = new Size(520, 20),
             AutoEllipsis = true
         };
-        y += 28;
+        y += 32;
 
         var envPanel = new Panel
         {
             Location = new Point(pad, y),
-            Size = new Size(520, 380),
-            BackColor = Color.FromArgb(250, 251, 252),
+            Size = new Size(528, 392),
+            BackColor = Color.FromArgb(250, 250, 250),
             BorderStyle = BorderStyle.FixedSingle
         };
-        int py = 12;
+        int py = 16;
         (string label, string key)[] fields =
         [
             ("ANTHROPIC_API_KEY (Claude Code)", "ANTHROPIC_API_KEY"),
@@ -158,15 +160,15 @@ public sealed class SettingsForm : Form
             var lbl = new Label
             {
                 Text = labelText,
-                Location = new Point(12, py),
+                Location = new Point(16, py),
                 AutoSize = true,
-                ForeColor = Color.FromArgb(70, 70, 70),
+                ForeColor = Color.FromArgb(63, 63, 70),
                 Font = new Font("Segoe UI", 9f)
             };
             var txt = new TextBox
             {
-                Location = new Point(12, py + 19),
-                Size = new Size(490, 26),
+                Location = new Point(16, py + 20),
+                Size = new Size(490, 28),
                 UseSystemPasswordChar = true,
                 BorderStyle = BorderStyle.FixedSingle,
                 Font = new Font("Segoe UI", 10f)
@@ -185,32 +187,34 @@ public sealed class SettingsForm : Form
         _txtOpenRouterKey = textBoxes[4];
         _txtOpenCodeKey = textBoxes[5];
         _txtGeminiKey = textBoxes[6];
-        y += 380 + 24;
+        y += 392 + 24;
 
         // Buttons
         var btnCancel = new Button
         {
             Text = "Cancel",
             Location = new Point(pad, y),
-            Size = new Size(100, 38),
+            Size = new Size(104, 44),
             FlatStyle = FlatStyle.Flat,
             ForeColor = TextMuted,
-            BackColor = Color.White
+            BackColor = Color.White,
+            Cursor = Cursors.Hand
         };
         btnCancel.FlatAppearance.BorderColor = SectionBorder;
-        btnCancel.FlatAppearance.MouseOverBackColor = Color.FromArgb(240, 240, 240);
-        btnCancel.FlatAppearance.MouseDownBackColor = Color.FromArgb(225, 225, 225);
+        btnCancel.FlatAppearance.MouseOverBackColor = Color.FromArgb(244, 244, 245);
+        btnCancel.FlatAppearance.MouseDownBackColor = Color.FromArgb(228, 228, 231);
         btnCancel.Click += (_, _) => Close();
 
         var btnSave = new Button
         {
             Text = "Save",
-            Location = new Point(448, y),
-            Size = new Size(100, 38),
+            Location = new Point(456, y),
+            Size = new Size(104, 44),
             FlatStyle = FlatStyle.Flat,
             BackColor = AccentBlue,
             ForeColor = Color.White,
-            Font = new Font("Segoe UI", 10f, FontStyle.Bold)
+            Font = new Font("Segoe UI", 10f, FontStyle.Bold),
+            Cursor = Cursors.Hand
         };
         btnSave.FlatAppearance.BorderColor = AccentBlue;
         btnSave.FlatAppearance.MouseOverBackColor = ControlPaint.Light(AccentBlue, 0.15f);
