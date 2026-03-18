@@ -187,11 +187,18 @@ public class SetupForm : Form
             _mcpKeys.Add(prop.Name);
             _mcpList.Items.Add($"{prop.Name} — {desc}");
         }
-        mcpCheck.CheckedChanged += (_, _) => _mcpList.Visible = mcpCheck.Checked;
+        var mcpListTop = y;
+        mcpCheck.CheckedChanged += (_, _) =>
+        {
+            _mcpList.Visible = mcpCheck.Checked;
+            var shift = mcpCheck.Checked ? 112 : 0;
+            _buildBtn.Top = mcpListTop + shift;
+            _cancelBtn.Top = mcpListTop + shift;
+            _logBox.Top = mcpListTop + shift + 56;
+        };
         _mainPanel.Controls.Add(_mcpList);
-        y += 112;
 
-        // ── Buttons ──
+        // ── Buttons (positioned right after MCP checkbox; shift down when MCP list is shown) ──
         _buildBtn = new Button
         {
             Text = "Create Profile",
