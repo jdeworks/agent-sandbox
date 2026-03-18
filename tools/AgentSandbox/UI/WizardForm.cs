@@ -844,8 +844,8 @@ public sealed class WizardForm : Form
 
                 var choice = MessageBox.Show(
                     $"Container '{containerName}' is already running.\n\n" +
-                    "Yes = Reattach (open new agent session)\n" +
-                    "No = Rebuild (stop, rebuild, start fresh)\n" +
+                    "Yes = Reattach (open new agent session in running container)\n" +
+                    "No = Restart (stop and relaunch with current settings)\n" +
                     "Cancel = Abort",
                     "Container Running", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
 
