@@ -30,6 +30,7 @@ public sealed class WizardForm : Form
     // Step 1: Project Selection + Launch
     private TextBox _txtPath = null!;
     private Button _btnBrowse = null!;
+    private Label _lblRecent = null!;
     private ListView _lstRecent = null!;
     private ComboBox _cboProfile = null!;
     private Panel _pluginPanel = null!;
@@ -39,6 +40,7 @@ public sealed class WizardForm : Form
     private Button _btnLaunch = null!;
     private Button _btnBackToProfiles = null!;
     private Button _btnEditUserEnv = null!;
+    private Button _btnSettings = null!;
     private TextBox _txtLog = null!;
     private Button _btnBackOverview = null!;
     private Button _btnClose = null!;
@@ -365,7 +367,7 @@ public sealed class WizardForm : Form
                 _txtPath.Text = dlg.SelectedPath;
         };
 
-        var lblRecent = new Label
+        _lblRecent = new Label
         {
             Text = "Recent projects",
             Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
@@ -462,14 +464,14 @@ public sealed class WizardForm : Form
         _btnEditUserEnv.ForeColor = AccentBlue;
         _btnEditUserEnv.Click += OnEditUserEnvClicked;
 
-        var btnSettings = new Button
+        _btnSettings = new Button
         {
             Text = "Settings\u2026",
             Location = new Point(344, 432),
             Size = new Size(96, 36)
         };
-        StyleFlatButton(btnSettings, TextMuted);
-        btnSettings.Click += (_, _) => new SettingsForm().ShowDialog(this);
+        StyleFlatButton(_btnSettings, TextMuted);
+        _btnSettings.Click += (_, _) => new SettingsForm().ShowDialog(this);
 
         _txtLog = new TextBox
         {
@@ -505,9 +507,9 @@ public sealed class WizardForm : Form
         _btnClose.Click += (_, _) => Close();
 
         _stepLaunch.Controls.AddRange([headerPanel, lblPath, _txtPath, _btnBrowse,
-            lblRecent, _lstRecent, lblProfile, _cboProfile,
+            _lblRecent, _lstRecent, lblProfile, _cboProfile,
             _btnLaunch, _lblPlugins, _pluginPanel,
-            _btnBackToProfiles, _btnEditUserEnv, btnSettings,
+            _btnBackToProfiles, _btnEditUserEnv, _btnSettings,
             _txtLog, _btnBackOverview, _btnClose]);
         Controls.Add(_stepLaunch);
 
@@ -767,18 +769,8 @@ public sealed class WizardForm : Form
             return;
         }
 
-        // Switch to launch mode
-        _btnLaunch.Enabled = false;
-        _btnBackToProfiles.Enabled = false;
-        _btnEditUserEnv.Enabled = false;
-        _btnBrowse.Enabled = false;
-        _txtPath.ReadOnly = true;
-        _cboProfile.Enabled = false;
-        _lstRecent.Enabled = false;
-        _txtLog.Visible = true;
-        _txtLog.Clear();
-        _btnBackOverview.Visible = false;
-        _btnClose.Visible = false;
+        // Switch to launch mode — hide pre-launch controls, show log
+        SetLaunchMode(true);
 
         await RunCoreLaunch(path, profileName);
     }
@@ -926,20 +918,52 @@ public sealed class WizardForm : Form
 
     private void OnBackToOverviewClicked(object? sender, EventArgs e)
     {
-        // Reset launch UI state
-        _btnLaunch.Enabled = true;
-        _btnBackToProfiles.Enabled = true;
-        _btnEditUserEnv.Enabled = true;
-        _btnBrowse.Enabled = true;
-        _txtPath.ReadOnly = false;
-        _cboProfile.Enabled = true;
-        _lstRecent.Enabled = true;
-        _txtLog.Visible = false;
-        _btnBackOverview.Visible = false;
-        _btnClose.Visible = false;
-
+        SetLaunchMode(false);
         RefreshProfileDropdown();
         RefreshRecentProjects();
+    }
+
+    /// <summary>
+    /// Toggle between pre-launch (browse/select/configure) and launch (log output) UI states.
+    /// </summary>
+    private void SetLaunchMode(bool launching)
+    {
+        // Pre-launch controls: hide during launch, show when returning
+        _lblRecent.Visible = !launching;
+        _lstRecent.Visible = !launching;
+        _btnBrowse.Visible = !launching;
+        _lblPlugins.Visible = !launching && _pluginChecks.Count > 0;
+        _pluginPanel.Visible = !launching && _pluginChecks.Count > 0;
+        _btnLaunch.Visible = !launching;
+        _btnBackToProfiles.Visible = !launching;
+        _btnEditUserEnv.Visible = !launching;
+        _btnSettings.Visible = !launching;
+
+        // Path and profile: keep visible but readonly during launch
+        _txtPath.ReadOnly = launching;
+        _cboProfile.Enabled = !launching;
+
+        if (launching)
+        {
+            // Move log up into the space freed by hidden controls
+            _txtLog.Location = new Point(32, 356);
+            _txtLog.Size = new Size(640, 240);
+            _txtLog.Visible = true;
+            _txtLog.Clear();
+            _btnBackOverview.Location = new Point(32, 604);
+            _btnClose.Location = new Point(208, 604);
+        }
+        else
+        {
+            // Restore log to default position (hidden)
+            _txtLog.Location = new Point(32, 476);
+            _txtLog.Size = new Size(640, 140);
+            _txtLog.Visible = false;
+            _btnBackOverview.Location = new Point(32, 620);
+            _btnClose.Location = new Point(208, 620);
+        }
+        _btnBackOverview.Visible = false;
+        _btnClose.Visible = false;
     }
 
     // ─── Helpers ────────────────────────────────────────────────────────
