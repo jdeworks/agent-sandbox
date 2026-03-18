@@ -7,14 +7,7 @@ PROJECTS_DIR="$REPO_DIR/projects"
 PREPARED_DIR="$REPO_DIR/prepared"
 ALIASES_FILE="$HOME/.bash_aliases"
 
-# Check if running with sudo
-IS_SUDO=false
-if [ -n "${SUDO_COMMAND:-}" ] || [ "$(id -u)" = "0" ]; then
-    IS_SUDO=true
-    rm_cmd="rm -rf"
-else
-    rm_cmd="rm -rf"
-fi
+rm_cmd="rm -rf"
 
 ########################################
 # Helper: Get profile names in use by scanning project Dockerfiles

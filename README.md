@@ -2,6 +2,12 @@
 
 Isolated Docker sandbox for AI coding agents. Each project runs inside a locked-down container with your choice of agent (Claude Code, OpenCode, Cursor CLI, GitHub Copilot) and only the runtimes you need. The agent can only see the mounted workspace; all config, caches, and logs persist on the host between sessions.
 
+## Prerequisites
+
+- **Docker Desktop** (or Docker Engine + Compose plugin on Linux)
+- **jq** — auto-installed by `setup.sh`, but `apt install jq` / `brew install jq` if you want it beforehand
+- ~2 GB disk for a basic profile (Node + one agent). Flutter adds ~2 GB, React Native ~4 GB.
+
 ## Quick Start
 
 ### Linux / macOS / WSL (v2)
@@ -31,7 +37,12 @@ sandbox-python ~/my-project
 
 ### Windows
 
-**GUI:** Double-click `agent-sandbox.exe` for a wizard (folder picker, language detection, Scan & Launch).
+**GUI:** Double-click `agent-sandbox.exe` to launch the wizard:
+
+1. **Profiles** — create profiles by picking agents, languages, and plugins. Each profile builds a Docker image.
+2. **Launch** — select a project folder and profile, then click Launch. The app scaffolds the project, starts the container, and opens the agent in a new terminal window.
+
+Settings (gear icon) lets you save API keys and pick a default agent.
 
 **CLI:**
 ```

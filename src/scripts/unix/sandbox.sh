@@ -16,6 +16,13 @@ if [ ! -d "$SANDBOX_PROFILE_DIR" ]; then
     exit 1
 fi
 
+for _required_file in Dockerfile.base docker-compose.yml.tpl; do
+    if [ ! -f "$SANDBOX_PROFILE_DIR/$_required_file" ]; then
+        echo "[sandbox] Error: Profile is missing $_required_file. Re-run prepare to fix."
+        exit 1
+    fi
+done
+
 PROFILE_NAME="${SANDBOX_PROFILE_NAME:-$(basename "$SANDBOX_PROFILE_DIR")}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -404,10 +411,10 @@ if [ ! -d "$PROJECT_DIR" ]; then
         cp "$TEMPLATES_DIR/agent-config.json" "$PROJECT_DIR/sandbox_data/agent-config.json"
     fi
     mkdir -p "$PROJECT_DIR/opencode_data"
-    cp "$TEMPLATES_DIR/opencode.json" "$PROJECT_DIR/opencode_data/opencode.json"
-    cp "$TEMPLATES_DIR/oh-my-openagent.json" "$PROJECT_DIR/opencode_data/oh-my-openagent.json"
-    cp "$SANDBOX_PROFILE_DIR/AGENTS.md" "$PROJECT_DIR/opencode_data/AGENTS.md"
-    cp "$SANDBOX_PROFILE_DIR/socratic.md" "$PROJECT_DIR/opencode_data/socratic.md"
+    [ -f "$TEMPLATES_DIR/opencode.json" ] && cp "$TEMPLATES_DIR/opencode.json" "$PROJECT_DIR/opencode_data/opencode.json"
+    [ -f "$TEMPLATES_DIR/oh-my-openagent.json" ] && cp "$TEMPLATES_DIR/oh-my-openagent.json" "$PROJECT_DIR/opencode_data/oh-my-openagent.json"
+    [ -f "$SANDBOX_PROFILE_DIR/AGENTS.md" ] && cp "$SANDBOX_PROFILE_DIR/AGENTS.md" "$PROJECT_DIR/opencode_data/AGENTS.md"
+    [ -f "$SANDBOX_PROFILE_DIR/socratic.md" ] && cp "$SANDBOX_PROFILE_DIR/socratic.md" "$PROJECT_DIR/opencode_data/socratic.md"
     mkdir -p "$PROJECT_DIR/opencode_sessions"
     mkdir -p "$PROJECT_DIR/logs"
 
@@ -442,8 +449,8 @@ else
         echo "FROM $BASE_IMAGE" > "$PROJECT_DIR/Dockerfile"
     fi
     mkdir -p "$PROJECT_DIR/opencode_data"
-    cp "$SANDBOX_PROFILE_DIR/AGENTS.md" "$PROJECT_DIR/opencode_data/AGENTS.md"
-    cp "$SANDBOX_PROFILE_DIR/socratic.md" "$PROJECT_DIR/opencode_data/socratic.md"
+    [ -f "$SANDBOX_PROFILE_DIR/AGENTS.md" ] && cp "$SANDBOX_PROFILE_DIR/AGENTS.md" "$PROJECT_DIR/opencode_data/AGENTS.md"
+    [ -f "$SANDBOX_PROFILE_DIR/socratic.md" ] && cp "$SANDBOX_PROFILE_DIR/socratic.md" "$PROJECT_DIR/opencode_data/socratic.md"
 fi
 
 # Update LAST_STARTED and WORKSPACE_PATH on every run
