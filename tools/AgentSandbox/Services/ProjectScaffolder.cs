@@ -152,15 +152,18 @@ public static class ProjectScaffolder
                     .Where(l => !l.StartsWith("#") && !string.IsNullOrWhiteSpace(l)));
         }
 
-        var configEnv = $"""
-            WORKSPACE_PATH={workspacePath}
-            PROJECT_NAME={projectName}
-            PROFILE={profileName}
-            CREATED={DateTime.Now:O}
-            LAST_STARTED={DateTime.Now:O}
-            {versionLines}
-            """;
-        ResourceManager.WriteLf(Path.Combine(projectDir, "config.env"), configEnv.TrimEnd() + "\n");
+        var configLines = new List<string>
+        {
+            $"WORKSPACE_PATH={workspacePath}",
+            $"PROJECT_NAME={projectName}",
+            $"PROFILE={profileName}",
+            $"CREATED={DateTime.Now:O}",
+            $"LAST_STARTED={DateTime.Now:O}"
+        };
+        if (!string.IsNullOrEmpty(versionLines))
+            configLines.Add(versionLines);
+        ResourceManager.WriteLf(Path.Combine(projectDir, "config.env"),
+            string.Join("\n", configLines) + "\n");
     }
 
     /// <summary>
