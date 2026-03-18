@@ -366,7 +366,7 @@ public class SetupForm : Form
 
                 // Append custom npm packages to Dockerfile
                 var dockerfilePath = Path.Combine(profileDir, "Dockerfile.base");
-                if (customPlugins.Count > 0)
+                if (customPlugins.Count > 0 && File.Exists(dockerfilePath))
                 {
                     var df = File.ReadAllText(dockerfilePath);
                     var installLines = string.Join("\n",

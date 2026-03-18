@@ -88,7 +88,10 @@ public static class ProjectScaffolder
         var projectDir = GetProjectDir(projectName);
         Directory.CreateDirectory(projectDir);
 
-        var composeTpl = File.ReadAllText(Path.Combine(profileDir, "docker-compose.yml.tpl"));
+        var composeTplPath = Path.Combine(profileDir, "docker-compose.yml.tpl");
+        if (!File.Exists(composeTplPath))
+            throw new FileNotFoundException($"Profile is missing docker-compose.yml.tpl. Re-create the profile '{profileName}'.", composeTplPath);
+        var composeTpl = File.ReadAllText(composeTplPath);
         var dockerPath = workspacePath.Replace('\\', '/');
         var compose = composeTpl
             .Replace("{{PROJECT_NAME}}", projectName)
@@ -115,18 +118,18 @@ public static class ProjectScaffolder
         }
 
         Directory.CreateDirectory(Path.Combine(projectDir, "opencode_data"));
-        File.Copy(
+        CopyIfExists(
             Path.Combine(ResourceManager.TemplatesDir, "opencode.json"),
-            Path.Combine(projectDir, "opencode_data", "opencode.json"), true);
-        File.Copy(
+            Path.Combine(projectDir, "opencode_data", "opencode.json"));
+        CopyIfExists(
             Path.Combine(ResourceManager.TemplatesDir, "oh-my-openagent.json"),
-            Path.Combine(projectDir, "opencode_data", "oh-my-openagent.json"), true);
-        File.Copy(
+            Path.Combine(projectDir, "opencode_data", "oh-my-openagent.json"));
+        CopyIfExists(
             Path.Combine(profileDir, "AGENTS.md"),
-            Path.Combine(projectDir, "opencode_data", "AGENTS.md"), true);
-        File.Copy(
+            Path.Combine(projectDir, "opencode_data", "AGENTS.md"));
+        CopyIfExists(
             Path.Combine(profileDir, "socratic.md"),
-            Path.Combine(projectDir, "opencode_data", "socratic.md"), true);
+            Path.Combine(projectDir, "opencode_data", "socratic.md"));
 
         Directory.CreateDirectory(Path.Combine(projectDir, "opencode_sessions"));
         Directory.CreateDirectory(Path.Combine(projectDir, "logs"));
@@ -185,7 +188,10 @@ public static class ProjectScaffolder
             }
         }
 
-        var composeTpl = File.ReadAllText(Path.Combine(profileDir, "docker-compose.yml.tpl"));
+        var composeTplPath = Path.Combine(profileDir, "docker-compose.yml.tpl");
+        if (!File.Exists(composeTplPath))
+            throw new FileNotFoundException($"Profile is missing docker-compose.yml.tpl. Re-create the profile.", composeTplPath);
+        var composeTpl = File.ReadAllText(composeTplPath);
         var dockerPath = workspacePath.Replace('\\', '/');
         var compose = composeTpl
             .Replace("{{PROJECT_NAME}}", projectName)
@@ -465,6 +471,12 @@ public static class ProjectScaffolder
         {
             return "opencode";
         }
+    }
+
+    private static void CopyIfExists(string src, string dst)
+    {
+        if (File.Exists(src))
+            File.Copy(src, dst, true);
     }
 
     private static string MapAgentToCommand(string agent)
