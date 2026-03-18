@@ -833,7 +833,58 @@ public sealed class WizardForm : Form
             }
             var projectName = ProjectScaffolder.ResolveProjectName(workspacePath);
             var projectDir = ProjectScaffolder.GetProjectDir(projectName);
+            var containerName = $"sandbox-{projectName}";
             var tag = $"agent-sandbox-{profileName}:latest";
+
+            // Check for already-running container
+            if (DockerRunner.IsContainerRunning(containerName))
+            {
+                var composeFile = Path.Combine(projectDir, "docker-compose.yml");
+                var containerId = DockerRunner.GetComposeContainerId(composeFile, projectDir) ?? containerName;
+
+                var choice = MessageBox.Show(
+                    $"Container '{containerName}' is already running.\n\n" +
+                    "Yes = Reattach (open new agent session)\n" +
+                    "No = Rebuild (stop, rebuild, start fresh)\n" +
+                    "Cancel = Abort",
+                    "Container Running", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+
+                if (choice == DialogResult.Cancel)
+                {
+                    SetLaunchMode(false);
+                    return;
+                }
+
+                if (choice == DialogResult.Yes)
+                {
+                    // Reattach — just exec into the running container
+                    Log($"[sandbox] Reattaching to {containerName}...");
+                    var agentCmd = ProjectScaffolder.GetAgentCommand(projectName);
+                    Log($"[sandbox] Launching agent: {agentCmd}");
+                    DockerRunner.ExecInteractive(containerId, agentCmd, newWindow: true);
+                    Log("[sandbox] Agent launched in new window.");
+                    Invoke(() =>
+                    {
+                        _btnBackOverview.Visible = true;
+                        _btnClose.Visible = true;
+                    });
+                    return;
+                }
+
+                // Rebuild — stop existing container first
+                Log($"[sandbox] Stopping existing container '{containerName}'...");
+                await Task.Run(() =>
+                {
+                    if (File.Exists(composeFile))
+                        DockerRunner.ComposeDown(composeFile, projectDir);
+                    else
+                    {
+                        RunDockerCapture("docker", $"stop {containerName}");
+                        RunDockerCapture("docker", $"rm {containerName}");
+                    }
+                });
+                Log("[sandbox] Container stopped.");
+            }
 
             await Task.Run(() =>
             {
