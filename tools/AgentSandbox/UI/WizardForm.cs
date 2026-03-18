@@ -32,6 +32,10 @@ public sealed class WizardForm : Form
     private Button _btnBrowse = null!;
     private ListView _lstRecent = null!;
     private ComboBox _cboProfile = null!;
+    private Panel _pluginPanel = null!;
+    private Label _lblPlugins = null!;
+    private readonly List<CheckBox> _pluginChecks = new();
+    private readonly List<string> _pluginKeys = new();
     private Button _btnLaunch = null!;
     private Button _btnBackToProfiles = null!;
     private Button _btnEditUserEnv = null!;
@@ -45,7 +49,7 @@ public sealed class WizardForm : Form
         _portConfigs = ConfigLoader.LoadPorts();
 
         Text = "Agent Sandbox";
-        Size = new Size(720, 680);
+        Size = new Size(720, 740);
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -402,6 +406,27 @@ public sealed class WizardForm : Form
             DropDownStyle = ComboBoxStyle.DropDownList,
             Font = new Font("Segoe UI", 10f)
         };
+        _cboProfile.SelectedIndexChanged += OnProfileSelectionChanged;
+
+        // Plugin toggles (populated dynamically when profile changes)
+        _lblPlugins = new Label
+        {
+            Text = "Plugins",
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            ForeColor = TextPrimary,
+            Location = new Point(32, 416),
+            AutoSize = true,
+            Visible = false
+        };
+
+        _pluginPanel = new FlowLayoutPanel
+        {
+            Location = new Point(28, 438),
+            Size = new Size(640, 28),
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Visible = false
+        };
 
         _btnLaunch = new Button
         {
@@ -416,7 +441,7 @@ public sealed class WizardForm : Form
         _btnBackToProfiles = new Button
         {
             Text = "\u2190 Back to Profiles",
-            Location = new Point(32, 424),
+            Location = new Point(32, 476),
             Size = new Size(176, 40)
         };
         StyleFlatButton(_btnBackToProfiles, TextMuted);
@@ -429,7 +454,7 @@ public sealed class WizardForm : Form
         _btnEditUserEnv = new Button
         {
             Text = "Edit user.env",
-            Location = new Point(224, 424),
+            Location = new Point(224, 476),
             Size = new Size(136, 40)
         };
         StyleFlatButton(_btnEditUserEnv, AccentBlue);
@@ -439,7 +464,7 @@ public sealed class WizardForm : Form
         var btnSettings = new Button
         {
             Text = "Settings\u2026",
-            Location = new Point(376, 424),
+            Location = new Point(376, 476),
             Size = new Size(104, 40)
         };
         StyleFlatButton(btnSettings, TextMuted);
@@ -447,7 +472,7 @@ public sealed class WizardForm : Form
 
         _txtLog = new TextBox
         {
-            Location = new Point(32, 480),
+            Location = new Point(32, 528),
             Size = new Size(640, 152),
             Multiline = true,
             ReadOnly = true,
@@ -461,7 +486,7 @@ public sealed class WizardForm : Form
         _btnBackOverview = new Button
         {
             Text = "Back to overview",
-            Location = new Point(32, 640),
+            Location = new Point(32, 688),
             Size = new Size(168, 44),
             Visible = false
         };
@@ -471,7 +496,7 @@ public sealed class WizardForm : Form
         _btnClose = new Button
         {
             Text = "Close",
-            Location = new Point(216, 640),
+            Location = new Point(216, 688),
             Size = new Size(104, 44),
             Visible = false
         };
@@ -480,6 +505,7 @@ public sealed class WizardForm : Form
 
         _stepLaunch.Controls.AddRange([headerPanel, lblPath, _txtPath, _btnBrowse,
             lblRecent, _lstRecent, lblProfile, _cboProfile,
+            _lblPlugins, _pluginPanel,
             _btnLaunch, _btnBackToProfiles, _btnEditUserEnv, btnSettings,
             _txtLog, _btnBackOverview, _btnClose]);
         Controls.Add(_stepLaunch);
@@ -507,6 +533,146 @@ public sealed class WizardForm : Form
                 break;
             }
         }
+    }
+
+    private void OnProfileSelectionChanged(object? sender, EventArgs e)
+    {
+        _pluginPanel.Controls.Clear();
+        _pluginChecks.Clear();
+        _pluginKeys.Clear();
+
+        if (_cboProfile.SelectedItem is not string profileName) return;
+
+        var profileJson = Path.Combine(ResourceManager.PreparedDir, profileName, "profile.json");
+        if (!File.Exists(profileJson)) return;
+
+        // Read which plugins are installed in this profile
+        List<string> installedPlugins;
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(profileJson));
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("plugins", out var pluginsEl) || pluginsEl.ValueKind != JsonValueKind.Array)
+                return;
+            installedPlugins = pluginsEl.EnumerateArray()
+                .Select(p => p.GetString() ?? "")
+                .Where(p => !string.IsNullOrEmpty(p))
+                .ToList();
+        }
+        catch { return; }
+
+        if (installedPlugins.Count == 0) return;
+
+        // Read current project opencode.json to get active plugin state
+        var activePlugins = new HashSet<string>();
+        var projectPath = _txtPath.Text.Trim();
+        if (!string.IsNullOrEmpty(projectPath) && Directory.Exists(projectPath))
+        {
+            var projectName = ProjectScaffolder.ResolveProjectName(projectPath);
+            var opencodePath = Path.Combine(ProjectScaffolder.GetProjectDir(projectName), "opencode_data", "opencode.json");
+            if (File.Exists(opencodePath))
+            {
+                try
+                {
+                    using var oc = JsonDocument.Parse(File.ReadAllText(opencodePath));
+                    if (oc.RootElement.TryGetProperty("plugin", out var arr) && arr.ValueKind == JsonValueKind.Array)
+                        foreach (var p in arr.EnumerateArray())
+                            if (p.GetString() is string s) activePlugins.Add(s);
+                }
+                catch { /* ignore */ }
+            }
+            else
+            {
+                // No project yet — default to all plugins enabled (matches template)
+                foreach (var p in installedPlugins) activePlugins.Add(p);
+            }
+        }
+        else
+        {
+            // No path selected — default all on
+            foreach (var p in installedPlugins) activePlugins.Add(p);
+        }
+
+        // Load plugin descriptions
+        var pluginsJsonPath = Path.Combine(ResourceManager.SandboxDir, "plugins.json");
+        JsonDocument? pluginsDef = null;
+        try { if (File.Exists(pluginsJsonPath)) pluginsDef = JsonDocument.Parse(File.ReadAllText(pluginsJsonPath)); }
+        catch { /* ignore */ }
+
+        foreach (var plugin in installedPlugins)
+        {
+            var desc = "";
+            if (pluginsDef != null &&
+                pluginsDef.RootElement.TryGetProperty(plugin, out var pEl) &&
+                pEl.TryGetProperty("description", out var dEl))
+                desc = dEl.GetString() ?? "";
+
+            var label = string.IsNullOrEmpty(desc) ? plugin : $"{plugin} — {desc}";
+            var cb = new CheckBox
+            {
+                Text = label,
+                AutoSize = true,
+                Checked = activePlugins.Contains(plugin),
+                Font = new Font("Segoe UI", 9f),
+                Margin = new Padding(4, 2, 12, 2)
+            };
+            _pluginChecks.Add(cb);
+            _pluginKeys.Add(plugin);
+            _pluginPanel.Controls.Add(cb);
+        }
+        pluginsDef?.Dispose();
+
+        _lblPlugins.Visible = true;
+        _pluginPanel.Visible = true;
+    }
+
+    /// <summary>
+    /// Write the selected plugin state to the project's opencode.json before launch.
+    /// </summary>
+    private void ApplyPluginSelection(string projectName)
+    {
+        if (_pluginKeys.Count == 0) return;
+
+        var opencodePath = Path.Combine(ProjectScaffolder.GetProjectDir(projectName), "opencode_data", "opencode.json");
+        if (!File.Exists(opencodePath)) return;
+
+        try
+        {
+            var json = File.ReadAllText(opencodePath);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            // Build new plugin array from checkboxes
+            var selectedPlugins = new List<string>();
+            for (int i = 0; i < _pluginChecks.Count; i++)
+                if (_pluginChecks[i].Checked)
+                    selectedPlugins.Add(_pluginKeys[i]);
+
+            // Reconstruct JSON with updated plugin array
+            using var ms = new System.IO.MemoryStream();
+            using (var writer = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = true }))
+            {
+                writer.WriteStartObject();
+                foreach (var prop in root.EnumerateObject())
+                {
+                    if (prop.Name == "plugin")
+                    {
+                        writer.WritePropertyName("plugin");
+                        writer.WriteStartArray();
+                        foreach (var p in selectedPlugins)
+                            writer.WriteStringValue(p);
+                        writer.WriteEndArray();
+                    }
+                    else
+                    {
+                        prop.WriteTo(writer);
+                    }
+                }
+                writer.WriteEndObject();
+            }
+            ResourceManager.WriteLf(opencodePath, System.Text.Encoding.UTF8.GetString(ms.ToArray()));
+        }
+        catch { /* don't block launch on plugin config failure */ }
     }
 
     private void OnEditUserEnvClicked(object? sender, EventArgs e)
@@ -674,6 +840,9 @@ public sealed class WizardForm : Form
                     Log($"[sandbox] Refreshing project '{projectName}' from profile...");
                     ProjectScaffolder.RefreshFromProfile(projectName, workspacePath, profileDir);
                 }
+
+                // Apply plugin selection from UI checkboxes
+                Invoke(() => ApplyPluginSelection(projectName));
 
                 // Write runtime env and sync auth
                 Log("[sandbox] Writing runtime environment...");
