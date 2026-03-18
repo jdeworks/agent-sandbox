@@ -49,7 +49,7 @@ public sealed class WizardForm : Form
         _portConfigs = ConfigLoader.LoadPorts();
 
         Text = "Agent Sandbox";
-        Size = new Size(720, 740);
+        Size = new Size(720, 700);
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -120,7 +120,7 @@ public sealed class WizardForm : Form
         _lstProfiles = new ListView
         {
             Location = new Point(32, 152),
-            Size = new Size(640, 376),
+            Size = new Size(640, 340),
             View = View.Details,
             FullRowSelect = true,
             GridLines = false,
@@ -146,7 +146,7 @@ public sealed class WizardForm : Form
         _btnDeleteProfile = new Button
         {
             Text = "Delete",
-            Location = new Point(32, 540),
+            Location = new Point(32, 504),
             Size = new Size(104, 44)
         };
         StyleFlatButton(_btnDeleteProfile, DangerRed);
@@ -155,7 +155,7 @@ public sealed class WizardForm : Form
         _btnContinueToProject = new Button
         {
             Text = "Continue to Project Selection \u2192",
-            Location = new Point(408, 540),
+            Location = new Point(408, 504),
             Size = new Size(264, 44),
             Font = new Font("Segoe UI", 10f, FontStyle.Bold)
         };
@@ -310,23 +310,23 @@ public sealed class WizardForm : Form
         var headerPanel = new Panel
         {
             Location = new Point(0, 0),
-            Size = new Size(720, 80),
+            Size = new Size(720, 72),
             BackColor = SurfaceLight
         };
         var title = new Label
         {
             Text = "Launch Sandbox",
-            Font = new Font("Segoe UI", 20f, FontStyle.Bold),
+            Font = new Font("Segoe UI", 18f, FontStyle.Bold),
             ForeColor = TextPrimary,
-            Location = new Point(32, 16),
+            Location = new Point(32, 12),
             AutoSize = true
         };
         var subtitleLaunch = new Label
         {
             Text = "Select a project folder and profile to launch",
-            Font = new Font("Segoe UI", 10f),
+            Font = new Font("Segoe UI", 9.5f),
             ForeColor = TextMuted,
-            Location = new Point(32, 50),
+            Location = new Point(32, 44),
             AutoSize = true
         };
         headerPanel.Controls.AddRange([title, subtitleLaunch]);
@@ -336,13 +336,13 @@ public sealed class WizardForm : Form
             Text = "Project folder",
             Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
             ForeColor = TextPrimary,
-            Location = new Point(32, 96),
+            Location = new Point(32, 82),
             AutoSize = true
         };
 
         _txtPath = new TextBox
         {
-            Location = new Point(32, 120),
+            Location = new Point(32, 104),
             Size = new Size(528, 28),
             Font = new Font("Segoe UI", 10f)
         };
@@ -350,7 +350,7 @@ public sealed class WizardForm : Form
         _btnBrowse = new Button
         {
             Text = "Browse\u2026",
-            Location = new Point(568, 118),
+            Location = new Point(568, 102),
             Size = new Size(104, 32)
         };
         StyleFlatButton(_btnBrowse, TextPrimary);
@@ -370,14 +370,14 @@ public sealed class WizardForm : Form
             Text = "Recent projects",
             Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
             ForeColor = TextPrimary,
-            Location = new Point(32, 160),
+            Location = new Point(32, 140),
             AutoSize = true
         };
 
         _lstRecent = new ListView
         {
-            Location = new Point(32, 184),
-            Size = new Size(640, 152),
+            Location = new Point(32, 162),
+            Size = new Size(640, 120),
             View = View.Details,
             FullRowSelect = true,
             GridLines = false,
@@ -385,9 +385,9 @@ public sealed class WizardForm : Form
             BorderStyle = BorderStyle.FixedSingle
         };
         _lstRecent.Columns.Add("Project", 160);
-        _lstRecent.Columns.Add("Profile", 130);
-        _lstRecent.Columns.Add("Last Used", 110);
-        _lstRecent.Columns.Add("Workspace Path", 220);
+        _lstRecent.Columns.Add("Profile", 120);
+        _lstRecent.Columns.Add("Last Used", 100);
+        _lstRecent.Columns.Add("Workspace Path", 240);
         _lstRecent.SelectedIndexChanged += OnRecentProjectSelected;
 
         var lblProfile = new Label
@@ -395,18 +395,28 @@ public sealed class WizardForm : Form
             Text = "Profile",
             Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
             ForeColor = TextPrimary,
-            Location = new Point(32, 352),
+            Location = new Point(32, 294),
             AutoSize = true
         };
 
         _cboProfile = new ComboBox
         {
-            Location = new Point(32, 376),
+            Location = new Point(32, 316),
             Size = new Size(264, 28),
             DropDownStyle = ComboBoxStyle.DropDownList,
             Font = new Font("Segoe UI", 10f)
         };
         _cboProfile.SelectedIndexChanged += OnProfileSelectionChanged;
+
+        _btnLaunch = new Button
+        {
+            Text = "Launch",
+            Location = new Point(504, 312),
+            Size = new Size(168, 44),
+            Font = new Font("Segoe UI", 10f, FontStyle.Bold)
+        };
+        StyleFilledButton(_btnLaunch, AccentBlue, Color.White);
+        _btnLaunch.Click += OnLaunchClicked;
 
         // Plugin toggles (populated dynamically when profile changes)
         _lblPlugins = new Label
@@ -414,35 +424,26 @@ public sealed class WizardForm : Form
             Text = "Plugins",
             Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
             ForeColor = TextPrimary,
-            Location = new Point(32, 416),
+            Location = new Point(32, 356),
             AutoSize = true,
             Visible = false
         };
 
         _pluginPanel = new FlowLayoutPanel
         {
-            Location = new Point(28, 438),
-            Size = new Size(640, 28),
-            FlowDirection = FlowDirection.LeftToRight,
+            Location = new Point(28, 376),
+            Size = new Size(644, 48),
+            FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
+            AutoScroll = false,
             Visible = false
         };
-
-        _btnLaunch = new Button
-        {
-            Text = "Launch",
-            Location = new Point(504, 372),
-            Size = new Size(168, 44),
-            Font = new Font("Segoe UI", 10f, FontStyle.Bold)
-        };
-        StyleFilledButton(_btnLaunch, AccentBlue, Color.White);
-        _btnLaunch.Click += OnLaunchClicked;
 
         _btnBackToProfiles = new Button
         {
             Text = "\u2190 Back to Profiles",
-            Location = new Point(32, 476),
-            Size = new Size(176, 40)
+            Location = new Point(32, 432),
+            Size = new Size(160, 36)
         };
         StyleFlatButton(_btnBackToProfiles, TextMuted);
         _btnBackToProfiles.Click += (_, _) =>
@@ -454,8 +455,8 @@ public sealed class WizardForm : Form
         _btnEditUserEnv = new Button
         {
             Text = "Edit user.env",
-            Location = new Point(224, 476),
-            Size = new Size(136, 40)
+            Location = new Point(208, 432),
+            Size = new Size(120, 36)
         };
         StyleFlatButton(_btnEditUserEnv, AccentBlue);
         _btnEditUserEnv.ForeColor = AccentBlue;
@@ -464,16 +465,16 @@ public sealed class WizardForm : Form
         var btnSettings = new Button
         {
             Text = "Settings\u2026",
-            Location = new Point(376, 476),
-            Size = new Size(104, 40)
+            Location = new Point(344, 432),
+            Size = new Size(96, 36)
         };
         StyleFlatButton(btnSettings, TextMuted);
         btnSettings.Click += (_, _) => new SettingsForm().ShowDialog(this);
 
         _txtLog = new TextBox
         {
-            Location = new Point(32, 528),
-            Size = new Size(640, 152),
+            Location = new Point(32, 476),
+            Size = new Size(640, 140),
             Multiline = true,
             ReadOnly = true,
             ScrollBars = ScrollBars.Vertical,
@@ -486,8 +487,8 @@ public sealed class WizardForm : Form
         _btnBackOverview = new Button
         {
             Text = "Back to overview",
-            Location = new Point(32, 688),
-            Size = new Size(168, 44),
+            Location = new Point(32, 620),
+            Size = new Size(160, 40),
             Visible = false
         };
         StyleFlatButton(_btnBackOverview, TextPrimary);
@@ -496,8 +497,8 @@ public sealed class WizardForm : Form
         _btnClose = new Button
         {
             Text = "Close",
-            Location = new Point(216, 688),
-            Size = new Size(104, 44),
+            Location = new Point(208, 620),
+            Size = new Size(104, 40),
             Visible = false
         };
         StyleFilledButton(_btnClose, Color.FromArgb(63, 63, 70), Color.White);
@@ -505,8 +506,8 @@ public sealed class WizardForm : Form
 
         _stepLaunch.Controls.AddRange([headerPanel, lblPath, _txtPath, _btnBrowse,
             lblRecent, _lstRecent, lblProfile, _cboProfile,
-            _lblPlugins, _pluginPanel,
-            _btnLaunch, _btnBackToProfiles, _btnEditUserEnv, btnSettings,
+            _btnLaunch, _lblPlugins, _pluginPanel,
+            _btnBackToProfiles, _btnEditUserEnv, btnSettings,
             _txtLog, _btnBackOverview, _btnClose]);
         Controls.Add(_stepLaunch);
 
@@ -611,10 +612,11 @@ public sealed class WizardForm : Form
             var cb = new CheckBox
             {
                 Text = label,
-                AutoSize = true,
+                Width = 620,
+                Height = 22,
                 Checked = activePlugins.Contains(plugin),
                 Font = new Font("Segoe UI", 9f),
-                Margin = new Padding(4, 2, 12, 2)
+                Margin = new Padding(4, 1, 0, 1)
             };
             _pluginChecks.Add(cb);
             _pluginKeys.Add(plugin);
