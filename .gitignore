@@ -2,3 +2,7 @@ src/projects/*
 !src/projects/.gitkeep
 src/prepared/*
 !src/prepared/.gitkeep
+
+# Editor / tool local config
+.cursor/
+.claude/projects/
