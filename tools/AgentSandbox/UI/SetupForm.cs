@@ -95,6 +95,7 @@ public class SetupForm : Form
         _agentList = new CheckedListBox { Left = left, Top = y, Width = fieldWidth, Height = 96, CheckOnClick = true, BorderStyle = BorderStyle.FixedSingle };
         foreach (var prop in _agentsDoc.RootElement.EnumerateObject())
         {
+            if (prop.Value.ValueKind != JsonValueKind.Object) continue;
             var label = prop.Value.TryGetProperty("label", out var l) ? l.GetString() ?? prop.Name : prop.Name;
             var envHint = "";
             if (prop.Value.TryGetProperty("env_vars", out var evArr))
@@ -120,6 +121,7 @@ public class SetupForm : Form
         _pluginList = new CheckedListBox { Left = left, Top = y, Width = fieldWidth, Height = 64, CheckOnClick = true, BorderStyle = BorderStyle.FixedSingle };
         foreach (var prop in _pluginsDoc.RootElement.EnumerateObject())
         {
+            if (prop.Value.ValueKind != JsonValueKind.Object) continue;
             var desc = prop.Value.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
             _pluginKeys.Add(prop.Name);
             _pluginList.Items.Add($"{prop.Name} — {desc}");
@@ -183,6 +185,7 @@ public class SetupForm : Form
         _mcpList = new CheckedListBox { Left = left, Top = y, Width = fieldWidth, Height = 104, CheckOnClick = true, Visible = false, BorderStyle = BorderStyle.FixedSingle };
         foreach (var prop in _mcpDoc.RootElement.EnumerateObject())
         {
+            if (prop.Value.ValueKind != JsonValueKind.Object) continue;
             var desc = prop.Value.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
             _mcpKeys.Add(prop.Name);
             _mcpList.Items.Add($"{prop.Name} — {desc}");
