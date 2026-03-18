@@ -654,6 +654,7 @@ public sealed class WizardForm : Form
 
             // Reconstruct JSON with updated plugin array
             using var ms = new System.IO.MemoryStream();
+            var pluginWritten = false;
             using (var writer = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = true }))
             {
                 writer.WriteStartObject();
@@ -666,11 +667,21 @@ public sealed class WizardForm : Form
                         foreach (var p in selectedPlugins)
                             writer.WriteStringValue(p);
                         writer.WriteEndArray();
+                        pluginWritten = true;
                     }
                     else
                     {
                         prop.WriteTo(writer);
                     }
+                }
+                // Add plugin key if it didn't exist in the original file
+                if (!pluginWritten)
+                {
+                    writer.WritePropertyName("plugin");
+                    writer.WriteStartArray();
+                    foreach (var p in selectedPlugins)
+                        writer.WriteStringValue(p);
+                    writer.WriteEndArray();
                 }
                 writer.WriteEndObject();
             }

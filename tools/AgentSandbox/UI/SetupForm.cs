@@ -388,7 +388,8 @@ public class SetupForm : Form
 
                 if (exitCode != 0)
                 {
-                    Log("[setup] Build failed.");
+                    Log("[setup] Build failed. Cleaning up partial profile...");
+                    try { Directory.Delete(profileDir, true); } catch { /* best effort */ }
                     return;
                 }
 

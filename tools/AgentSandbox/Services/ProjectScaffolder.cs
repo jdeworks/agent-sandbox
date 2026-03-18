@@ -318,19 +318,26 @@ public static class ProjectScaffolder
     {
         var envPath = Path.Combine(GetProjectDir(projectName), "runtime.env");
         var sb = new StringBuilder();
-        
-        // Collect all env vars (host env + overrides)
+
+        // Collect all env vars: saved settings < host env < overrides (last wins)
         var allVars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        
-        // Add host environment variables
+
+        // 1. Saved API keys from Settings (lowest priority)
+        foreach (var kvp in EnvVarSettings.Load())
+        {
+            if (!string.IsNullOrEmpty(kvp.Value))
+                allVars[kvp.Key] = kvp.Value;
+        }
+
+        // 2. Host environment variables (override saved settings)
         foreach (var key in ApiKeyVars)
         {
             var val = Environment.GetEnvironmentVariable(key);
             if (!string.IsNullOrEmpty(val))
                 allVars[key] = val;
         }
-        
-        // Override with UI-provided values (these take precedence)
+
+        // 3. UI-provided overrides (highest priority)
         if (overrides != null)
         {
             foreach (var kvp in overrides)
@@ -339,14 +346,14 @@ public static class ProjectScaffolder
                     allVars[kvp.Key] = kvp.Value;
             }
         }
-        
+
         // runtime.env is injected into Docker containers via env_file.
         // Values MUST be plaintext — containers cannot decrypt DPAPI-protected data.
         foreach (var kvp in allVars)
         {
             sb.AppendLine($"{kvp.Key}={kvp.Value}");
         }
-        
+
         ResourceManager.WriteLf(envPath, sb.ToString());
     }
 
@@ -426,7 +433,7 @@ public static class ProjectScaffolder
             if (lineHostPort != hostPort) continue;
 
             var containerPort = int.Parse(match.Groups[3].Value);
-            var freePort = DockerRunner.FindFreePort(hostPort);
+            var freePort = DockerRunner.FindFreePort(hostPort + 1);
             lines[i] = $"{match.Groups[1].Value}{freePort}:{containerPort}{match.Groups[4].Value}";
             log?.Invoke($"[sandbox] Port {hostPort} in use -> remapped to {freePort}:{containerPort}");
             ResourceManager.WriteLf(composePath, string.Join("\n", lines) + "\n");
