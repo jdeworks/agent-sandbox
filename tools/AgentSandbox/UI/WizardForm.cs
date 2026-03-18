@@ -755,10 +755,33 @@ public sealed class WizardForm : Form
             return;
         }
 
+        // Re-check profiles in case they were deleted externally
+        RefreshProfileDropdown();
+
+        if (_cboProfile.Items.Count == 0)
+        {
+            var create = MessageBox.Show(
+                "No profiles found. Create one now?",
+                "No Profiles", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (create == DialogResult.Yes)
+                OnCreateProfileClicked(null, EventArgs.Empty);
+            RefreshProfileDropdown();
+            return;
+        }
+
         if (_cboProfile.SelectedItem is not string profileName || string.IsNullOrEmpty(profileName))
         {
             MessageBox.Show("Please select a profile.", "Launch",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var profileDir = Path.Combine(ResourceManager.PreparedDir, profileName);
+        if (!Directory.Exists(profileDir))
+        {
+            MessageBox.Show($"Profile '{profileName}' no longer exists. Please select or create another profile.",
+                "Profile Missing", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            RefreshProfileDropdown();
             return;
         }
 
