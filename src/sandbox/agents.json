@@ -1,42 +1,97 @@
 {
   "opencode": {
     "label": "OpenCode",
+    "description": "An open-source AI coding assistant that works with many AI providers (OpenRouter, Anthropic, OpenAI, Google, and local models). It includes a plugin system and built-in multi-agent orchestration for tackling complex tasks.",
+    "use_cases": "Good choice if you want flexibility in which AI model to use, prefer open-source tools, or want to keep costs down with OpenRouter. Also great if you plan to use plugins to extend its capabilities.",
+    "auth_hint": "Log in via 'opencode auth' on first launch, or set OPENCODE_API_KEY / OPENROUTER_API_KEY in your environment. Your login is preserved between sessions.",
+    "url": "https://opencode.ai",
     "command": "opencode",
     "args": [],
-    "install": "curl -fsSL https://opencode.ai/install | bash && mv /root/.opencode /opt/opencode && chmod -R a+rX /opt/opencode && ln -sf /opt/opencode/bin/opencode /usr/local/bin/opencode",
+    "dockerfile": [
+      "# OpenCode",
+      "RUN curl -fsSL https://opencode.ai/install | bash \\",
+      "    && mv /root/.opencode /opt/opencode \\",
+      "    && chmod -R a+rX /opt/opencode \\",
+      "    && ln -sf /opt/opencode/bin/opencode /usr/local/bin/opencode",
+      "ENV PATH=\"/opt/opencode/bin:${PATH}\""
+    ],
     "auth_files": [],
     "config_dirs": ["/workspace/.config/opencode"],
     "env_vars": ["OPENCODE_API_KEY", "OPENROUTER_API_KEY"],
     "instruction_file": "AGENTS.md",
-    "plugins": ["oh-my-openagent"]
+    "plugins": ["oh-my-openagent"],
+    "plugin_install": "RUN npm install -g oh-my-openagent @code-yeongyu/comment-checker",
+    "discovery_urls": [
+      "https://registry.npmjs.org/-/v1/search?text=opencode+plugin&size=20"
+    ]
   },
   "claude": {
     "label": "Claude Code",
+    "description": "Anthropic's official coding assistant powered by Claude. It works directly in the terminal and can read files, write code, run commands, search your project, and manage git — all through natural conversation.",
+    "use_cases": "Ideal for complex refactoring, working with large codebases, and security-conscious projects. Excels at understanding existing code and making well-reasoned changes across many files.",
+    "auth_hint": "Log in via 'claude login' on first launch. Your session is preserved between container restarts. Alternatively, set ANTHROPIC_API_KEY in your environment.",
+    "url": "https://docs.anthropic.com/en/docs/claude-code",
     "command": "claude",
     "args": [],
-    "install": "curl -fsSL https://claude.ai/install.sh | bash",
+    "dockerfile": [
+      "# Claude Code CLI",
+      "RUN curl -fsSL https://claude.ai/install.sh | bash \\",
+      "    && ( [ -f /root/.claude/bin/claude ] && ln -sf /root/.claude/bin/claude /usr/local/bin/claude ) \\",
+      "    || ( [ -f /root/.local/bin/claude ] && ln -sf /root/.local/bin/claude /usr/local/bin/claude ) \\",
+      "    || ( CLAUDE=\"$(find /root/.claude /root/.local -name claude -type f 2>/dev/null | head -1)\" && [ -n \"$CLAUDE\" ] && ln -sf \"$CLAUDE\" /usr/local/bin/claude ) || true"
+    ],
     "auth_files": ["~/.claude/auth.json"],
     "config_dirs": ["/root/.claude"],
     "env_vars": ["ANTHROPIC_API_KEY"],
     "instruction_file": "CLAUDE.md",
-    "plugins": []
+    "plugins": [],
+    "discovery_urls": [
+      "https://registry.npmjs.org/-/v1/search?text=claude+code+plugin&size=15"
+    ],
+    "skills_url": "https://raw.githubusercontent.com/anthropics/skills/main/.claude-plugin/marketplace.json"
   },
   "cursor": {
     "label": "Cursor CLI",
+    "description": "The terminal version of Cursor's AI editor. Same AI capabilities as the Cursor desktop app, but running in a command line. It can edit multiple files, run background tasks, and integrate with your existing Cursor subscription.",
+    "use_cases": "Best if you already use Cursor's desktop editor and want the same AI in a container. Useful for automated coding tasks and CI/CD pipelines.",
+    "auth_hint": "Log in via 'agent auth' on first launch. Your Cursor subscription carries over. Alternatively, set CURSOR_API_KEY in your environment.",
+    "url": "https://docs.cursor.com/cli",
     "command": "agent",
     "args": [],
-    "install": "curl https://cursor.com/install -fsS | bash",
+    "dockerfile": [
+      "# Cursor CLI",
+      "RUN ( curl https://cursor.com/install -fsS | bash ) 2>/dev/null || true \\",
+      "    && if [ -f /root/.cursor/bin/agent ]; then \\",
+      "        ln -sf /root/.cursor/bin/agent /usr/local/bin/agent; \\",
+      "    elif [ -f /root/.local/bin/agent ]; then \\",
+      "        ln -sf /root/.local/bin/agent /usr/local/bin/agent; \\",
+      "    elif AGENT=\"$(find /root/.cursor /root/.local -name agent -type f 2>/dev/null | head -1)\" && [ -n \"$AGENT\" ]; then \\",
+      "        ln -sf \"$AGENT\" /usr/local/bin/agent; \\",
+      "    fi"
+    ],
     "auth_files": ["~/.cursor/config.json"],
     "config_dirs": ["/root/.cursor"],
     "env_vars": ["CURSOR_API_KEY"],
     "instruction_file": ".cursorrules",
-    "plugins": []
+    "plugins": [],
+    "discovery_urls": [
+      "https://registry.npmjs.org/-/v1/search?text=cursor+cli+plugin&size=15",
+      "https://registry.npmjs.org/-/v1/search?text=cursor+agent+tool&size=15"
+    ]
   },
   "copilot": {
     "label": "GitHub Copilot",
+    "description": "GitHub's AI coding assistant running as a command-line tool. It connects directly to your GitHub account and can work with issues, pull requests, and your repository's context.",
+    "use_cases": "Best if your workflow centers on GitHub — turning issues into code, automating PR reviews, and working within GitHub's ecosystem. Requires a GitHub Copilot subscription.",
+    "auth_hint": "Log in via 'gh auth login' on first launch. Your GitHub credentials are preserved between sessions.",
+    "url": "https://docs.github.com/en/copilot",
     "command": "gh copilot",
     "args": ["agent"],
-    "install": "npm install -g @github/copilot",
+    "dockerfile": [
+      "# GitHub Copilot CLI",
+      "RUN npm install -g @github/copilot \\",
+      "    && ( [ -f /usr/local/bin/gh ] && ln -sf /usr/local/bin/gh /usr/local/bin/gh-copilot ) || true"
+    ],
     "auth_files": ["~/.copilot/config.json"],
     "config_dirs": ["/root/.copilot"],
     "env_vars": ["GITHUB_COPILOT_API_KEY"],

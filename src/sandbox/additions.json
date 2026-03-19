@@ -1,0 +1,156 @@
+{
+  "vscode-server": {
+    "label": "VS Code Server",
+    "description": "Browser-based VS Code editor (code-server) accessible at http://localhost:4040",
+    "size_warning": "~300MB",
+    "priority": 50,
+    "dockerfile": [
+      "# VS Code Server (code-server)",
+      "RUN curl -fsSL https://code-server.dev/install.sh | sh"
+    ],
+    "port": 4040,
+    "volumes": {
+      "vscode_extensions_{{PROJECT_NAME}}": "/workspace/.vscode-server/extensions",
+      "vscode_data_{{PROJECT_NAME}}": "/workspace/.vscode-server/data"
+    },
+    "fragment": "vscode-server.sh",
+    "agents_md": "vscode-server.agents.md",
+    "extensions": {
+      "always": {
+        "streetsidesoftware.code-spell-checker": {
+          "label": "Code Spell Checker",
+          "description": "Catches spelling errors in code, comments, and strings. Supports camelCase splitting and multiple languages."
+        },
+        "gruntfuggly.todo-tree": {
+          "label": "Todo Tree",
+          "description": "Finds TODO, FIXME, HACK, and other annotations across the project and displays them in a tree view."
+        },
+        "usernamehw.errorlens": {
+          "label": "Error Lens",
+          "description": "Shows errors and warnings inline next to the code, making problems immediately visible without hovering."
+        },
+        "editorconfig.editorconfig": {
+          "label": "EditorConfig",
+          "description": "Applies .editorconfig settings (indent style, charset, trim whitespace) automatically."
+        },
+        "esbenp.prettier-vscode": {
+          "label": "Prettier",
+          "description": "Opinionated formatter for JSON, YAML, Markdown, HTML, CSS, and more. Language-specific formatters take precedence."
+        }
+      },
+      "optional": {
+        "eamodio.gitlens": {
+          "label": "GitLens",
+          "description": "Rich Git integration: inline blame, line/file history, commit search, and visual comparisons. Adds ~50MB to image.",
+          "size_warning": "~50MB"
+        }
+      },
+      "languages": {
+        "python": [
+          {
+            "id": "ms-python.python",
+            "label": "Python",
+            "description": "IntelliSense (Pylance), debugging, linting, Jupyter notebook support, and virtual environment management."
+          },
+          {
+            "id": "charliermarsh.ruff",
+            "label": "Ruff",
+            "description": "Extremely fast Python linter and formatter (written in Rust). Replaces pylint, flake8, black, and isort in one tool."
+          },
+          {
+            "id": "ms-toolsai.jupyter",
+            "label": "Jupyter",
+            "description": "Run and edit Jupyter notebooks directly in VS Code. Includes cell execution, variable explorer, and plot viewer."
+          }
+        ],
+        "node": [
+          {
+            "id": "dbaeumer.vscode-eslint",
+            "label": "ESLint",
+            "description": "Integrates ESLint into VS Code for JavaScript and TypeScript linting with auto-fix on save."
+          }
+        ],
+        "go": [
+          {
+            "id": "golang.go",
+            "label": "Go",
+            "description": "Official Go extension: IntelliSense via gopls, debugging via Delve, formatting, testing, and code navigation."
+          }
+        ],
+        "rust": [
+          {
+            "id": "rust-lang.rust-analyzer",
+            "label": "rust-analyzer",
+            "description": "Fast and feature-rich Rust language server: completions, inline type hints, diagnostics, and refactoring."
+          }
+        ],
+        "java": [
+          {
+            "id": "redhat.java",
+            "label": "Language Support for Java",
+            "description": "Java IntelliSense, code navigation, refactoring, and Maven/Gradle project support via Eclipse JDT."
+          },
+          {
+            "id": "vscjava.vscode-java-debug",
+            "label": "Debugger for Java",
+            "description": "Lightweight Java debugger with breakpoints, step execution, variable inspection, and hot code replace."
+          }
+        ],
+        "cpp": [
+          {
+            "id": "ms-vscode.cpptools",
+            "label": "C/C++",
+            "description": "IntelliSense, debugging (GDB/LLDB), code formatting, and code navigation for C and C++."
+          }
+        ],
+        "dotnet": [
+          {
+            "id": "ms-dotnettools.csdevkit",
+            "label": "C# Dev Kit",
+            "description": "Full C# development experience: IntelliSense, refactoring, debugging, test explorer, and solution management."
+          }
+        ],
+        "php": [
+          {
+            "id": "bmewburn.vscode-intelephense-client",
+            "label": "Intelephense",
+            "description": "High-performance PHP language server with completions, diagnostics, formatting, and go-to-definition."
+          }
+        ],
+        "ruby": [
+          {
+            "id": "shopify.ruby-lsp",
+            "label": "Ruby LSP",
+            "description": "Shopify's Ruby language server: code navigation, completions, diagnostics, formatting, and debugging."
+          }
+        ],
+        "dart": [
+          {
+            "id": "dart-code.dart-code",
+            "label": "Dart",
+            "description": "Dart language support: IntelliSense, debugging, syntax highlighting, code formatting, and pub integration."
+          }
+        ],
+        "flutter": [
+          {
+            "id": "dart-code.dart-code",
+            "label": "Dart",
+            "description": "Dart language support: IntelliSense, debugging, syntax highlighting, code formatting, and pub integration."
+          },
+          {
+            "id": "dart-code.flutter",
+            "label": "Flutter",
+            "description": "Flutter development tools: widget inspector, hot reload, device selector, and Flutter-specific code actions."
+          }
+        ],
+        "kotlin": [
+          {
+            "id": "mathiasfrohlich.kotlin",
+            "label": "Kotlin",
+            "description": "Kotlin language support: syntax highlighting, code snippets, and basic IntelliSense."
+          }
+        ]
+      }
+    }
+  }
+}

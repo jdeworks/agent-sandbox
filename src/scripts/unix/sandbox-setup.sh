@@ -10,6 +10,7 @@ PORTS_JSON="$SANDBOX_DIR/ports.json"
 AGENTS_JSON="$SANDBOX_DIR/agents.json"
 PLUGINS_JSON="$SANDBOX_DIR/plugins.json"
 MCP_SERVERS_JSON="$SANDBOX_DIR/mcp-servers.json"
+ADDITIONS_JSON="$SANDBOX_DIR/additions.json"
 CONFIG_MIRRORS_JSON="$SANDBOX_DIR/config-mirrors.json"
 
 # Source shared libraries
@@ -89,6 +90,107 @@ case "${1:-}" in
         echo "  Run 'sandbox-setup --rebuild $profile' to apply."
         exit 0
         ;;
+    --export)
+        profile="${2:-}"
+        [ -z "$profile" ] && { echo "Usage: sandbox-setup --export <profile-name> [output-file]"; exit 1; }
+        profile_dir="$SANDBOX_HOME/profiles/$profile"
+        [ ! -f "$profile_dir/profile.json" ] && { echo "[setup] Profile '$profile' not found."; exit 1; }
+        output_file="${3:--}"
+        exported=$(jq -n \
+            --arg fmt "agent-sandbox-profile/1" \
+            --argjson profile "$(cat "$profile_dir/profile.json")" \
+            --arg exported "$(date -Iseconds)" \
+            --arg host "$(hostname)" \
+            --arg version "2.2.0" \
+            '{
+                _format: $fmt,
+                _metadata: { exported_at: $exported, hostname: $host, version: $version },
+                profile: $profile
+            }')
+        if [ "$output_file" = "-" ]; then
+            echo "$exported"
+        else
+            echo "$exported" > "$output_file"
+            echo "[setup] Profile '$profile' exported to $output_file"
+        fi
+        exit 0
+        ;;
+    --import)
+        import_file="${2:-}"
+        [ -z "$import_file" ] || [ ! -f "$import_file" ] && { echo "Usage: sandbox-setup --import <file.json>"; exit 1; }
+        format=$(jq -r '._format // empty' "$import_file")
+        [ "$format" != "agent-sandbox-profile/1" ] && { echo "[setup] Unknown or invalid profile format."; exit 1; }
+        imp_name=$(jq -r '.profile.name // empty' "$import_file")
+        [ -z "$imp_name" ] && { echo "[setup] Profile has no name."; exit 1; }
+        # Resolve name collisions: append -2, -3, etc.
+        base_name="$imp_name"
+        suffix=1
+        while [ -d "$SANDBOX_HOME/profiles/$imp_name" ]; do
+            suffix=$((suffix + 1))
+            imp_name="${base_name}-${suffix}"
+        done
+        if [ "$imp_name" != "$base_name" ]; then
+            echo "[setup] Profile '$base_name' already exists, using '$imp_name' instead."
+        fi
+        imp_dir="$SANDBOX_HOME/profiles/$imp_name"
+        mkdir -p "$imp_dir"
+        # Update name in profile.json to match resolved name
+        jq --arg name "$imp_name" '.profile | .name = $name' "$import_file" > "$imp_dir/profile.json"
+        echo "[setup] Imported profile '$imp_name'. Generating files..."
+
+        # Read profile fields and regenerate
+        imp_langs=$(jq -r '.profile.languages // [] | join(",")' "$import_file")
+        imp_additions=$(jq -r '.profile.additions // [] | join(",")' "$import_file")
+        imp_versions=$(jq -r '.profile.versions // {} | to_entries | map("\(.key):\(.value)") | join(",")' "$import_file")
+        imp_primary=$(jq -r '.profile.agents[0] // "opencode"' "$import_file")
+        imp_vscode_exts=$(jq -r '.profile.vscode_extensions // [] | join(",")' "$import_file")
+        imp_custom_df=$(jq -r '.profile.custom_dockerfile_lines // [] | join("\n")' "$import_file")
+        imp_custom_before=$(jq -r '.profile.custom_startup_before // [] | join("\n")' "$import_file")
+        imp_custom_after=$(jq -r '.profile.custom_startup_after // [] | join("\n")' "$import_file")
+
+        # Compute ports
+        imp_ports=$(jq -r '.base.ports[]' "$SANDBOX_DIR/ports.json")
+        while IFS=',' read -ra il; do
+            for lang in "${il[@]}"; do
+                jq -r ".\"$lang\".default[]? // empty" "$SANDBOX_DIR/ports.json" 2>/dev/null
+            done
+        done <<< "$imp_langs"
+        for addition in $(echo "$imp_additions" | tr ',' ' '); do
+            jq -r ".\"$addition\".port // empty" "$SANDBOX_DIR/additions.json" 2>/dev/null
+        done
+        # Simplified: use base ports + let generate_profile sort it out
+        imp_port_csv=$(jq -r '[.base.ports[]] | sort | join(",")' "$SANDBOX_DIR/ports.json")
+
+        imp_agents=$(jq -r '.profile.agents // [] | join(",")' "$import_file")
+        SELECTED_AGENTS="$imp_agents" \
+        PRIMARY_AGENT="$imp_primary" \
+        VSCODE_EXTENSIONS="$imp_vscode_exts" \
+        CUSTOM_DOCKERFILE_LINES="$imp_custom_df" \
+        CUSTOM_STARTUP_BEFORE="$imp_custom_before" \
+        CUSTOM_STARTUP_AFTER="$imp_custom_after" \
+        "$SANDBOX_DIR/generate_profile.sh" "$SANDBOX_DIR" "$imp_dir" "$imp_name" "$imp_langs" "$imp_port_csv" "$imp_versions" "$imp_additions"
+
+        # Append custom npm packages
+        imp_custom_pkgs=$(jq -r '.profile.custom_plugins // [] | .[]' "$import_file")
+        if [ -n "$imp_custom_pkgs" ]; then
+            while IFS= read -r pkg; do
+                [ -n "$pkg" ] && sed -i "/^ENTRYPOINT/i RUN npm install -g $pkg" "$imp_dir/Dockerfile.base"
+            done <<< "$imp_custom_pkgs"
+        fi
+        # Append skills
+        imp_skills=$(jq -r '.profile.skills // [] | .[]' "$import_file")
+        if [ -n "$imp_skills" ]; then
+            while IFS= read -r skill; do
+                [ -n "$skill" ] && sed -i "/^ENTRYPOINT/i RUN claude skill install anthropics/skills --skill $skill || true" "$imp_dir/Dockerfile.base"
+            done <<< "$imp_skills"
+        fi
+
+        echo "[setup] Building image..."
+        docker build -t "agent-sandbox-${imp_name}:latest" \
+            -f "$imp_dir/Dockerfile.base" "$imp_dir"
+        echo "[setup] Profile '$imp_name' imported and built."
+        exit 0
+        ;;
     --help|-h)
         cat <<'HELP'
 sandbox-setup — Create and manage sandbox profiles
@@ -99,11 +201,15 @@ Usage:
   sandbox-setup --delete <name>          Delete a profile and its Docker image
   sandbox-setup --rebuild <name>         Rebuild a profile image (no cache)
   sandbox-setup --add-plugin <name> [pkg] Add an npm package to a profile
+  sandbox-setup --export <name> [file]   Export a profile to JSON (stdout or file)
+  sandbox-setup --import <file.json>     Import and build a profile from JSON
 
 Examples:
   sandbox-setup                          # Create a new profile interactively
   sandbox-setup --add-plugin my-dev oh-my-openagent
   sandbox-setup --rebuild my-dev
+  sandbox-setup --export my-dev my-dev.json
+  sandbox-setup --import shared-profile.json
 HELP
         exit 0
         ;;
@@ -148,15 +254,15 @@ echo ""
 echo "Which coding agents should be installed?"
 
 agent_keys=()
-while IFS='|' read -r key label; do
+while IFS='|' read -r key label use_cases; do
     agent_keys+=("$key")
     env_hint=""
     env_vars=$(jq -r ".\"$key\".env_vars[]? // empty" "$AGENTS_JSON")
     for ev in $env_vars; do
-        [ -n "${!ev:-}" ] && { env_hint=" (credentials found)"; break; }
+        [ -n "${!ev:-}" ] && { env_hint=" [credentials found]"; break; }
     done
-    printf "  %d) %s%s\n" "${#agent_keys[@]}" "$label" "$env_hint"
-done < <(jq -r 'to_entries | .[] | "\(.key)|\(.value.label)"' "$AGENTS_JSON")
+    printf "  %d) %-18s %s%s\n" "${#agent_keys[@]}" "$label" "$use_cases" "$env_hint"
+done < <(jq -r 'to_entries | .[] | "\(.key)|\(.value.label)|\(.value.use_cases // "")"' "$AGENTS_JSON")
 
 echo ""
 read -rp "Select agents (comma-separated): " agent_choice
@@ -191,8 +297,10 @@ for agent in "${selected_agents[@]}"; do
     while IFS= read -r pname; do
         [ -z "$pname" ] && continue
         desc=$(jq -r ".\"$pname\".description" "$PLUGINS_JSON")
+        # Truncate description to first sentence for readability
+        short_desc=$(echo "$desc" | sed 's/\. .*/\./')
         plugin_list+=("$pname")
-        printf "  %d) %s — %s\n" "${#plugin_list[@]}" "$pname" "$desc"
+        printf "  %d) %s — %s\n" "${#plugin_list[@]}" "$pname" "$short_desc"
     done <<< "$agent_plugins"
     echo ""
     read -rp "Select plugins (comma-separated, Enter to skip): " plugin_choice
@@ -206,13 +314,145 @@ for agent in "${selected_agents[@]}"; do
     fi
 done
 
-# Custom plugins (free text — any npm package)
+# Plugin discovery (opt-in, fetches from online registries)
 custom_plugins=()
+selected_skills=()
+DISCOVERY_CACHE_DIR="$SANDBOX_HOME/.cache/plugin-discovery"
+mkdir -p "$DISCOVERY_CACHE_DIR"
+
+for agent in "${selected_agents[@]}"; do
+    # Support both discovery_urls (array) and discovery_url (string)
+    discovery_urls=()
+    while IFS= read -r u; do
+        [ -n "$u" ] && discovery_urls+=("$u")
+    done < <(jq -r "(.\"$agent\".discovery_urls // [])[]? // empty" "$AGENTS_JSON" 2>/dev/null)
+    if [ ${#discovery_urls[@]} -eq 0 ]; then
+        single_url=$(jq -r ".\"$agent\".discovery_url // empty" "$AGENTS_JSON" 2>/dev/null)
+        [ -n "$single_url" ] && discovery_urls+=("$single_url")
+    fi
+    [ ${#discovery_urls[@]} -eq 0 ] && continue
+
+    agent_label=$(jq -r ".\"$agent\".label // \"$agent\"" "$AGENTS_JSON")
+    echo ""
+    read -rp "Search for popular $agent_label plugins/skills online? [y/N]: " discover_opt
+    [[ ! "$discover_opt" =~ ^[yY]$ ]] && continue
+
+    # Fetch from all discovery URLs, merge results
+    all_json="[]"
+    for disc_url in "${discovery_urls[@]}"; do
+        cache_key=$(echo "$disc_url" | md5sum | cut -c1-16)
+        cache_file="$DISCOVERY_CACHE_DIR/${agent}_${cache_key}.json"
+        cache_age=86400
+
+        use_cache=false
+        if [ -f "$cache_file" ]; then
+            file_age=$(( $(date +%s) - $(stat -c %Y "$cache_file" 2>/dev/null || echo 0) ))
+            [ "$file_age" -lt "$cache_age" ] && use_cache=true
+        fi
+
+        if $use_cache; then
+            raw_content=$(<"$cache_file")
+        else
+            echo "  Fetching from npm registry..."
+            raw_content=$(curl -sS --connect-timeout 5 --max-time 15 "$disc_url" 2>/dev/null) || continue
+            echo "$raw_content" > "$cache_file"
+        fi
+
+        # Merge objects arrays
+        url_objects=$(echo "$raw_content" | jq '.objects // []' 2>/dev/null)
+        [ -n "$url_objects" ] && all_json=$(echo "$all_json $url_objects" | jq -s '.[0] + .[1]')
+    done
+
+    # Parse merged results, deduplicate, sort by weekly downloads
+    discovered=()
+    discovered_desc=()
+    discovered_dl=()
+    declare -A seen_pkgs
+    while IFS='|' read -r pkg desc weekly; do
+        [ -z "$pkg" ] && continue
+        [ -n "${seen_pkgs[$pkg]:-}" ] && continue
+        seen_pkgs["$pkg"]=1
+        # Skip packages already in registry or already selected
+        already=false
+        for sp in "${selected_plugins[@]}"; do
+            [ "$sp" = "$pkg" ] && { already=true; break; }
+        done
+        for cp in "${custom_plugins[@]}"; do
+            [ "$cp" = "$pkg" ] && { already=true; break; }
+        done
+        $already && continue
+        discovered+=("$pkg")
+        short_desc=$(echo "$desc" | sed 's/\. .*/\./')
+        [ ${#short_desc} -gt 50 ] && short_desc="${short_desc:0:47}..."
+        discovered_desc+=("$short_desc")
+        if [ "$weekly" -ge 1000 ] 2>/dev/null; then
+            discovered_dl+=("$((weekly / 1000))k/wk")
+        else
+            discovered_dl+=("${weekly:-0}/wk")
+        fi
+    done < <(echo "$all_json" | jq -r 'sort_by(-.downloads.weekly) | .[]? | "\(.package.name)|\(.package.description // "")|\(.downloads.weekly // 0)"' 2>/dev/null)
+    unset seen_pkgs
+
+    # Also fetch skills from GitHub marketplace (e.g. Claude Code skills)
+    skills_url=$(jq -r ".\"$agent\".skills_url // empty" "$AGENTS_JSON" 2>/dev/null)
+    if [ -n "$skills_url" ]; then
+        skills_cache="$DISCOVERY_CACHE_DIR/${agent}_skills.json"
+        skills_content=""
+        if [ -f "$skills_cache" ]; then
+            file_age=$(( $(date +%s) - $(stat -c %Y "$skills_cache" 2>/dev/null || echo 0) ))
+            [ "$file_age" -lt 86400 ] && skills_content=$(<"$skills_cache")
+        fi
+        if [ -z "$skills_content" ]; then
+            echo "  Fetching skills from GitHub..."
+            skills_content=$(curl -sS --connect-timeout 5 --max-time 15 "$skills_url" 2>/dev/null) || skills_content=""
+            [ -n "$skills_content" ] && echo "$skills_content" > "$skills_cache"
+        fi
+        if [ -n "$skills_content" ]; then
+            while IFS='|' read -r sname sdesc; do
+                [ -z "$sname" ] && continue
+                [ -n "${seen_pkgs[$sname]:-}" ] 2>/dev/null && continue
+                discovered+=("$sname")
+                discovered_desc+=("$sdesc [skill]")
+                discovered_dl+=("skill")
+            done < <(echo "$skills_content" | jq -r '.plugins[]? | . as $p | .skills[]? | split("/") | last | . as $name | "\($name)|\($p.description // "Skill")"' 2>/dev/null)
+        fi
+    fi
+
+    if [ ${#discovered[@]} -eq 0 ]; then
+        echo "  No additional plugins or skills found."
+        continue
+    fi
+
+    echo "  Discovered $agent_label plugins & skills (sorted by popularity):"
+    for i in "${!discovered[@]}"; do
+        printf "  %2d) %7s  %-30s %s\n" "$((i + 1))" "${discovered_dl[$i]}" "${discovered[$i]}" "${discovered_desc[$i]}"
+    done
+    echo ""
+    read -rp "  Select (comma-separated, Enter to skip): " disc_choice
+    if [ -n "$disc_choice" ]; then
+        IFS=',' read -ra disc_indices <<< "$disc_choice"
+        for di in "${disc_indices[@]}"; do
+            di=$(echo "$di" | tr -d ' ')
+            arr_di=$((di - 1))
+            if [ "$arr_di" -ge 0 ] && [ "$arr_di" -lt "${#discovered[@]}" ]; then
+                # Skills go to a separate list, npm packages to custom_plugins
+                if [ "${discovered_dl[$arr_di]}" = "skill" ]; then
+                    selected_skills+=("${discovered[$arr_di]}")
+                else
+                    custom_plugins+=("${discovered[$arr_di]}")
+                fi
+            fi
+        done
+    fi
+done
+
+# Custom plugins (free text — any npm package)
 echo ""
 read -rp "Install additional npm packages? (space-separated, Enter to skip): " custom_input
 if [ -n "$custom_input" ]; then
-    read -ra custom_plugins <<< "$custom_input"
-    echo "  -> custom: ${custom_plugins[*]}"
+    read -ra custom_input_pkgs <<< "$custom_input"
+    custom_plugins+=("${custom_input_pkgs[@]}")
+    echo "  -> custom: ${custom_input_pkgs[*]}"
 fi
 
 ########################################
@@ -266,6 +506,63 @@ else
         version_overrides["$lang"]=$(jq -r ".\"$lang\".default_version // \"system\"" "$LANGUAGES_JSON")
     done
 fi
+
+########################################
+# Additions (optional container-level tools)
+########################################
+selected_additions=()
+if [ -f "$ADDITIONS_JSON" ] && [ "$(jq 'length' "$ADDITIONS_JSON")" -gt 0 ]; then
+    echo ""
+    echo "Optional additions (extra tools baked into the image):"
+    addition_keys=()
+    while IFS='|' read -r key label desc size_warn; do
+        addition_keys+=("$key")
+        warn=""
+        [ "$size_warn" != "null" ] && [ -n "$size_warn" ] && warn=" ($size_warn)"
+        printf "  %d) %s — %s%s\n" "${#addition_keys[@]}" "$label" "$desc" "$warn"
+    done < <(jq -r 'to_entries | .[] | "\(.key)|\(.value.label)|\(.value.description)|\(.value.size_warning // "null")"' "$ADDITIONS_JSON")
+    echo ""
+    read -rp "Select additions (comma-separated, Enter to skip): " addition_choice
+    if [ -n "$addition_choice" ]; then
+        IFS=',' read -ra aidx <<< "$addition_choice"
+        for ai in "${aidx[@]}"; do
+            ai=$(echo "$ai" | tr -d ' ')
+            arr_ai=$((ai - 1))
+            [ "$arr_ai" -ge 0 ] && [ "$arr_ai" -lt "${#addition_keys[@]}" ] && selected_additions+=("${addition_keys[$arr_ai]}")
+        done
+    fi
+    [ ${#selected_additions[@]} -gt 0 ] && echo "  -> ${selected_additions[*]}"
+fi
+
+# VS Code optional extensions (only if vscode-server is selected)
+selected_vscode_extensions=()
+for addition in "${selected_additions[@]}"; do
+    if [ "$addition" = "vscode-server" ]; then
+        opt_exts=$(jq -r '.["vscode-server"].extensions.optional // {} | to_entries[] | "\(.key)|\(.value.label)|\(.value.description)"' "$ADDITIONS_JSON" 2>/dev/null)
+        if [ -n "$opt_exts" ]; then
+            echo ""
+            echo "Optional VS Code extensions (always-installed + language-specific are automatic):"
+            opt_keys=()
+            while IFS='|' read -r eid elabel edesc; do
+                [ -z "$eid" ] && continue
+                opt_keys+=("$eid")
+                printf "  %d) %s — %s\n" "${#opt_keys[@]}" "$elabel" "$edesc"
+            done <<< "$opt_exts"
+            echo ""
+            read -rp "Select optional extensions (comma-separated, Enter to skip): " ext_choice
+            if [ -n "$ext_choice" ]; then
+                IFS=',' read -ra eidx <<< "$ext_choice"
+                for ei in "${eidx[@]}"; do
+                    ei=$(echo "$ei" | tr -d ' ')
+                    arr_ei=$((ei - 1))
+                    [ "$arr_ei" -ge 0 ] && [ "$arr_ei" -lt "${#opt_keys[@]}" ] && selected_vscode_extensions+=("${opt_keys[$arr_ei]}")
+                done
+            fi
+            [ ${#selected_vscode_extensions[@]} -gt 0 ] && echo "  -> ${selected_vscode_extensions[*]}"
+        fi
+        break
+    fi
+done
 
 ########################################
 # Advanced options (MCP + config mirroring behind single prompt)
@@ -339,6 +636,38 @@ if [[ "$advanced_opt_in" =~ ^[yY]$ ]]; then
             done
         fi
     fi
+
+    # Custom Dockerfile lines
+    custom_dockerfile_lines=()
+    echo ""
+    read -rp "Add custom Dockerfile RUN lines? (expert, Enter to skip): " custom_df_opt
+    if [[ "$custom_df_opt" =~ ^[yY] ]]; then
+        echo "  Enter Dockerfile instructions (one per line, blank line to finish):"
+        while IFS= read -rp "  > " df_line; do
+            [ -z "$df_line" ] && break
+            custom_dockerfile_lines+=("$df_line")
+        done
+        [ ${#custom_dockerfile_lines[@]} -gt 0 ] && echo "  -> ${#custom_dockerfile_lines[@]} custom line(s) added"
+    fi
+
+    # Custom startup commands
+    custom_startup_before=()
+    custom_startup_after=()
+    echo ""
+    read -rp "Add custom startup commands? (run before/after agent, Enter to skip): " custom_startup_opt
+    if [[ "$custom_startup_opt" =~ ^[yY] ]]; then
+        echo "  Commands to run BEFORE the agent (one per line, blank to finish):"
+        while IFS= read -rp "  before> " cmd_line; do
+            [ -z "$cmd_line" ] && break
+            custom_startup_before+=("$cmd_line")
+        done
+        echo "  Commands to run in BACKGROUND before agent (one per line, blank to finish):"
+        while IFS= read -rp "  bg> " cmd_line; do
+            [ -z "$cmd_line" ] && break
+            # Append & for background, but avoid doubling if user already added it
+            [[ "$cmd_line" == *"&" ]] && custom_startup_after+=("$cmd_line") || custom_startup_after+=("$cmd_line &")
+        done
+    fi
 fi
 
 ########################################
@@ -350,6 +679,7 @@ echo "  Profile:    $profile_name"
 echo "  Agents:     ${selected_agents[*]}"
 [ ${#selected_plugins[@]} -gt 0 ] && echo "  Plugins:    ${selected_plugins[*]}"
 echo "  Languages:  ${selected_languages[*]}"
+[ ${#selected_additions[@]} -gt 0 ] && echo "  Additions:  ${selected_additions[*]}"
 [ ${#selected_mcp[@]} -gt 0 ] && echo "  MCP:        ${selected_mcp[*]}"
 [ ${#selected_mirrors[@]} -gt 0 ] && echo "  Mirroring:  ${selected_mirrors[*]}"
 echo ""
@@ -369,7 +699,13 @@ agents_json_arr=$(printf '%s\n' "${selected_agents[@]}" | jq -R . | jq -s .)
 plugins_json_arr=$(printf '%s\n' "${selected_plugins[@]}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
 custom_json_arr=$(printf '%s\n' "${custom_plugins[@]}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
 langs_json_arr=$(printf '%s\n' "${selected_languages[@]}" | jq -R . | jq -s .)
+additions_json_arr=$(printf '%s\n' "${selected_additions[@]}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
+vscode_ext_json_arr=$(printf '%s\n' "${selected_vscode_extensions[@]}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
 mcp_json_arr=$(printf '%s\n' "${selected_mcp[@]}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
+skills_json_arr=$(printf '%s\n' "${selected_skills[@]}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
+custom_df_json_arr=$(printf '%s\n' "${custom_dockerfile_lines[@]}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
+custom_before_json_arr=$(printf '%s\n' "${custom_startup_before[@]}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
+custom_after_json_arr=$(printf '%s\n' "${custom_startup_after[@]}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
 
 mirrors_json_obj="{}"
 for mkey in "${selected_mirrors[@]}"; do
@@ -394,18 +730,30 @@ jq -n \
     --argjson plugins "$plugins_json_arr" \
     --argjson languages "$langs_json_arr" \
     --argjson versions "$versions_json" \
+    --argjson additions "$additions_json_arr" \
+    --argjson vscode_extensions "$vscode_ext_json_arr" \
     --argjson mcp_servers "$mcp_json_arr" \
     --argjson config_mirrors "$mirrors_json_obj" \
     --argjson custom_plugins "$custom_json_arr" \
+    --argjson skills "$skills_json_arr" \
+    --argjson custom_dockerfile_lines "$custom_df_json_arr" \
+    --argjson custom_startup_before "$custom_before_json_arr" \
+    --argjson custom_startup_after "$custom_after_json_arr" \
     '{
         name: $name,
         agents: $agents,
         plugins: $plugins,
         custom_plugins: $custom_plugins,
+        skills: $skills,
         languages: $languages,
         versions: $versions,
+        additions: $additions,
+        vscode_extensions: $vscode_extensions,
         mcp_servers: $mcp_servers,
         config_mirrors: $config_mirrors,
+        custom_dockerfile_lines: $custom_dockerfile_lines,
+        custom_startup_before: $custom_startup_before,
+        custom_startup_after: $custom_startup_after,
         created: $created
     }' \
     --arg name "$profile_name" \
@@ -428,6 +776,12 @@ for lang in "${selected_languages[@]}"; do
         port_set["$port"]=1
     done < <(jq -r ".\"$lang\".default[]? // empty" "$PORTS_JSON")
 done
+# Addition ports
+for addition in "${selected_additions[@]}"; do
+    aport=$(jq -r ".\"$addition\".port // empty" "$ADDITIONS_JSON" 2>/dev/null)
+    [ -n "$aport" ] && port_set["$aport"]=1
+done
+
 sorted_ports=($(printf '%s\n' "${!port_set[@]}" | sort -n))
 ports_csv=$(IFS=','; echo "${sorted_ports[*]}")
 
@@ -440,15 +794,46 @@ for lang in "${selected_languages[@]}"; do
     fi
 done
 
-"$SANDBOX_DIR/generate_profile.sh" "$SANDBOX_DIR" "$PROFILE_DIR" "$profile_name" "$selected_csv" "$ports_csv" "$versions_csv"
+additions_csv=$(IFS=','; echo "${selected_additions[*]}")
+vscode_ext_csv=$(IFS=','; echo "${selected_vscode_extensions[*]}")
 
-# Append custom npm packages to Dockerfile
+# Build custom Dockerfile lines (newline-separated for env var)
+custom_df_env=""
+for line in "${custom_dockerfile_lines[@]}"; do
+    [ -n "$custom_df_env" ] && custom_df_env+=$'\n'
+    custom_df_env+="$line"
+done
+
+# Build custom startup command strings
+custom_before_env=""
+for cmd in "${custom_startup_before[@]}"; do
+    [ -n "$custom_before_env" ] && custom_before_env+=$'\n'
+    custom_before_env+="$cmd"
+done
+custom_after_env=""
+for cmd in "${custom_startup_after[@]}"; do
+    [ -n "$custom_after_env" ] && custom_after_env+=$'\n'
+    custom_after_env+="$cmd"
+done
+
+selected_agents_csv=$(IFS=','; echo "${selected_agents[*]}")
+SELECTED_AGENTS="$selected_agents_csv" \
+PRIMARY_AGENT="${selected_agents[0]}" \
+VSCODE_EXTENSIONS="$vscode_ext_csv" \
+CUSTOM_DOCKERFILE_LINES="$custom_df_env" \
+CUSTOM_STARTUP_BEFORE="$custom_before_env" \
+CUSTOM_STARTUP_AFTER="$custom_after_env" \
+"$SANDBOX_DIR/generate_profile.sh" "$SANDBOX_DIR" "$PROFILE_DIR" "$profile_name" "$selected_csv" "$ports_csv" "$versions_csv" "$additions_csv"
+
+# Append custom npm packages and skills to Dockerfile
 if [ ${#custom_plugins[@]} -gt 0 ]; then
-    # Insert before the last few lines (WORKDIR, COPY, HEALTHCHECK, ENTRYPOINT)
-    # Simpler: just append RUN lines before the ENTRYPOINT
     for pkg in "${custom_plugins[@]}"; do
-        # Insert before ENTRYPOINT line
         sed -i "/^ENTRYPOINT/i RUN npm install -g $pkg" "$PROFILE_DIR/Dockerfile.base"
+    done
+fi
+if [ ${#selected_skills[@]} -gt 0 ]; then
+    for skill in "${selected_skills[@]}"; do
+        sed -i "/^ENTRYPOINT/i RUN claude skill install anthropics/skills --skill $skill || true" "$PROFILE_DIR/Dockerfile.base"
     done
 fi
 

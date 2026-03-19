@@ -6,3 +6,6 @@ src/prepared/*
 # Editor / tool local config
 .cursor/
 .claude/projects/
+
+# Local planning files
+TODO-*.md

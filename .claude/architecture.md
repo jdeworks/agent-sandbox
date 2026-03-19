@@ -10,7 +10,7 @@ Bash scripts in `src/scripts/unix/` using `jq` for JSON parsing.
 
 | Script | Role |
 |--------|------|
-| `sandbox-setup.sh` | v2: Interactive profile builder (agents, plugins, languages, MCP) |
+| `sandbox-setup.sh` | v2: Interactive profile builder (agents, plugins, languages, additions, MCP) |
 | `sandbox-me.sh` | v2: Run from any project dir, reads `.sandbox` file |
 | `setup.sh` | v1: First-time setup: Docker check, jq install, alias registration |
 | `prepare.sh` | v1: Interactive profile builder: language selection, version/port detection |
@@ -66,11 +66,13 @@ SOURCE OF TRUTH (src/sandbox/)              WINDOWS COPY (tools/AgentSandbox/Res
   ports.json                    ─────────>    ports.json
   agents.json                   ─────────>    agents.json
   plugins.json                  ─────────>    plugins.json
+  additions.json                ─────────>    additions.json
   mcp-servers.json              ─────────>    mcp-servers.json
   Dockerfile.base.tpl           ─────────>    Dockerfile.base.tpl
   instructions.base.md          ─────────>    AGENTS.md.base
   fragments/languages/*.sh      ─────────>    fragments/*.sh
   fragments/languages/*.agents.md ────────>   fragments/*.agents.md
+  fragments/additions/*          ─────────>   additions/*
 
 SOURCE OF TRUTH (src/templates/)
   opencode.json                 ─────────>    templates/opencode.json
@@ -102,8 +104,9 @@ Defined in `languages.json` with detection patterns, default versions, Dockerfil
 
 ## Key Directories
 
-- `src/sandbox/` — Config source of truth (languages.json, ports.json, agents.json, plugins.json, mcp-servers.json, fragments)
+- `src/sandbox/` — Config source of truth (languages.json, ports.json, agents.json, plugins.json, additions.json, mcp-servers.json, fragments)
 - `src/sandbox/fragments/languages/` — Per-language startup scripts (.sh) and agent instructions (.agents.md)
+- `src/sandbox/fragments/additions/` — Per-addition startup scripts (.sh) and agent instructions (.agents.md)
 - `src/sandbox/fragments/agents/` — Per-agent install scripts and config templates
 - `src/scripts/unix/` — Host-side bash scripts
 - `src/scripts/unix/lib/` — Shared bash library

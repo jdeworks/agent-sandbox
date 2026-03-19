@@ -11,5 +11,12 @@ public class ProfileSpec
     // v2 fields
     public List<string> Agents { get; set; } = new();
     public List<string> Plugins { get; set; } = new();
+    public List<string> Additions { get; set; } = new();
+    public List<string> VscodeExtensions { get; set; } = new();
     public List<string> McpServers { get; set; } = new();
+    public List<string> Skills { get; set; } = new();
+    public List<string> CustomPlugins { get; set; } = new();
+    public List<string> CustomDockerfileLines { get; set; } = new();
+    public List<string> CustomStartupBefore { get; set; } = new();
+    public List<string> CustomStartupAfter { get; set; } = new();
 }

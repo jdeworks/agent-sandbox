@@ -236,11 +236,10 @@ public static class ProjectScaffolder
             .Replace("{{HOST_GID}}", "");
         ResourceManager.WriteLf(Path.Combine(projectDir, "docker-compose.yml"), compose);
 
-        // Ensure Dockerfile exists (e.g., projects created before this step was added)
+        // Always update Dockerfile to reference the current profile's image
         var profileName = Path.GetFileName(profileDir);
         var dockerfilePath = Path.Combine(projectDir, "Dockerfile");
-        if (!File.Exists(dockerfilePath))
-            ResourceManager.WriteLf(dockerfilePath, $"FROM agent-sandbox-{profileName}:latest\n");
+        ResourceManager.WriteLf(dockerfilePath, $"FROM agent-sandbox-{profileName}:latest\n");
 
         // Ensure opencode_data directory exists before copying AGENTS.md
         Directory.CreateDirectory(Path.Combine(projectDir, "opencode_data"));
@@ -408,7 +407,7 @@ public static class ProjectScaffolder
             if (freePort != hostPort)
             {
                 lines[i] = $"{match.Groups[1].Value}{freePort}:{containerPort}{match.Groups[4].Value}";
-                log?.Invoke($"[sandbox] Port {hostPort} in use -> remapped to {freePort}:{containerPort}");
+                log?.Invoke($"[sandbox] \u26a0 Port {hostPort} in use -> remapped to {freePort}:{containerPort}");
                 changed = true;
             }
         }
@@ -435,7 +434,7 @@ public static class ProjectScaffolder
             var containerPort = int.Parse(match.Groups[3].Value);
             var freePort = DockerRunner.FindFreePort(hostPort + 1);
             lines[i] = $"{match.Groups[1].Value}{freePort}:{containerPort}{match.Groups[4].Value}";
-            log?.Invoke($"[sandbox] Port {hostPort} in use -> remapped to {freePort}:{containerPort}");
+            log?.Invoke($"[sandbox] \u26a0 Port {hostPort} in use -> remapped to {freePort}:{containerPort}");
             ResourceManager.WriteLf(composePath, string.Join("\n", lines) + "\n");
             return true;
         }
@@ -522,9 +521,40 @@ public static class ProjectScaffolder
             File.Copy(src, dst, true);
     }
 
-    private static string MapAgentToCommand(string agent)
+    private static string MapAgentToCommand(string agent) => MapAgentKeyToCommand(agent);
+
+    /// <summary>Resolve an agent key (e.g. "claude", "opencode") to the shell command
+    /// by reading agents.json. Falls back to hardcoded mapping if agents.json is unavailable.</summary>
+    public static string MapAgentKeyToCommand(string agentKey)
     {
-        return agent switch
+        // Try to resolve from agents.json (authoritative source)
+        var agentsPath = Path.Combine(ResourceManager.SandboxDir, "agents.json");
+        if (File.Exists(agentsPath))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(agentsPath));
+                if (doc.RootElement.TryGetProperty(agentKey, out var agentEl))
+                {
+                    var cmd = agentEl.TryGetProperty("command", out var c) ? c.GetString() ?? "" : "";
+                    if (!string.IsNullOrEmpty(cmd))
+                    {
+                        if (agentEl.TryGetProperty("args", out var argsEl) && argsEl.ValueKind == JsonValueKind.Array)
+                        {
+                            var args = argsEl.EnumerateArray()
+                                .Select(a => a.GetString() ?? "").Where(a => a != "").ToList();
+                            if (args.Count > 0)
+                                return $"{cmd} {string.Join(" ", args)}";
+                        }
+                        return cmd;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // Fallback
+        return agentKey switch
         {
             "cursor" => "agent",
             "copilot" => "gh copilot agent",

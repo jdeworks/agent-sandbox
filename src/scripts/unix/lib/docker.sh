@@ -22,6 +22,7 @@ docker_remap_compose_ports() {
     local compose_file="$1"
     local tmpfile
     tmpfile=$(mktemp)
+    local any_remapped=false
 
     while IFS= read -r line; do
         if [[ "$line" =~ ^([[:space:]]*-[[:space:]]*\")([0-9]+):([0-9]+)(\".*) ]]; then
@@ -33,7 +34,8 @@ docker_remap_compose_ports() {
             free_port=$(docker_find_free_port "$host_port")
             if [ "$free_port" != "$host_port" ]; then
                 echo "${prefix}${free_port}:${container_port}${suffix}" >> "$tmpfile"
-                echo "[sandbox] Port $host_port in use -> remapped to $free_port:$container_port"
+                echo "[sandbox] ⚠ Port $host_port in use -> remapped to $free_port:$container_port"
+                any_remapped=true
             else
                 echo "$line" >> "$tmpfile"
             fi
@@ -43,6 +45,14 @@ docker_remap_compose_ports() {
     done < "$compose_file"
 
     mv "$tmpfile" "$compose_file"
+
+    if $any_remapped; then
+        echo ""
+        echo "  ╔══════════════════════════════════════════════════════╗"
+        echo "  ║  Some ports were remapped — check URLs above        ║"
+        echo "  ╚══════════════════════════════════════════════════════╝"
+        echo ""
+    fi
 }
 
 docker_wait_for_ready() {

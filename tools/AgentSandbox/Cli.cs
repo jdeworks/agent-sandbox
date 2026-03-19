@@ -425,7 +425,6 @@ internal static class Cli
         ProjectScaffolder.UpdateWorkspacePath(projectName, projectPath);
         ProjectScaffolder.SyncHostAuth(projectName, Console.WriteLine);
         ProjectScaffolder.WriteRuntimeEnv(projectName);
-        ProjectScaffolder.RemapPorts(projectName, Console.WriteLine);
 
         if (ProjectScaffolder.HasDockerfileExtension(projectName))
         {

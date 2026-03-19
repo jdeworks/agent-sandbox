@@ -5,7 +5,8 @@
     "args": ["/workspace/src"],
     "env_vars": [],
     "compatible_agents": ["claude", "opencode"],
-    "description": "Read/write access to project files via MCP"
+    "description": "Gives the AI a structured way to read, write, and search files in your project. Without this, the agent relies on shell commands — this is cleaner and more reliable.",
+    "url": "https://modelcontextprotocol.io"
   },
   "github": {
     "install": "npm install -g @modelcontextprotocol/server-github",
@@ -13,7 +14,8 @@
     "args": [],
     "env_vars": ["GITHUB_TOKEN"],
     "compatible_agents": ["claude", "opencode"],
-    "description": "GitHub API access (issues, PRs, repos)"
+    "description": "Lets the AI interact with GitHub directly — create and read issues, open pull requests, check CI status, and browse repository contents. Requires a GitHub token (set GITHUB_TOKEN in your environment or user.env).",
+    "url": "https://github.com/modelcontextprotocol/servers"
   },
   "postgres": {
     "install": "npm install -g @modelcontextprotocol/server-postgres",
@@ -21,7 +23,8 @@
     "args": [],
     "env_vars": ["DATABASE_URL"],
     "compatible_agents": ["claude", "opencode"],
-    "description": "PostgreSQL database access via MCP"
+    "description": "Connects the AI to a PostgreSQL database so it can run queries, inspect table structures, and help debug data issues. Set DATABASE_URL in user.env (e.g. postgres://user:pass@host:5432/db).",
+    "url": "https://github.com/modelcontextprotocol/servers"
   },
   "sqlite": {
     "install": "npm install -g @modelcontextprotocol/server-sqlite",
@@ -29,7 +32,8 @@
     "args": [],
     "env_vars": [],
     "compatible_agents": ["claude", "opencode"],
-    "description": "SQLite database access via MCP"
+    "description": "Lets the AI work with SQLite databases in your project. Useful for mobile apps (React Native, Flutter), desktop apps, and any project that stores data locally in SQLite files.",
+    "url": "https://github.com/modelcontextprotocol/servers"
   },
   "memory": {
     "install": "npm install -g @modelcontextprotocol/server-memory",
@@ -37,7 +41,8 @@
     "args": [],
     "env_vars": [],
     "compatible_agents": ["claude", "opencode"],
-    "description": "Persistent key-value memory for agents"
+    "description": "Gives the AI a persistent memory that survives between sessions. It can store project decisions, learned patterns, and context so it doesn't lose track of what was discussed previously.",
+    "url": "https://github.com/modelcontextprotocol/servers"
   },
   "fetch": {
     "install": "npm install -g @modelcontextprotocol/server-fetch",
@@ -45,6 +50,7 @@
     "args": [],
     "env_vars": [],
     "compatible_agents": ["claude", "opencode"],
-    "description": "HTTP fetch capabilities for agents"
+    "description": "Enables the AI to make HTTP requests — fetch API documentation, check web endpoints, and download resources from the internet. Useful when the AI needs to look up library docs or test API responses.",
+    "url": "https://github.com/modelcontextprotocol/servers"
   }
 }

@@ -1,58 +1,67 @@
 {
-  "_doc": "Plugin registry. Install = baked into Docker image. Enable = added to agent config at project level. Custom plugins can be added via 'custom_install' in profile.json.",
+  "_doc": "Plugin registry. Install = baked into Docker image. Enable = added to agent config at project level.",
 
   "oh-my-openagent": {
     "agent": "opencode",
     "install": "npm install -g oh-my-openagent @code-yeongyu/comment-checker",
     "enable": { "file": "opencode.json", "field": "plugin", "type": "array-add" },
-    "description": "Multi-model orchestration with Sisyphus, Oracle, Librarian agents and ultrawork mode"
+    "description": "Adds multi-agent orchestration to OpenCode. Instead of one AI handling everything, this splits complex tasks across specialized agents: Sisyphus retries with stronger models when something fails, Oracle handles hard reasoning, and Librarian manages project context. 'Ultrawork' mode chains them all together for maximum capability.",
+    "url": "https://github.com/code-yeongyu/oh-my-openagent"
   },
   "dcp": {
     "agent": "opencode",
     "install": "npm install -g @tarquinen/opencode-dcp",
     "enable": { "file": "opencode.json", "field": "plugin", "type": "array-add" },
-    "description": "Dynamic context pruning — optimizes token usage by removing obsolete tool outputs"
+    "description": "Keeps your AI context clean by automatically removing old tool outputs that are no longer needed. This saves tokens (and money) during long sessions where the AI has read many files. Recommended for cost-conscious usage.",
+    "url": "https://www.npmjs.com/package/@tarquinen/opencode-dcp"
   },
   "speckit": {
     "agent": "opencode",
     "install": "npm install -g speckit-opencode-plugin",
     "enable": { "file": "opencode.json", "field": "plugin", "type": "array-add" },
-    "description": "Specification-driven development workflow (spec-kit/specify)"
+    "description": "Enables a 'spec first, code second' workflow. You write a specification describing what you want, and the agent implements it to match. Reduces back-and-forth and helps maintain consistent architecture.",
+    "url": "https://www.npmjs.com/package/speckit-opencode-plugin"
   },
   "opencode-scheduler": {
     "agent": "opencode",
     "install": "npm install -g opencode-scheduler",
     "enable": { "file": "opencode.json", "field": "plugin", "type": "array-add" },
-    "description": "Scheduling recurring jobs using launchd (Mac) or systemd (Linux)"
+    "description": "Lets the AI schedule recurring tasks — for example, running lint checks every hour, updating dependencies weekly, or generating reports on a schedule. Uses the system's built-in scheduler (systemd on Linux, launchd on macOS).",
+    "url": "https://www.npmjs.com/package/opencode-scheduler"
   },
   "opencode-gitlab-duo": {
     "agent": "opencode",
     "install": "npm install -g opencode-gitlab-duo-agentic",
     "enable": { "file": "opencode.json", "field": "plugin", "type": "array-add" },
-    "description": "GitLab Duo Agentic workflows integration"
+    "description": "Connects OpenCode to GitLab's AI features (Duo). Enables the agent to work with GitLab merge requests, code suggestions, and CI pipelines. Only useful if your project is hosted on GitLab.",
+    "url": "https://www.npmjs.com/package/opencode-gitlab-duo-agentic"
   },
   "claude-code-review": {
     "agent": "claude",
     "install": "claude plugins install code-review@claude-plugins-official",
     "enable": { "type": "marketplace", "marketplace": "claude-plugins-official" },
-    "description": "Automated code review with Claude Code"
+    "description": "Adds a dedicated code review capability. Claude analyzes your changes for bugs, performance issues, and security concerns, then gives structured feedback with severity ratings and specific suggestions for improvement.",
+    "url": "https://docs.anthropic.com/en/docs/claude-code"
   },
   "claude-security-guidance": {
     "agent": "claude",
     "install": "claude plugins install security-guidance@claude-plugins-official",
     "enable": { "type": "marketplace", "marketplace": "claude-plugins-official" },
-    "description": "Security best practices and vulnerability guidance"
+    "description": "Proactive security scanning — checks your code for common vulnerabilities (SQL injection, XSS, insecure authentication, etc.) and suggests hardened alternatives. Helpful for teams that need to meet security compliance requirements.",
+    "url": "https://docs.anthropic.com/en/docs/claude-code"
   },
   "claude-pr-review": {
     "agent": "claude",
     "install": "claude plugins install pr-review-toolkit@claude-plugins-official",
     "enable": { "type": "marketplace", "marketplace": "claude-plugins-official" },
-    "description": "PR review toolkit with structured feedback"
+    "description": "Automates pull request reviews — generates summaries of what changed and why, flags breaking changes, checks that tests cover new code, and gives an approve or request-changes recommendation.",
+    "url": "https://docs.anthropic.com/en/docs/claude-code"
   },
   "claude-hookify": {
     "agent": "claude",
     "install": "claude plugins install hookify@claude-plugins-official",
     "enable": { "type": "marketplace", "marketplace": "claude-plugins-official" },
-    "description": "Git hooks integration for Claude Code"
+    "description": "Runs Claude Code checks automatically before you commit or push code (via git hooks). Catches issues early so they don't make it to your CI pipeline or code review.",
+    "url": "https://docs.anthropic.com/en/docs/claude-code"
   }
 }

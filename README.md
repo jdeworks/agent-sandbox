@@ -73,6 +73,8 @@ Each profile generates:
 | **List profiles** | `sandbox-setup --list` | `agent-sandbox profiles` |
 | **Delete profile** | `sandbox-setup --delete <name>` | `agent-sandbox profiles delete <name>` |
 | **Rebuild profile** | `sandbox-setup --rebuild <name>` | — |
+| **Export profile** | `sandbox-setup --export <name> [file]` | Export button on Profiles step |
+| **Import profile** | `sandbox-setup --import <file.json>` | Import button on Profiles step |
 | **Stop sandbox** | `sandbox-me --stop` | — |
 | **Show status** | `sandbox-me --status` | — |
 | **Disk usage** | `sandbox-me --stats` | `agent-sandbox stats` |
@@ -170,6 +172,59 @@ To enable a custom OpenCode plugin after installation, add it to the `"plugin"` 
 
 Language definitions are in `src/sandbox/languages.json`. Fragments live in `src/sandbox/fragments/languages/`.
 
+## Additions
+
+Optional tools that can be baked into the container image during profile creation. Unlike languages (which provide runtimes) or plugins (which extend agents), additions are standalone services that run alongside the agent.
+
+| Addition | Description | Default Port | Size |
+|----------|-------------|-------------|------|
+| VS Code Server | Browser-based VS Code editor ([code-server](https://github.com/coder/code-server)) | 4040 | ~300MB |
+
+When enabled, the addition's port is automatically included in the Docker port mappings. VS Code Server starts in the background when the container launches and is accessible at `http://localhost:4040` with no authentication (localhost-only).
+
+VS Code extensions and user data persist across container restarts via named volumes (`asb_vscode_extensions_<project>`, `asb_vscode_data_<project>`).
+
+### VS Code Extensions
+
+When VS Code Server is selected, extensions are automatically installed based on three tiers:
+
+**Always installed:**
+
+| Extension | Description |
+|-----------|-------------|
+| Code Spell Checker | Catches spelling errors in code and comments |
+| Todo Tree | Surfaces TODO/FIXME/HACK annotations across the project |
+| Error Lens | Shows errors and warnings inline next to the code |
+| EditorConfig | Applies `.editorconfig` settings automatically |
+| Prettier | Opinionated formatter for JSON, YAML, Markdown, HTML, CSS |
+
+**Language-specific (installed automatically for selected languages):**
+
+| Language | Extensions |
+|----------|-----------|
+| Python | Python (IntelliSense), Ruff (linter + formatter), Jupyter |
+| Node/JS/TS | ESLint |
+| Go | Go (official, includes gopls) |
+| Rust | rust-analyzer |
+| Java | Language Support for Java, Debugger for Java |
+| C/C++ | C/C++ (IntelliSense + debugging) |
+| C#/.NET | C# Dev Kit |
+| PHP | Intelephense |
+| Ruby | Ruby LSP |
+| Dart | Dart |
+| Flutter | Dart, Flutter |
+| Kotlin | Kotlin |
+
+**Optional (opt-in during setup):**
+
+| Extension | Description |
+|-----------|-------------|
+| GitLens | Git blame, history, comparison (~50MB) |
+
+Extension definitions are in the `extensions` field of `src/sandbox/additions.json`.
+
+Addition definitions are in `src/sandbox/additions.json`. Fragments live in `src/sandbox/fragments/additions/`.
+
 ## MCP Servers
 
 MCP servers can be selected during `sandbox-setup` and are baked into the profile image. Available servers are defined in `src/sandbox/mcp-servers.json`:
@@ -185,7 +240,7 @@ MCP servers can be selected during `sandbox-setup` and are baked into the profil
 
 ## Ports
 
-Ports are dynamically selected during profile creation. Base ports (3000, 8080) are always included. Language and framework defaults are added automatically.
+Ports are dynamically selected during profile creation. Base ports (3000, 8080) are always included. Language and framework defaults are added automatically. Additions (e.g. VS Code Server on port 4040) add their ports when selected.
 
 ### Supported frameworks
 
@@ -208,6 +263,45 @@ Ports are dynamically selected during profile creation. Base ports (3000, 8080) 
 
 You can run multiple sandboxes simultaneously. Auto port remapping: when a port is already in use, it is remapped to the next free port (e.g. `Port 3000 in use -> remapped to 3001:3000`). The container-side port stays the same; only the host-side mapping changes.
 
+## Profile Import/Export
+
+Profiles can be exported to JSON and shared with others:
+
+```bash
+# Export a profile to a file
+sandbox-setup --export my-profile my-profile.json
+
+# Export to stdout (pipe or redirect)
+sandbox-setup --export my-profile > my-profile.json
+
+# Import a shared profile (creates profile + builds Docker image)
+sandbox-setup --import shared-profile.json
+```
+
+The exported file is a self-contained JSON envelope containing all profile settings (agents, languages, plugins, additions, VS Code extensions, custom Dockerfile lines, startup commands). Recipients only need Docker to import and build.
+
+Windows users can export/import via the **Export** and **Import** buttons on the Profiles step.
+
+## Plugin Discovery
+
+During `sandbox-setup`, after selecting agents, you'll be asked whether to search for popular plugins online. Discovery fetches from curated sources (e.g. awesome-opencode on GitHub) and presents results as a selectable list. Selected packages are added as custom npm plugins.
+
+Discovery results are cached locally for 24 hours in `~/.agent-sandbox/.cache/plugin-discovery/`.
+
+Windows users can click **Discover online plugins...** on the Plugins step.
+
+## Custom Dockerfile & Startup Commands
+
+For expert users, `sandbox-setup` offers (under **Advanced options**):
+
+- **Custom Dockerfile lines**: Arbitrary `RUN` instructions baked into the image (e.g. `RUN apt install -y htop`)
+- **Pre-agent startup commands**: Run before the agent starts (e.g. environment setup)
+- **Background startup commands**: Run in the background before the agent (e.g. services that must be running when the agent starts)
+
+These are stored in `profile.json` and reproduced on import/export.
+
+> **Note:** Custom Dockerfile lines and startup commands are currently available in the Unix CLI only. Windows GUI support is planned.
+
 ## The `.sandbox` File
 
 When using `sandbox-me`, a `.sandbox` file is created in the project root:
@@ -228,6 +322,7 @@ All named Docker volumes are prefixed with `asb_` to avoid collisions:
 - `asb_sandbox_data_<project>` — changes.txt, Dockerfile.extension
 - `asb_opencode_cache_<project>` — OpenCode cache
 - Language-specific volumes (e.g. `asb_venv_<project>`, `asb_cargo_registry_<project>`)
+- Addition volumes (e.g. `asb_vscode_extensions_<project>`, `asb_vscode_data_<project>`)
 
 ## Config Mirroring
 
@@ -296,6 +391,7 @@ src/
     ports.json                       #   Framework-to-port lookup
     agents.json                      #   Agent definitions (command, install, auth, plugins)
     plugins.json                     #   Plugin definitions (install, conflicts)
+    additions.json                   #   Optional container tools (VS Code Server, etc.)
     mcp-servers.json                 #   MCP server registry (install, command, env_vars)
     instructions.base.md             #   Base agent instructions (language-independent)
     generate_profile.sh              #   Assembles profile from templates + selections
@@ -304,6 +400,9 @@ src/
       languages/                     #   Per-language fragments
         <lang>.sh                    #     Container startup (dep install, PATH)
         <lang>.agents.md             #     AI agent instructions
+      additions/                     #   Per-addition fragments
+        <addition>.sh                #     Container startup (launch service)
+        <addition>.agents.md         #     AI agent instructions
       agents/                        #   Per-agent fragments
         <agent>.sh                   #     Dockerfile install commands
         <agent>.config/              #     Agent config templates + sync rules
@@ -333,9 +432,10 @@ tools/
   dist/                              # Build output (gitignored)
   AgentSandbox/                      # Windows C# .NET 8.0 project
     Resources/                       #   Embedded data files (copied from src/sandbox/)
-      agents.json, plugins.json, mcp-servers.json
+      agents.json, plugins.json, additions.json, mcp-servers.json
       languages.json, ports.json, Dockerfile.base.tpl, AGENTS.md.base
       fragments/                     #   *.sh and *.agents.md
+      additions/                     #   Addition fragments (vscode-server.sh, etc.)
       templates/                     #   opencode.json, oh-my-openagent.json
 ```
 

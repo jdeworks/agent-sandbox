@@ -19,6 +19,19 @@ All of the following locations MUST be updated together:
 
 After copying to `tools/AgentSandbox/Resources/`, bump `VersionStamp` in `tools/AgentSandbox/Services/ResourceManager.cs`.
 
+## Adding or Modifying an Addition
+
+1. `src/sandbox/additions.json` — addition definition
+2. `src/sandbox/fragments/additions/<key>.sh` — container startup fragment
+3. `src/sandbox/fragments/additions/<key>.agents.md` — agent instruction fragment
+4. `tools/AgentSandbox/Resources/additions.json` — copy of (1)
+5. `tools/AgentSandbox/Resources/additions/<key>.sh` — copy of (2)
+6. `tools/AgentSandbox/Resources/additions/<key>.agents.md` — copy of (3)
+7. `src/sandbox/fragments/README.md` — update "Available additions" table
+8. `README.md` — update additions table, volumes list
+
+After copying to `tools/AgentSandbox/Resources/`, bump `VersionStamp` in `tools/AgentSandbox/Services/ResourceManager.cs`.
+
 ## Adding or Modifying an Agent
 
 1. `src/sandbox/agents.json` — agent definition
@@ -39,6 +52,7 @@ Each source file must be copied to its Windows Resources counterpart:
 | `src/sandbox/instructions.base.md` | `tools/AgentSandbox/Resources/AGENTS.md.base` |
 | `src/sandbox/agents.json` | `tools/AgentSandbox/Resources/agents.json` |
 | `src/sandbox/plugins.json` | `tools/AgentSandbox/Resources/plugins.json` |
+| `src/sandbox/additions.json` | `tools/AgentSandbox/Resources/additions.json` |
 | `src/sandbox/mcp-servers.json` | `tools/AgentSandbox/Resources/mcp-servers.json` |
 | `src/sandbox/config-mirrors.json` | `tools/AgentSandbox/Resources/config-mirrors.json` |
 | `src/templates/opencode.json` | `tools/AgentSandbox/Resources/templates/opencode.json` |
@@ -91,6 +105,22 @@ Recent projects are discovered by scanning `projects/*/config.env` (no separate 
 - `tools/AgentSandbox/Services/ProjectScaffolder.cs` — `GetRecentProjects()`
 - `tools/AgentSandbox/UI/WizardForm.cs` — `PopulateRecentProjects()`
 - `tools/AgentSandbox/Cli.cs` — `RunSandbox()` picker
+
+## Modifying Profile Import/Export
+
+- `src/scripts/unix/sandbox-setup.sh` — `--export` / `--import` subcommands (bash)
+- `tools/AgentSandbox/Services/ProfileImportExport.cs` — C# import/export service
+- `tools/AgentSandbox/UI/WizardForm.cs` — Export/Import buttons on Profiles step
+
+The export format (`agent-sandbox-profile/1`) must be identical across platforms.
+
+## Modifying Plugin Discovery
+
+- `src/scripts/unix/sandbox-setup.sh` — curl-based fetch + cache (bash)
+- `tools/AgentSandbox/Services/PluginDiscovery.cs` — HttpClient-based fetch + cache (C#)
+- `src/sandbox/agents.json` — `discovery_url` field per agent
+
+Cache location: `$SANDBOX_HOME/.cache/plugin-discovery/` (Unix) or `%APPDATA%/AgentSandbox/.cache/plugin-discovery/` (Windows).
 
 ## Documentation Sync
 

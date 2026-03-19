@@ -16,17 +16,20 @@ prepare (host)
 
 ## Directory structure
 
-| Directory    | Contents                                                  |
-|--------------|-----------------------------------------------------------|
-| `languages/` | Per-language fragments (`<lang>.sh` and `<lang>.agents.md`) |
-| `agents/`    | Agent configuration fragments (`agents-config.sh`)        |
+| Directory     | Contents                                                       |
+|---------------|----------------------------------------------------------------|
+| `languages/`  | Per-language fragments (`<lang>.sh` and `<lang>.agents.md`)    |
+| `additions/`  | Optional tool fragments (`<addition>.sh` and `<addition>.agents.md`) |
+| `agents/`     | Agent configuration fragments (`agents-config.sh`)             |
 
 ## File types
 
-| Pattern             | Purpose                                                  |
-|---------------------|----------------------------------------------------------|
-| `<lang>.sh`         | Container startup script (venv setup, dep install, etc.) |
-| `<lang>.agents.md`  | Agent instructions appended to the profile's AGENTS.md   |
+| Pattern               | Purpose                                                    |
+|-----------------------|------------------------------------------------------------|
+| `<lang>.sh`           | Container startup script (venv setup, dep install, etc.)   |
+| `<lang>.agents.md`    | Agent instructions appended to the profile's AGENTS.md     |
+| `<addition>.sh`       | Addition startup script (launch background service, etc.)  |
+| `<addition>.agents.md`| Addition instructions appended to the profile's AGENTS.md  |
 
 ## Available languages
 
@@ -45,6 +48,12 @@ prepare (host)
 | `react-native` | React Native | `package.json` (react-native) |
 | `ruby`   | Ruby             | `Gemfile`                  |
 | `rust`   | Rust             | `Cargo.lock`               |
+
+## Available additions
+
+| Key              | Label            | Default port | Description                     |
+|------------------|------------------|--------------|---------------------------------|
+| `vscode-server`  | VS Code Server   | 4040         | Browser-based VS Code (code-server) |
 
 ## Conventions
 
@@ -76,5 +85,17 @@ Each `.agents.md` fragment should:
 6. Bump the `VersionStamp` in `tools/AgentSandbox/Services/ResourceManager.cs`
 7. Update `README.md` (languages table, frameworks table, dependencies list)
 8. Run `prepare` and select the new language to generate a profile
+
+## Adding a new addition
+
+1. Add the entry in `../additions.json` with `label`, `description`, `size_warning`, `dockerfile`, `port`, `volumes`, `fragment`, and `agents_md`
+2. Create `<key>.sh` in the `additions/` subdirectory matching the `fragment` field
+3. Create `<key>.agents.md` in the `additions/` subdirectory matching the `agents_md` field
+4. Copy the new/changed files to the Windows embedded resources:
+   - `additions.json` -> `tools/AgentSandbox/Resources/additions.json`
+   - `<key>.sh` -> `tools/AgentSandbox/Resources/additions/<key>.sh`
+   - `<key>.agents.md` -> `tools/AgentSandbox/Resources/additions/<key>.agents.md`
+5. Bump the `VersionStamp` in `tools/AgentSandbox/Services/ResourceManager.cs`
+6. Update `README.md` (additions table, volumes list)
 
 See `.cursorrules` in the repo root for the full cross-platform sync checklist.

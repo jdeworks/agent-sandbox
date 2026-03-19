@@ -225,8 +225,8 @@ grep -q 'public static void Scaffold' "$SCAFFOLDER" 2>/dev/null && \
 grep -q 'public static void RefreshFromProfile' "$SCAFFOLDER" 2>/dev/null && \
     log_pass "Scaffolder: RefreshFromProfile method exists" || log_fail "Scaffolder: No RefreshFromProfile"
 
-grep -q 'Ensure Dockerfile exists' "$SCAFFOLDER" 2>/dev/null && \
-    log_pass "Scaffolder: Dockerfile check exists" || log_fail "Scaffolder: No Dockerfile check"
+grep -q 'Always update Dockerfile' "$SCAFFOLDER" 2>/dev/null && \
+    log_pass "Scaffolder: Always updates Dockerfile FROM" || log_fail "Scaffolder: Missing Dockerfile update"
 
 grep -q 'Ensure opencode_data directory exists' "$SCAFFOLDER" 2>/dev/null && \
     log_pass "Scaffolder: opencode_data check exists" || log_fail "Scaffolder: No opencode_data check"
@@ -581,8 +581,8 @@ for cfg in "agents.json" "plugins.json" "mcp-servers.json"; do
         log_pass "Windows resource $cfg exists" || log_fail "Windows resource $cfg missing"
 done
 
-grep -q '2.0.0' "$CSHARP_DIR/Services/ResourceManager.cs" 2>/dev/null && \
-    log_pass "ResourceManager: VersionStamp bumped to 2.0.0" || log_fail "ResourceManager: VersionStamp not updated"
+grep -q '2.4.0' "$CSHARP_DIR/Services/ResourceManager.cs" 2>/dev/null && \
+    log_pass "ResourceManager: VersionStamp bumped to 2.4.0" || log_fail "ResourceManager: VersionStamp not updated"
 
 # ----- TEST 10.10: Profile generation with new paths -----
 log_section "10.10 Profile Generation Test"
@@ -612,6 +612,479 @@ if [ $? -eq 0 ]; then
 else
     log_fail "generate_profile.sh failed to run"
 fi
+
+# ==============================================================================
+# TEST 11: VS Code Server Addition (profile generation)
+# ==============================================================================
+log_section "11.1 VS Code Server Dockerfile Generation"
+
+VSCODE_DIR="$TEMP_DIR/test-vscode-profile"
+SELECTED_AGENTS="opencode" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$VSCODE_DIR" "test-vscode" "node,python" "3000,4040,8080" "" "vscode-server" >/dev/null 2>&1
+
+if [ -f "$VSCODE_DIR/Dockerfile.base" ]; then
+    grep -q "code-server.dev/install.sh" "$VSCODE_DIR/Dockerfile.base" && \
+        log_pass "Dockerfile has code-server install" || log_fail "Dockerfile missing code-server install"
+
+    grep -q "install-extension" "$VSCODE_DIR/Dockerfile.base" && \
+        log_pass "Dockerfile has VS Code extensions" || log_fail "Dockerfile missing VS Code extensions"
+
+    grep -q "streetsidesoftware.code-spell-checker" "$VSCODE_DIR/Dockerfile.base" && \
+        log_pass "Dockerfile has always-installed extension (spell checker)" || log_fail "Dockerfile missing always-installed extensions"
+
+    grep -q "ms-python.python" "$VSCODE_DIR/Dockerfile.base" && \
+        log_pass "Dockerfile has language-specific extension (Python)" || log_fail "Dockerfile missing Python extension"
+
+    grep -q "dbaeumer.vscode-eslint" "$VSCODE_DIR/Dockerfile.base" && \
+        log_pass "Dockerfile has language-specific extension (ESLint)" || log_fail "Dockerfile missing ESLint extension"
+else
+    log_fail "VS Code profile generation failed"
+fi
+
+log_section "11.2 VS Code Server install.sh Fragment"
+
+if [ -f "$VSCODE_DIR/install.sh" ]; then
+    grep -q "code-server" "$VSCODE_DIR/install.sh" && \
+        log_pass "install.sh has code-server startup" || log_fail "install.sh missing code-server startup"
+
+    grep -q "0.0.0.0:4040" "$VSCODE_DIR/install.sh" && \
+        log_pass "install.sh binds to port 4040" || log_fail "install.sh missing port 4040 binding"
+
+    grep -q "code-server.*&" "$VSCODE_DIR/install.sh" && \
+        log_pass "install.sh runs code-server in background" || log_fail "install.sh code-server not backgrounded"
+else
+    log_fail "install.sh not generated"
+fi
+
+log_section "11.3 VS Code Server docker-compose Volumes and Ports"
+
+if [ -f "$VSCODE_DIR/docker-compose.yml.tpl" ]; then
+    grep -q "4040:4040" "$VSCODE_DIR/docker-compose.yml.tpl" && \
+        log_pass "Compose has port 4040 mapping" || log_fail "Compose missing port 4040"
+
+    grep -q "vscode_extensions" "$VSCODE_DIR/docker-compose.yml.tpl" && \
+        log_pass "Compose has VS Code extensions volume" || log_fail "Compose missing extensions volume"
+
+    grep -q "vscode_data" "$VSCODE_DIR/docker-compose.yml.tpl" && \
+        log_pass "Compose has VS Code data volume" || log_fail "Compose missing data volume"
+else
+    log_fail "docker-compose.yml.tpl not generated"
+fi
+
+log_section "11.4 VS Code Server AGENTS.md"
+
+if [ -f "$VSCODE_DIR/AGENTS.md" ]; then
+    grep -q "VS Code" "$VSCODE_DIR/AGENTS.md" && \
+        log_pass "AGENTS.md mentions VS Code Server" || log_fail "AGENTS.md missing VS Code section"
+else
+    log_fail "AGENTS.md not generated"
+fi
+
+# ==============================================================================
+# TEST 12: Agent-Aware Exec and Custom Startup
+# ==============================================================================
+log_section "11.5 Selective Agent Installation"
+
+# Only claude selected — should NOT have opencode/cursor/copilot install
+SELECTIVE_DIR="$TEMP_DIR/test-selective"
+SELECTED_AGENTS="claude" PRIMARY_AGENT="claude" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$SELECTIVE_DIR" "test-selective" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$SELECTIVE_DIR/Dockerfile.base" ]; then
+    grep -q "claude.ai/install.sh" "$SELECTIVE_DIR/Dockerfile.base" && \
+        log_pass "Selective: Claude install present" || log_fail "Selective: Claude install missing"
+
+    ! grep -q "opencode.ai/install" "$SELECTIVE_DIR/Dockerfile.base" && \
+        log_pass "Selective: OpenCode NOT installed (not selected)" || log_fail "Selective: OpenCode installed despite not selected"
+
+    ! grep -q "cursor.com/install" "$SELECTIVE_DIR/Dockerfile.base" && \
+        log_pass "Selective: Cursor NOT installed (not selected)" || log_fail "Selective: Cursor installed despite not selected"
+
+    ! grep -q "oh-my-openagent" "$SELECTIVE_DIR/Dockerfile.base" && \
+        log_pass "Selective: oh-my-openagent NOT installed (opencode not selected)" || log_fail "Selective: oh-my-openagent installed despite opencode not selected"
+else
+    log_fail "Selective agent Dockerfile not generated"
+fi
+
+# Multiple agents — both should be present
+MULTI_DIR="$TEMP_DIR/test-multi-agent"
+SELECTED_AGENTS="opencode,claude" PRIMARY_AGENT="opencode" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$MULTI_DIR" "test-multi" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$MULTI_DIR/Dockerfile.base" ]; then
+    grep -q "opencode.ai/install" "$MULTI_DIR/Dockerfile.base" && \
+        log_pass "Multi-agent: OpenCode present" || log_fail "Multi-agent: OpenCode missing"
+
+    grep -q "claude.ai/install.sh" "$MULTI_DIR/Dockerfile.base" && \
+        log_pass "Multi-agent: Claude present" || log_fail "Multi-agent: Claude missing"
+
+    ! grep -q "cursor.com/install" "$MULTI_DIR/Dockerfile.base" && \
+        log_pass "Multi-agent: Cursor NOT present (not selected)" || log_fail "Multi-agent: Cursor present despite not selected"
+else
+    log_fail "Multi-agent Dockerfile not generated"
+fi
+
+log_section "12.1 Agent-Aware Exec in install.sh"
+
+AGENT_DIR="$TEMP_DIR/test-agent-exec"
+PRIMARY_AGENT="claude" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$AGENT_DIR" "test-agent" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$AGENT_DIR/install.sh" ]; then
+    grep -q "exec claude" "$AGENT_DIR/install.sh" && \
+        log_pass "install.sh uses 'exec claude' for PRIMARY_AGENT=claude" || log_fail "install.sh not using claude agent"
+
+    grep -q "runuser.*-- claude" "$AGENT_DIR/install.sh" && \
+        log_pass "install.sh runuser uses claude" || log_fail "install.sh runuser not using claude"
+else
+    log_fail "install.sh not generated"
+fi
+
+# Test default agent (no PRIMARY_AGENT)
+DEFAULT_DIR="$TEMP_DIR/test-default-agent"
+bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$DEFAULT_DIR" "test-default" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$DEFAULT_DIR/install.sh" ]; then
+    grep -q "exec opencode" "$DEFAULT_DIR/install.sh" && \
+        log_pass "install.sh defaults to 'exec opencode'" || log_fail "install.sh not defaulting to opencode"
+else
+    log_fail "Default agent install.sh not generated"
+fi
+
+# Test copilot agent (has args)
+COPILOT_DIR="$TEMP_DIR/test-copilot"
+PRIMARY_AGENT="copilot" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$COPILOT_DIR" "test-copilot" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$COPILOT_DIR/install.sh" ]; then
+    grep -q "exec gh copilot agent" "$COPILOT_DIR/install.sh" && \
+        log_pass "install.sh uses 'exec gh copilot agent' for copilot" || log_fail "install.sh not using copilot args"
+else
+    log_fail "Copilot install.sh not generated"
+fi
+
+log_section "12.2 Custom Startup Commands"
+
+CUSTOM_DIR="$TEMP_DIR/test-custom-startup"
+CUSTOM_STARTUP_BEFORE="echo 'pre-agent'" CUSTOM_STARTUP_AFTER="my-service --port=9090 &" \
+    bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$CUSTOM_DIR" "test-custom" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$CUSTOM_DIR/install.sh" ]; then
+    grep -q "pre-agent" "$CUSTOM_DIR/install.sh" && \
+        log_pass "install.sh has custom before command" || log_fail "install.sh missing before command"
+
+    grep -q "my-service" "$CUSTOM_DIR/install.sh" && \
+        log_pass "install.sh has custom after command" || log_fail "install.sh missing after command"
+else
+    log_fail "Custom startup install.sh not generated"
+fi
+
+log_section "12.3 Special Character Escaping in Custom Commands"
+
+ESCAPE_DIR="$TEMP_DIR/test-escape"
+CUSTOM_STARTUP_BEFORE=$'echo "hello\'s world"\necho "test $VAR"' \
+    bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$ESCAPE_DIR" "test-escape" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$ESCAPE_DIR/install.sh" ]; then
+    grep -q "hello's world" "$ESCAPE_DIR/install.sh" && \
+        log_pass "Single quotes preserved in install.sh" || log_fail "Single quotes mangled"
+
+    grep -q 'test $VAR' "$ESCAPE_DIR/install.sh" && \
+        log_pass "Dollar signs preserved in install.sh" || log_fail "Dollar signs expanded"
+else
+    log_fail "Escape test install.sh not generated"
+fi
+
+# ==============================================================================
+# TEST 13: Custom Dockerfile Lines
+# ==============================================================================
+log_section "13.1 Custom Dockerfile Lines via Template"
+
+CUSTOMDF_DIR="$TEMP_DIR/test-custom-df"
+CUSTOM_DOCKERFILE_LINES="RUN apt update && apt install -y htop" \
+    bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$CUSTOMDF_DIR" "test-customdf" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$CUSTOMDF_DIR/Dockerfile.base" ]; then
+    grep -q "htop" "$CUSTOMDF_DIR/Dockerfile.base" && \
+        log_pass "Custom Dockerfile line (htop) present" || log_fail "Custom Dockerfile line missing"
+
+    # Verify it's before ENTRYPOINT
+    htop_line=$(grep -n "htop" "$CUSTOMDF_DIR/Dockerfile.base" | head -1 | cut -d: -f1)
+    entry_line=$(grep -n "ENTRYPOINT" "$CUSTOMDF_DIR/Dockerfile.base" | head -1 | cut -d: -f1)
+    if [ -n "$htop_line" ] && [ -n "$entry_line" ] && [ "$htop_line" -lt "$entry_line" ]; then
+        log_pass "Custom line is before ENTRYPOINT"
+    else
+        log_fail "Custom line is not before ENTRYPOINT"
+    fi
+else
+    log_fail "Custom Dockerfile install not generated"
+fi
+
+# ==============================================================================
+# TEST 14: VS Code Optional Extensions
+# ==============================================================================
+log_section "14.1 Optional VS Code Extensions"
+
+VSEXT_DIR="$TEMP_DIR/test-vscode-ext"
+SELECTED_AGENTS="opencode" VSCODE_EXTENSIONS="eamodio.gitlens" \
+    bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$VSEXT_DIR" "test-vsext" "node" "3000,4040,8080" "" "vscode-server" >/dev/null 2>&1
+
+if [ -f "$VSEXT_DIR/Dockerfile.base" ]; then
+    grep -q "eamodio.gitlens" "$VSEXT_DIR/Dockerfile.base" && \
+        log_pass "Optional extension (GitLens) included" || log_fail "Optional extension missing"
+
+    # Verify always extensions are also present
+    grep -q "gruntfuggly.todo-tree" "$VSEXT_DIR/Dockerfile.base" && \
+        log_pass "Always extension (Todo Tree) present alongside optional" || log_fail "Always extension missing when optional set"
+else
+    log_fail "VS Code extensions profile not generated"
+fi
+
+# ==============================================================================
+# TEST 15: Addition Priority Ordering
+# ==============================================================================
+log_section "15.1 Additions Sorted by Priority"
+
+# additions.json has priority field — verify generate_profile.sh reads it
+if [ -f "$SANDBOX_CORE/additions.json" ]; then
+    priority=$(jq -r '.["vscode-server"].priority // "missing"' "$SANDBOX_CORE/additions.json")
+    [ "$priority" != "missing" ] && \
+        log_pass "additions.json has priority field ($priority)" || log_fail "additions.json missing priority field"
+else
+    log_fail "additions.json not found"
+fi
+
+# ==============================================================================
+# TEST 16: Export/Import Round-Trip
+# ==============================================================================
+log_section "16.1 Profile Export"
+
+EXPORT_DIR="$TEMP_DIR/test-export"
+mkdir -p "$EXPORT_DIR/profiles/test-rt"
+cat > "$EXPORT_DIR/profiles/test-rt/profile.json" <<'PROFILEJSON'
+{
+    "name": "test-rt",
+    "agents": ["claude", "opencode"],
+    "plugins": ["oh-my-openagent"],
+    "custom_plugins": ["@goondocks/myco"],
+    "skills": ["pdf", "mcp-builder"],
+    "languages": ["node", "python"],
+    "versions": {"node": "20", "python": "3.12"},
+    "additions": ["vscode-server"],
+    "vscode_extensions": ["eamodio.gitlens"],
+    "mcp_servers": ["filesystem"],
+    "config_mirrors": {"git": {"strategy": "bind-ro"}},
+    "custom_dockerfile_lines": ["RUN apt install -y htop"],
+    "custom_startup_before": ["echo setup"],
+    "custom_startup_after": ["my-svc &"],
+    "created": "2026-03-19"
+}
+PROFILEJSON
+
+exported=$(SANDBOX_HOME="$EXPORT_DIR" bash "$SANDBOX_SCRIPTS/sandbox-setup.sh" --export test-rt 2>/dev/null)
+
+if [ -n "$exported" ]; then
+    log_pass "Export produces output"
+
+    echo "$exported" | jq -e '._format == "agent-sandbox-profile/1"' >/dev/null 2>&1 && \
+        log_pass "Export has correct format" || log_fail "Export format wrong"
+
+    echo "$exported" | jq -e '.profile.agents | length == 2' >/dev/null 2>&1 && \
+        log_pass "Export preserves agents" || log_fail "Export lost agents"
+
+    echo "$exported" | jq -e '.profile.skills | length == 2' >/dev/null 2>&1 && \
+        log_pass "Export preserves skills" || log_fail "Export lost skills"
+
+    echo "$exported" | jq -e '.profile.custom_plugins | length == 1' >/dev/null 2>&1 && \
+        log_pass "Export preserves custom_plugins" || log_fail "Export lost custom_plugins"
+
+    echo "$exported" | jq -e '.profile.additions | length == 1' >/dev/null 2>&1 && \
+        log_pass "Export preserves additions" || log_fail "Export lost additions"
+
+    echo "$exported" | jq -e '.profile.vscode_extensions | length == 1' >/dev/null 2>&1 && \
+        log_pass "Export preserves vscode_extensions" || log_fail "Export lost vscode_extensions"
+
+    echo "$exported" | jq -e '.profile.mcp_servers | length == 1' >/dev/null 2>&1 && \
+        log_pass "Export preserves mcp_servers" || log_fail "Export lost mcp_servers"
+
+    echo "$exported" | jq -e '.profile.config_mirrors.git.strategy == "bind-ro"' >/dev/null 2>&1 && \
+        log_pass "Export preserves config_mirrors" || log_fail "Export lost config_mirrors"
+
+    echo "$exported" | jq -e '.profile.custom_dockerfile_lines | length == 1' >/dev/null 2>&1 && \
+        log_pass "Export preserves custom_dockerfile_lines" || log_fail "Export lost custom_dockerfile_lines"
+
+    echo "$exported" | jq -e '.profile.custom_startup_before | length == 1' >/dev/null 2>&1 && \
+        log_pass "Export preserves custom_startup_before" || log_fail "Export lost custom_startup_before"
+else
+    log_fail "Export produced no output"
+fi
+
+log_section "16.2 Import with Name Collision"
+
+IMPORT_DIR="$TEMP_DIR/test-import"
+mkdir -p "$IMPORT_DIR/profiles/test-rt" "$IMPORT_DIR/projects"
+echo '{"name":"test-rt"}' > "$IMPORT_DIR/profiles/test-rt/profile.json"
+
+echo "$exported" > "$IMPORT_DIR/import.json"
+
+# The import should resolve "test-rt" to "test-rt-2" since test-rt exists
+imp_name=$(SANDBOX_HOME="$IMPORT_DIR" bash -c '
+    import_file="'"$IMPORT_DIR/import.json"'"
+    imp_name=$(jq -r ".profile.name" "$import_file")
+    base_name="$imp_name"
+    suffix=1
+    while [ -d "'"$IMPORT_DIR"'/profiles/$imp_name" ]; do
+        suffix=$((suffix + 1))
+        imp_name="${base_name}-${suffix}"
+    done
+    echo "$imp_name"
+' 2>/dev/null)
+
+[ "$imp_name" = "test-rt-2" ] && \
+    log_pass "Import name collision resolved to test-rt-2" || log_fail "Name collision resolution: got '$imp_name'"
+
+# ==============================================================================
+# TEST 17: Windows Resource Completeness
+# ==============================================================================
+log_section "17.1 Windows Resource Files Content"
+
+WIN_RES="$CSHARP_DIR/Resources"
+
+# additions.json must have the full structure
+if [ -f "$WIN_RES/additions.json" ]; then
+    jq -e '.["vscode-server"].dockerfile' "$WIN_RES/additions.json" >/dev/null 2>&1 && \
+        log_pass "Resources additions.json has dockerfile field" || log_fail "Resources additions.json missing dockerfile"
+
+    jq -e '.["vscode-server"].extensions.always' "$WIN_RES/additions.json" >/dev/null 2>&1 && \
+        log_pass "Resources additions.json has always extensions" || log_fail "Resources additions.json missing always extensions"
+
+    jq -e '.["vscode-server"].extensions.optional' "$WIN_RES/additions.json" >/dev/null 2>&1 && \
+        log_pass "Resources additions.json has optional extensions" || log_fail "Resources additions.json missing optional extensions"
+
+    jq -e '.["vscode-server"].extensions.languages' "$WIN_RES/additions.json" >/dev/null 2>&1 && \
+        log_pass "Resources additions.json has language extensions" || log_fail "Resources additions.json missing language extensions"
+
+    jq -e '.["vscode-server"].port' "$WIN_RES/additions.json" >/dev/null 2>&1 && \
+        log_pass "Resources additions.json has port field" || log_fail "Resources additions.json missing port"
+
+    jq -e '.["vscode-server"].priority' "$WIN_RES/additions.json" >/dev/null 2>&1 && \
+        log_pass "Resources additions.json has priority field" || log_fail "Resources additions.json missing priority"
+else
+    log_fail "Resources additions.json not found"
+fi
+
+# agents.json must have v2 fields
+if [ -f "$WIN_RES/agents.json" ]; then
+    jq -e '.opencode.description' "$WIN_RES/agents.json" >/dev/null 2>&1 && \
+        log_pass "Resources agents.json has description field" || log_fail "Resources agents.json missing description"
+
+    jq -e '.opencode.use_cases' "$WIN_RES/agents.json" >/dev/null 2>&1 && \
+        log_pass "Resources agents.json has use_cases field" || log_fail "Resources agents.json missing use_cases"
+
+    jq -e '.opencode.auth_hint' "$WIN_RES/agents.json" >/dev/null 2>&1 && \
+        log_pass "Resources agents.json has auth_hint field" || log_fail "Resources agents.json missing auth_hint"
+
+    jq -e '.opencode.discovery_urls | type == "array"' "$WIN_RES/agents.json" >/dev/null 2>&1 && \
+        log_pass "Resources agents.json has discovery_urls array" || log_fail "Resources agents.json missing discovery_urls"
+
+    jq -e '.claude.skills_url' "$WIN_RES/agents.json" >/dev/null 2>&1 && \
+        log_pass "Resources agents.json Claude has skills_url" || log_fail "Resources agents.json missing skills_url"
+else
+    log_fail "Resources agents.json not found"
+fi
+
+# Addition fragment files must exist in Resources
+[ -f "$WIN_RES/additions/vscode-server.sh" ] && \
+    log_pass "Resources has vscode-server.sh fragment" || log_fail "Resources missing vscode-server.sh"
+
+[ -f "$WIN_RES/additions/vscode-server.agents.md" ] && \
+    log_pass "Resources has vscode-server.agents.md" || log_fail "Resources missing vscode-server.agents.md"
+
+log_section "17.2 Source vs Resources Parity"
+
+for f in additions.json agents.json plugins.json mcp-servers.json Dockerfile.base.tpl; do
+    if [ -f "$SANDBOX_CORE/$f" ] && [ -f "$WIN_RES/$f" ]; then
+        diff <(jq -S . "$SANDBOX_CORE/$f" 2>/dev/null || cat "$SANDBOX_CORE/$f") \
+             <(jq -S . "$WIN_RES/$f" 2>/dev/null || cat "$WIN_RES/$f") >/dev/null 2>&1 && \
+            log_pass "Source and Resources $f are identical" || log_fail "Source and Resources $f differ"
+    fi
+done
+
+# ==============================================================================
+# TEST 18: C# Code Structure Checks
+# ==============================================================================
+log_section "18.1 ProfileSpec Field Completeness"
+
+SPEC_FILE="$CSHARP_DIR/Models/ProfileSpec.cs"
+for field in Languages Versions Ports Agents Plugins Additions VscodeExtensions McpServers Skills CustomPlugins CustomDockerfileLines CustomStartupBefore CustomStartupAfter; do
+    grep -q "$field" "$SPEC_FILE" 2>/dev/null && \
+        log_pass "ProfileSpec has $field" || log_fail "ProfileSpec missing $field"
+done
+
+log_section "18.2 ProfileGenerator Handles Additions"
+
+PG_FILE="$CSHARP_DIR/Services/ProfileGenerator.cs"
+grep -q "LoadAdditionsJson" "$PG_FILE" 2>/dev/null && \
+    log_pass "ProfileGenerator loads additions.json" || log_fail "ProfileGenerator missing additions loading"
+
+grep -q "vscode-server" "$PG_FILE" 2>/dev/null && \
+    log_pass "ProfileGenerator handles vscode-server" || log_fail "ProfileGenerator missing vscode-server handling"
+
+grep -q "install-extension" "$PG_FILE" 2>/dev/null && \
+    log_pass "ProfileGenerator installs VS Code extensions" || log_fail "ProfileGenerator missing extension install"
+
+grep -q "ReadAdditionFragment" "$PG_FILE" 2>/dev/null && \
+    log_pass "ProfileGenerator reads addition fragments" || log_fail "ProfileGenerator missing fragment reading"
+
+grep -q "spec.CustomDockerfileLines" "$PG_FILE" 2>/dev/null && \
+    log_pass "ProfileGenerator handles custom Dockerfile lines" || log_fail "ProfileGenerator missing custom Dockerfile"
+
+log_section "18.3 RegenerateProfile Reads profile.json"
+
+grep -q "profile.json" "$PG_FILE" 2>/dev/null && \
+    log_pass "RegenerateProfile reads profile.json" || log_fail "RegenerateProfile doesn't read profile.json"
+
+grep -q "ReadArray" "$PG_FILE" 2>/dev/null && \
+    log_pass "RegenerateProfile uses ReadArray for all fields" || log_fail "RegenerateProfile missing ReadArray"
+
+log_section "18.4 ProfileImportExport Handles All Fields"
+
+IE_FILE="$CSHARP_DIR/Services/ProfileImportExport.cs"
+for field in plugins custom_plugins skills additions vscode_extensions mcp_servers custom_dockerfile_lines custom_startup_before custom_startup_after; do
+    grep -q "\"$field\"" "$IE_FILE" 2>/dev/null && \
+        log_pass "ImportExport handles $field" || log_fail "ImportExport missing $field"
+done
+
+log_section "18.5 ResourceManager Extraction Safety"
+
+RM_FILE="$CSHARP_DIR/Services/ResourceManager.cs"
+grep -q 'additions.json.*OrdinalIgnoreCase' "$RM_FILE" 2>/dev/null && \
+    log_pass "ResourceManager excludes additions.json from subdirectory mapping" || log_fail "ResourceManager missing additions.json exclusion"
+
+grep -q "GetLastWriteTimeUtc" "$RM_FILE" 2>/dev/null && \
+    log_pass "ResourceManager checks exe timestamp for re-extraction" || log_fail "ResourceManager missing timestamp check"
+
+log_section "18.6 ProjectScaffolder Always Updates FROM"
+
+grep -q 'ResourceManager.WriteLf(dockerfilePath' "$SCAFFOLDER" 2>/dev/null && \
+    ! grep -q 'if (!File.Exists(dockerfilePath))' "$SCAFFOLDER" 2>/dev/null && \
+    log_pass "RefreshFromProfile always updates Dockerfile FROM" || log_fail "RefreshFromProfile may skip Dockerfile update"
+
+# ==============================================================================
+# TEST 19: Dockerfile Template Markers
+# ==============================================================================
+log_section "19.1 Dockerfile Template Has All Markers"
+
+TPL="$SANDBOX_CORE/Dockerfile.base.tpl"
+grep -q '{{AGENT_LAYERS}}' "$TPL" && \
+    log_pass "Template has AGENT_LAYERS marker" || log_fail "Template missing AGENT_LAYERS"
+grep -q '{{LANGUAGE_LAYERS}}' "$TPL" && \
+    log_pass "Template has LANGUAGE_LAYERS marker" || log_fail "Template missing LANGUAGE_LAYERS"
+grep -q '{{ADDITION_LAYERS}}' "$TPL" && \
+    log_pass "Template has ADDITION_LAYERS marker" || log_fail "Template missing ADDITION_LAYERS"
+grep -q '{{CUSTOM_DOCKERFILE_LINES}}' "$TPL" && \
+    log_pass "Template has CUSTOM_DOCKERFILE_LINES marker" || log_fail "Template missing CUSTOM_DOCKERFILE_LINES"
+grep -q '{{NODE_VERSION}}' "$TPL" && \
+    log_pass "Template has NODE_VERSION marker" || log_fail "Template missing NODE_VERSION"
+
+# Template should NOT have hardcoded agent installs
+! grep -q "opencode.ai/install" "$TPL" && \
+    log_pass "Template has no hardcoded agent installs" || log_fail "Template still has hardcoded agent installs"
 
 # ==============================================================================
 # SUMMARY

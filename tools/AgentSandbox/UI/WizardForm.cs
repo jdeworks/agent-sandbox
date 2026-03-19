@@ -35,12 +35,20 @@ public sealed class WizardForm : Form
     private ComboBox _cboProfile = null!;
     private Panel _pluginPanel = null!;
     private Label _lblPlugins = null!;
+    private Label _lblProfileInfo = null!;
+    private LinkLabel _lnkVsCode = null!;
+    private Label _lblAgent = null!;
+    private ComboBox _cboAgent = null!;
+    private readonly List<string> _profileAgentKeys = new();
+    private readonly List<Control> _launchTempControls = new();
+    private bool _profileHasVsCode;
+    private int _vsCodePort = 4040;
     private readonly List<CheckBox> _pluginChecks = new();
     private readonly List<string> _pluginKeys = new();
     private Button _btnLaunch = null!;
     private Button _btnBackToProfiles = null!;
     private Button _btnEditUserEnv = null!;
-    private Button _btnSettings = null!;
+    // Settings removed — agent selection is on launch step, API keys in user.env
     private TextBox _txtLog = null!;
     private Button _btnBackOverview = null!;
     private Button _btnClose = null!;
@@ -163,11 +171,29 @@ public sealed class WizardForm : Form
         StyleFlatButton(btnRebuildProfile, TextPrimary);
         btnRebuildProfile.Click += OnRebuildProfileClicked;
 
+        var btnExportProfile = new Button
+        {
+            Text = "Export",
+            Location = new Point(304, 504),
+            Size = new Size(96, 44)
+        };
+        StyleFlatButton(btnExportProfile, TextPrimary);
+        btnExportProfile.Click += OnExportProfileClicked;
+
+        var btnImportProfile = new Button
+        {
+            Text = "Import",
+            Location = new Point(408, 504),
+            Size = new Size(96, 44)
+        };
+        StyleFlatButton(btnImportProfile, TextPrimary);
+        btnImportProfile.Click += OnImportProfileClicked;
+
         _btnContinueToProject = new Button
         {
-            Text = "Continue to Project Selection \u2192",
-            Location = new Point(408, 504),
-            Size = new Size(264, 44),
+            Text = "Continue \u2192",
+            Location = new Point(520, 504),
+            Size = new Size(152, 44),
             Font = new Font("Segoe UI", 10f, FontStyle.Bold)
         };
         StyleFilledButton(_btnContinueToProject, AccentBlue, Color.White);
@@ -179,7 +205,7 @@ public sealed class WizardForm : Form
         };
 
         _stepProfiles.Controls.AddRange([headerPanel, _btnCreateProfile, _lstProfiles,
-            _lblNoProfiles, _btnDeleteProfile, btnRebuildProfile, _btnContinueToProject]);
+            _lblNoProfiles, _btnDeleteProfile, btnRebuildProfile, btnExportProfile, btnImportProfile, _btnContinueToProject]);
         Controls.Add(_stepProfiles);
 
         RefreshProfileList();
@@ -261,7 +287,16 @@ public sealed class WizardForm : Form
         var success = false;
         await Task.Run(() =>
         {
-            success = DockerRunner.Build(dockerfilePath, tag, profileDir, noCache: true) == 0;
+            // Regenerate profile files from profile.json before rebuilding
+            // This ensures install.sh, Dockerfile.base, etc. reflect current templates
+            try
+            {
+                ProfileGenerator.RegenerateProfile(name, _languages, _portConfigs);
+            }
+            catch { /* best effort — rebuild with existing files */ }
+
+            success = DockerRunner.Build(
+                Path.Combine(profileDir, "Dockerfile.base"), tag, profileDir, noCache: true) == 0;
         });
 
         _btnCreateProfile.Enabled = true;
@@ -273,6 +308,82 @@ public sealed class WizardForm : Form
             success ? $"Image '{tag}' rebuilt successfully." : $"Image rebuild failed. Check Docker output.",
             "Rebuild Image", MessageBoxButtons.OK,
             success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
+
+        RefreshProfileList();
+    }
+
+    private void OnExportProfileClicked(object? sender, EventArgs e)
+    {
+        if (_lstProfiles.SelectedItems.Count == 0)
+        {
+            MessageBox.Show("Select a profile to export.", "Export Profile",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var name = _lstProfiles.SelectedItems[0].Text;
+        using var sfd = new SaveFileDialog
+        {
+            FileName = $"{name}.json",
+            Filter = "JSON files (*.json)|*.json",
+            Title = "Export Profile"
+        };
+
+        if (sfd.ShowDialog() != DialogResult.OK) return;
+
+        try
+        {
+            var json = ProfileImportExport.Export(name);
+            File.WriteAllText(sfd.FileName, json);
+            MessageBox.Show($"Profile '{name}' exported to:\n{sfd.FileName}", "Export Complete",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Export failed: {ex.Message}", "Error",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private async void OnImportProfileClicked(object? sender, EventArgs e)
+    {
+        using var ofd = new OpenFileDialog
+        {
+            Filter = "JSON files (*.json)|*.json",
+            Title = "Import Profile"
+        };
+
+        if (ofd.ShowDialog() != DialogResult.OK) return;
+
+        try
+        {
+            var json = File.ReadAllText(ofd.FileName);
+            _btnCreateProfile.Enabled = false;
+            _btnDeleteProfile.Enabled = false;
+            _lstProfiles.Enabled = false;
+
+            await Task.Run(() =>
+            {
+                ProfileImportExport.Import(json, _languages, _portConfigs, msg =>
+                    Invoke(() => Text = $"Agent Sandbox — {msg}"));
+            });
+
+            Text = "Agent Sandbox";
+            MessageBox.Show("Profile imported and built successfully.", "Import Complete",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            Text = "Agent Sandbox";
+            MessageBox.Show($"Import failed: {ex.Message}", "Error",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            _btnCreateProfile.Enabled = true;
+            _btnDeleteProfile.Enabled = true;
+            _lstProfiles.Enabled = true;
+        }
 
         RefreshProfileList();
     }
@@ -405,7 +516,9 @@ public sealed class WizardForm : Form
         {
             Location = new Point(32, 104),
             Size = new Size(528, 28),
-            Font = new Font("Segoe UI", 10f)
+            Font = new Font("Segoe UI", 10f),
+            ReadOnly = true,
+            BackColor = Color.White
         };
 
         _btnBrowse = new Button
@@ -463,26 +576,71 @@ public sealed class WizardForm : Form
         _cboProfile = new ComboBox
         {
             Location = new Point(32, 316),
-            Size = new Size(264, 28),
+            Size = new Size(200, 28),
             DropDownStyle = ComboBoxStyle.DropDownList,
             Font = new Font("Segoe UI", 10f)
         };
         _cboProfile.SelectedIndexChanged += OnProfileSelectionChanged;
 
+        // Agent selector (filtered by profile)
+        _lblAgent = new Label
+        {
+            Text = "Agent",
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            ForeColor = TextPrimary,
+            Location = new Point(244, 296),
+            AutoSize = true,
+            Visible = false
+        };
+        _cboAgent = new ComboBox
+        {
+            Location = new Point(244, 316),
+            Size = new Size(160, 28),
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Font = new Font("Segoe UI", 10f),
+            Visible = false
+        };
+
         _btnLaunch = new Button
         {
             Text = "Launch",
-            Location = new Point(504, 312),
-            Size = new Size(168, 44),
+            Location = new Point(420, 310),
+            Size = new Size(120, 40),
             Font = new Font("Segoe UI", 10f, FontStyle.Bold)
         };
         StyleFilledButton(_btnLaunch, AccentBlue, Color.White);
         _btnLaunch.Click += OnLaunchClicked;
 
+        // Profile info
+        _lblProfileInfo = new Label
+        {
+            Text = "",
+            Font = new Font("Segoe UI", 9f),
+            ForeColor = TextMuted,
+            Location = new Point(32, 350),
+            Size = new Size(640, 18),
+            Visible = false
+        };
+
+        // VS Code link (shown after launch, right below project folder)
+        _lnkVsCode = new LinkLabel
+        {
+            Text = "",
+            Font = new Font("Segoe UI", 9.5f),
+            LinkColor = AccentBlue,
+            Location = new Point(32, 134),
+            AutoSize = true,
+            Visible = false
+        };
+        _lnkVsCode.LinkClicked += (_, _) =>
+        {
+            try { System.Diagnostics.Process.Start(new ProcessStartInfo(_lnkVsCode.Tag?.ToString() ?? "") { UseShellExecute = true }); } catch { }
+        };
+
         // Plugin toggles (populated dynamically when profile changes)
         _lblPlugins = new Label
         {
-            Text = "Plugins",
+            Text = "Plugins (toggle for this launch)",
             Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
             ForeColor = TextPrimary,
             Location = new Point(32, 356),
@@ -523,15 +681,6 @@ public sealed class WizardForm : Form
         _btnEditUserEnv.ForeColor = AccentBlue;
         _btnEditUserEnv.Click += OnEditUserEnvClicked;
 
-        _btnSettings = new Button
-        {
-            Text = "Settings\u2026",
-            Location = new Point(344, 432),
-            Size = new Size(96, 36)
-        };
-        StyleFlatButton(_btnSettings, TextMuted);
-        _btnSettings.Click += (_, _) => new SettingsForm().ShowDialog(this);
-
         _txtLog = new TextBox
         {
             Location = new Point(32, 476),
@@ -567,8 +716,10 @@ public sealed class WizardForm : Form
 
         _stepLaunch.Controls.AddRange([headerPanel, lblPath, _txtPath, _btnBrowse,
             _lblRecent, _lstRecent, lblProfile, _cboProfile,
-            _btnLaunch, _lblPlugins, _pluginPanel,
-            _btnBackToProfiles, _btnEditUserEnv, _btnSettings,
+            _lblAgent, _cboAgent, _btnLaunch,
+            _lblProfileInfo, _lnkVsCode,
+            _lblPlugins, _pluginPanel,
+            _btnBackToProfiles, _btnEditUserEnv,
             _txtLog, _btnBackOverview, _btnClose]);
         Controls.Add(_stepLaunch);
 
@@ -579,21 +730,39 @@ public sealed class WizardForm : Form
     private void OnRecentProjectSelected(object? sender, EventArgs e)
     {
         if (_lstRecent.SelectedItems.Count == 0) return;
-
         var item = _lstRecent.SelectedItems[0];
-        var workspacePath = item.SubItems[3].Text;
-        var profile = item.SubItems[1].Text;
+        _txtPath.Text = item.SubItems[3].Text;
+        AutoSelectProfileForPath(item.SubItems[3].Text, item.SubItems[1].Text);
+    }
 
-        _txtPath.Text = workspacePath;
+    /// <summary>Auto-select the profile for a project path. Reads .sandbox file first, then falls back to hint.</summary>
+    private void AutoSelectProfileForPath(string path, string? hint = null)
+    {
+        string? profile = null;
 
-        // Auto-select profile in dropdown
+        // Read .sandbox file in the project directory
+        var sandboxFile = Path.Combine(path, ".sandbox");
+        if (File.Exists(sandboxFile))
+        {
+            try
+            {
+                foreach (var line in File.ReadAllLines(sandboxFile))
+                {
+                    var trimmed = line.Trim();
+                    if (trimmed.StartsWith("profile:", StringComparison.OrdinalIgnoreCase))
+                    { profile = trimmed["profile:".Length..].Trim(); break; }
+                }
+            }
+            catch { }
+        }
+
+        profile ??= hint;
+        if (string.IsNullOrEmpty(profile)) return;
+
         for (int i = 0; i < _cboProfile.Items.Count; i++)
         {
             if (_cboProfile.Items[i] as string == profile)
-            {
-                _cboProfile.SelectedIndex = i;
-                break;
-            }
+            { _cboProfile.SelectedIndex = i; return; }
         }
     }
 
@@ -602,26 +771,101 @@ public sealed class WizardForm : Form
         _pluginPanel.Controls.Clear();
         _pluginChecks.Clear();
         _pluginKeys.Clear();
+        _lblProfileInfo.Visible = false;
+        _lnkVsCode.Visible = false;
 
         if (_cboProfile.SelectedItem is not string profileName) return;
 
         var profileJson = Path.Combine(ResourceManager.PreparedDir, profileName, "profile.json");
         if (!File.Exists(profileJson)) return;
 
-        // Read which plugins are installed in this profile
+        // Read profile data
         List<string> installedPlugins;
+        var customItems = new HashSet<string>();
+        var skillItems = new HashSet<string>();
+        var agents = new List<string>();
+        var hasVsCode = false;
         try
         {
             using var doc = JsonDocument.Parse(File.ReadAllText(profileJson));
             var root = doc.RootElement;
-            if (!root.TryGetProperty("plugins", out var pluginsEl) || pluginsEl.ValueKind != JsonValueKind.Array)
-                return;
-            installedPlugins = pluginsEl.EnumerateArray()
-                .Select(p => p.GetString() ?? "")
-                .Where(p => !string.IsNullOrEmpty(p))
-                .ToList();
+
+            if (root.TryGetProperty("agents", out var agentsEl) && agentsEl.ValueKind == JsonValueKind.Array)
+                agents = agentsEl.EnumerateArray().Select(a => a.GetString() ?? "").Where(a => a != "").ToList();
+
+            if (root.TryGetProperty("additions", out var addEl) && addEl.ValueKind == JsonValueKind.Array)
+                hasVsCode = addEl.EnumerateArray().Any(a => a.GetString() == "vscode-server");
+
+            installedPlugins = new List<string>();
+            if (root.TryGetProperty("plugins", out var pluginsEl) && pluginsEl.ValueKind == JsonValueKind.Array)
+                installedPlugins.AddRange(pluginsEl.EnumerateArray().Select(p => p.GetString() ?? "").Where(p => p != ""));
+
+            if (root.TryGetProperty("custom_plugins", out var cpEl) && cpEl.ValueKind == JsonValueKind.Array)
+                foreach (var p in cpEl.EnumerateArray().Select(el2 => el2.GetString() ?? "").Where(s => s != ""))
+                { installedPlugins.Add(p); customItems.Add(p); }
+
+            if (root.TryGetProperty("skills", out var skEl) && skEl.ValueKind == JsonValueKind.Array)
+                foreach (var s in skEl.EnumerateArray().Select(el2 => el2.GetString() ?? "").Where(s => s != ""))
+                { installedPlugins.Add(s); skillItems.Add(s); }
         }
         catch { return; }
+
+        // Populate agent selector from profile
+        _cboAgent.Items.Clear();
+        _profileAgentKeys.Clear();
+        var agentsJsonPath = Path.Combine(ResourceManager.SandboxDir, "agents.json");
+        JsonDocument? agentsDef = null;
+        try { if (File.Exists(agentsJsonPath)) agentsDef = JsonDocument.Parse(File.ReadAllText(agentsJsonPath)); } catch { }
+        foreach (var ag in agents)
+        {
+            var agLabel = ag;
+            if (agentsDef?.RootElement.TryGetProperty(ag, out var agEl) == true && agEl.TryGetProperty("label", out var lbl))
+                agLabel = lbl.GetString() ?? ag;
+            _profileAgentKeys.Add(ag);
+            _cboAgent.Items.Add(agLabel);
+        }
+        agentsDef?.Dispose();
+
+        // Add "VS Code only" option if profile has vscode-server
+        if (hasVsCode)
+        {
+            _profileAgentKeys.Add("_vscode");
+            _cboAgent.Items.Add("VS Code only (no agent)");
+        }
+
+        // Pre-select the saved default agent if it's in this profile, otherwise first
+        var savedAgent = SavedSettings.GetDefaultAgent();
+        var savedIdx = _profileAgentKeys.IndexOf(savedAgent);
+        _cboAgent.SelectedIndex = savedIdx >= 0 ? savedIdx : (_cboAgent.Items.Count > 0 ? 0 : -1);
+        _lblAgent.Visible = _cboAgent.Items.Count > 0;
+        _cboAgent.Visible = _cboAgent.Items.Count > 0;
+
+        // VS Code state
+        _profileHasVsCode = hasVsCode;
+        _vsCodePort = 4040;
+        if (hasVsCode)
+        {
+            var vsProjectPath = _txtPath.Text.Trim();
+            if (!string.IsNullOrEmpty(vsProjectPath) && Directory.Exists(vsProjectPath))
+            {
+                try
+                {
+                    var pName = ProjectScaffolder.ResolveProjectName(vsProjectPath);
+                    var composePath = Path.Combine(ProjectScaffolder.GetProjectDir(pName), "docker-compose.yml");
+                    if (File.Exists(composePath))
+                        foreach (var line in File.ReadAllLines(composePath))
+                        {
+                            var m = System.Text.RegularExpressions.Regex.Match(line, @"""(\d+):4040""");
+                            if (m.Success && int.TryParse(m.Groups[1].Value, out var mapped))
+                            { _vsCodePort = mapped; break; }
+                        }
+                }
+                catch { }
+            }
+        }
+        _lblProfileInfo.Text = "";
+        _lblProfileInfo.Visible = false;
+        _lnkVsCode.Visible = false;
 
         if (installedPlugins.Count == 0) return;
 
@@ -663,20 +907,38 @@ public sealed class WizardForm : Form
 
         foreach (var plugin in installedPlugins)
         {
-            var desc = "";
-            if (pluginsDef != null &&
-                pluginsDef.RootElement.TryGetProperty(plugin, out var pEl) &&
-                pEl.TryGetProperty("description", out var dEl))
-                desc = dEl.GetString() ?? "";
-
-            var label = string.IsNullOrEmpty(desc) ? plugin : $"{plugin} — {desc}";
+            var isFixed = skillItems.Contains(plugin) || customItems.Contains(plugin);
+            string label;
+            if (skillItems.Contains(plugin))
+            {
+                label = $"[skill] {plugin} (always active)";
+            }
+            else if (customItems.Contains(plugin))
+            {
+                label = $"[npm] {plugin} (always active)";
+            }
+            else
+            {
+                var desc = "";
+                if (pluginsDef != null &&
+                    pluginsDef.RootElement.TryGetProperty(plugin, out var pEl) &&
+                    pEl.TryGetProperty("description", out var dEl))
+                {
+                    desc = dEl.GetString() ?? "";
+                    var dot = desc.IndexOf(". ", StringComparison.Ordinal);
+                    if (dot > 0) desc = desc[..dot];
+                }
+                label = string.IsNullOrEmpty(desc) ? plugin : $"{plugin} — {desc}";
+            }
             var cb = new CheckBox
             {
                 Text = label,
                 Width = 620,
                 Height = 22,
-                Checked = activePlugins.Contains(plugin),
+                Checked = isFixed || activePlugins.Contains(plugin),
+                Enabled = !isFixed,
                 Font = new Font("Segoe UI", 9f),
+                ForeColor = isFixed ? TextMuted : TextPrimary,
                 Margin = new Padding(4, 1, 0, 1)
             };
             _pluginChecks.Add(cb);
@@ -785,15 +1047,20 @@ public sealed class WizardForm : Form
 
     private void RefreshProfileDropdown()
     {
+        var previousSelection = _cboProfile.SelectedItem as string;
         _cboProfile.Items.Clear();
 
         if (!Directory.Exists(ResourceManager.PreparedDir)) return;
 
         foreach (var dir in Directory.GetDirectories(ResourceManager.PreparedDir))
-        {
             _cboProfile.Items.Add(Path.GetFileName(dir)!);
-        }
 
+        // Restore previous selection if still available
+        if (!string.IsNullOrEmpty(previousSelection))
+        {
+            var idx = _cboProfile.Items.IndexOf(previousSelection);
+            if (idx >= 0) { _cboProfile.SelectedIndex = idx; return; }
+        }
         if (_cboProfile.Items.Count > 0)
             _cboProfile.SelectedIndex = 0;
     }
@@ -825,19 +1092,9 @@ public sealed class WizardForm : Form
             return;
         }
 
-        // Re-check profiles in case they were deleted externally
-        RefreshProfileDropdown();
-
-        if (_cboProfile.Items.Count == 0)
-        {
-            var create = MessageBox.Show(
-                "No profiles found. Create one now?",
-                "No Profiles", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-            if (create == DialogResult.Yes)
-                OnCreateProfileClicked(null, EventArgs.Empty);
-            RefreshProfileDropdown();
-            return;
-        }
+        // Read the agent selection and profile BEFORE any refresh that could reset the dropdowns
+        var selectedAgentKey = _cboAgent.SelectedIndex >= 0 && _cboAgent.SelectedIndex < _profileAgentKeys.Count
+            ? _profileAgentKeys[_cboAgent.SelectedIndex] : "";
 
         if (_cboProfile.SelectedItem is not string profileName || string.IsNullOrEmpty(profileName))
         {
@@ -861,17 +1118,69 @@ public sealed class WizardForm : Form
                 "Docker Not Found", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
+        var isVsCodeLaunch = selectedAgentKey == "_vscode";
+
+        // Resolve the agent command to use for exec (reattach or normal launch)
+        string agentCommand;
+        if (isVsCodeLaunch)
+        {
+            agentCommand = ""; // not used in VS Code mode
+        }
+        else if (!string.IsNullOrEmpty(selectedAgentKey))
+        {
+            SavedSettings.SetDefaultAgent(selectedAgentKey);
+            agentCommand = ProjectScaffolder.MapAgentKeyToCommand(selectedAgentKey);
+        }
+        else
+        {
+            agentCommand = "opencode";
+        }
+
+        // Check if profile changed from .sandbox file — offer to update
+        var sandboxFile = Path.Combine(path, ".sandbox");
+        if (File.Exists(sandboxFile))
+        {
+            string? currentProfile = null;
+            try
+            {
+                foreach (var line in File.ReadAllLines(sandboxFile))
+                {
+                    var trimmed = line.Trim();
+                    if (trimmed.StartsWith("profile:", StringComparison.OrdinalIgnoreCase))
+                    { currentProfile = trimmed["profile:".Length..].Trim(); break; }
+                }
+            }
+            catch { }
+
+            if (!string.IsNullOrEmpty(currentProfile) && currentProfile != profileName)
+            {
+                var change = MessageBox.Show(
+                    $"This project currently uses profile '{currentProfile}'.\nYou selected '{profileName}'.\n\nUpdate the project to use '{profileName}' as default?",
+                    "Profile Changed", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (change == DialogResult.Yes)
+                {
+                    try { File.WriteAllText(sandboxFile, $"profile: {profileName}\n"); }
+                    catch { }
+                }
+            }
+        }
 
         // Switch to launch mode — hide pre-launch controls, show log
         SetLaunchMode(true);
 
-        await RunCoreLaunch(path, profileName);
+        await RunCoreLaunch(path, profileName, isVsCodeLaunch, agentCommand);
     }
 
-    private async Task RunCoreLaunch(string workspacePath, string profileName)
+    private async Task RunCoreLaunch(string workspacePath, string profileName, bool vsCodeOnly = false, string agentCommand = "opencode")
     {
+        var portRemaps = new List<string>();
+
         void Log(string msg)
         {
+            // Capture port remap messages for the summary notice
+            if (msg.Contains("remapped to"))
+                portRemaps.Add(msg);
+
             if (InvokeRequired)
                 Invoke(() => Log(msg));
             else
@@ -901,13 +1210,19 @@ public sealed class WizardForm : Form
                 var composeFile = Path.Combine(projectDir, "docker-compose.yml");
                 var containerId = DockerRunner.GetComposeContainerId(composeFile, projectDir) ?? containerName;
 
-                var choice = MessageBox.Show(
-                    $"Container '{containerName}' is already running.\n\n" +
-                    "Yes = Reattach (open new agent session in running container)\n" +
-                    "No = Restart (stop and relaunch with current settings)\n" +
-                    "Cancel = Abort",
-                    "Container Running", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                var selectedLabel = vsCodeOnly ? "VS Code Server" : agentCommand;
+                var dialogMsg = $"Container '{containerName}' is already running.\n\n" +
+                    $"Yes = Attach '{selectedLabel}' as a new session in the running container\n" +
+                    $"No = Restart the container with current settings\n" +
+                    $"Cancel = Do nothing";
 
+                var choice = MessageBox.Show(dialogMsg,
+                    "Container Running",
+                    MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question,
+                    MessageBoxDefaultButton.Button1,
+                    0, false);
+
+                // Relabel: Yes=Attach, No=Restart, Cancel=Cancel
                 if (choice == DialogResult.Cancel)
                 {
                     SetLaunchMode(false);
@@ -916,12 +1231,29 @@ public sealed class WizardForm : Form
 
                 if (choice == DialogResult.Yes)
                 {
-                    // Reattach — just exec into the running container
-                    Log($"[sandbox] Reattaching to {containerName}...");
-                    var agentCmd = ProjectScaffolder.GetAgentCommand(projectName);
-                    Log($"[sandbox] Launching agent: {agentCmd}");
-                    DockerRunner.ExecInteractive(containerId, agentCmd, newWindow: true);
-                    Log("[sandbox] Agent launched in new window.");
+                    if (vsCodeOnly)
+                    {
+                        // VS Code — container already running, just show link
+                        var actualPort = 4040;
+                        var cf = Path.Combine(projectDir, "docker-compose.yml");
+                        if (File.Exists(cf))
+                            foreach (var line in File.ReadAllLines(cf))
+                            {
+                                var pm = System.Text.RegularExpressions.Regex.Match(line, @"""(\d+):4040""");
+                                if (pm.Success && int.TryParse(pm.Groups[1].Value, out var mp))
+                                { actualPort = mp; break; }
+                            }
+                        _vsCodePort = actualPort;
+                        Log($"[sandbox] VS Code Server is running at http://localhost:{actualPort}");
+                    }
+                    else
+                    {
+                        // Attach new agent session in running container
+                        Log($"[sandbox] Attaching new session to {containerName}...");
+                        Log($"[sandbox] Launching: {agentCommand}");
+                        DockerRunner.ExecInteractive(containerId, agentCommand, newWindow: true);
+                        Log("[sandbox] Agent session launched in new window.");
+                    }
                     Invoke(() =>
                     {
                         _btnBackOverview.Visible = true;
@@ -930,7 +1262,7 @@ public sealed class WizardForm : Form
                     return;
                 }
 
-                // Rebuild — stop existing container first
+                // Restart — stop existing container first
                 Log($"[sandbox] Stopping existing container '{containerName}'...");
                 await Task.Run(() =>
                 {
@@ -987,8 +1319,9 @@ public sealed class WizardForm : Form
                 ProjectScaffolder.WriteRuntimeEnv(projectName);
                 ProjectScaffolder.SyncHostAuth(projectName, Log);
 
-                // Remap ports if needed
-                ProjectScaffolder.RemapPorts(projectName, Log);
+                // VS Code only mode: override entrypoint to skip agent entirely
+                var composePath = Path.Combine(projectDir, "docker-compose.yml");
+                SetComposeVsCodeOnly(composePath, vsCodeOnly);
 
                 // Compose up with port retry
                 var composeFile = Path.Combine(projectDir, "docker-compose.yml");
@@ -1029,24 +1362,79 @@ public sealed class WizardForm : Form
                 // Update last started
                 ProjectScaffolder.UpdateLastStarted(projectName);
 
-                // Launch agent in new window (returns immediately — agent runs in separate cmd.exe)
                 var containerTarget = containerId ?? $"{projectName}-agent-1";
-                var agentCmd = ProjectScaffolder.GetAgentCommand(projectName);
-                Log($"[sandbox] Launching agent: {agentCmd}");
-                DockerRunner.ExecInteractive(containerTarget, agentCmd, newWindow: true);
 
-                // Note: Dockerfile.extension check cannot run here because the agent is
-                // still running in a new window. It will be checked on next launch instead
-                // (RefreshFromProfile path in the existing project branch above).
+                // Re-read the actual VS Code port from compose (may have been remapped)
+                var actualVsPort = 4040;
+                var composeForPort = Path.Combine(projectDir, "docker-compose.yml");
+                if (File.Exists(composeForPort))
+                    foreach (var line in File.ReadAllLines(composeForPort))
+                    {
+                        var pm = System.Text.RegularExpressions.Regex.Match(line, @"""(\d+):4040""");
+                        if (pm.Success && int.TryParse(pm.Groups[1].Value, out var mp))
+                        { actualVsPort = mp; break; }
+                    }
+                _vsCodePort = actualVsPort;
 
-                Log("[sandbox] Agent launched in new window.");
+                // Verify code-server is actually in the Dockerfile
+                var dfCheck = Path.Combine(profileDir, "Dockerfile.base");
+                if (File.Exists(dfCheck) && !File.ReadAllText(dfCheck).Contains("code-server"))
+                    Log("[sandbox] WARNING: VS Code Server is not in this profile's Dockerfile. Rebuild the profile to add it.");
+
+                if (vsCodeOnly)
+                {
+                    Log("");
+                    Log("  ╔══════════════════════════════════════════════════╗");
+                    Log($"  ║  VS Code Server: http://localhost:{actualVsPort,-14}║");
+                    Log("  ╚══════════════════════════════════════════════════╝");
+                    Log("");
+                    Log("[sandbox] The container is running in the background.");
+                    Log("[sandbox] Open the URL above in your browser to start coding.");
+                }
+                else
+                {
+                    if (_profileHasVsCode)
+                        Log($"[sandbox] VS Code Server also available at: http://localhost:{actualVsPort}");
+
+                    Log($"[sandbox] Launching agent: {agentCommand}");
+                    DockerRunner.ExecInteractive(containerTarget, agentCommand, newWindow: true);
+                    Log("[sandbox] Agent launched in new window.");
+                }
             });
 
-            // Show completion buttons
+            // Show completion buttons + update VS Code link with actual port
             Invoke(() =>
             {
                 _btnBackOverview.Visible = true;
                 _btnClose.Visible = true;
+
+                // Update VS Code link with actual port (may differ from pre-launch value)
+                if (_profileHasVsCode && _vsCodePort > 0)
+                {
+                    _lnkVsCode.Text = $"VS Code Server: http://localhost:{_vsCodePort}";
+                    _lnkVsCode.Tag = $"http://localhost:{_vsCodePort}";
+                    _lnkVsCode.Visible = true;
+                }
+
+                if (portRemaps.Count > 0)
+                {
+                    var remapText = string.Join("  |  ", portRemaps.Select(r =>
+                    {
+                        var m = System.Text.RegularExpressions.Regex.Match(r, @"Port (\d+).*remapped to (\d+):(\d+)");
+                        return m.Success ? $"localhost:{m.Groups[1].Value} \u2192 localhost:{m.Groups[2].Value}" : r;
+                    }));
+                    var notice = new Label
+                    {
+                        Text = $"\u26a0 Port remapping: {remapText}",
+                        Left = 32, Top = _txtLog.Top - 28,
+                        Width = _txtLog.Width, Height = 22,
+                        Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                        ForeColor = Color.FromArgb(180, 120, 0)
+                    };
+                    _stepLaunch.Controls.Add(notice);
+                    notice.BringToFront();
+                    _launchTempControls.Add(notice);
+                }
             });
         }
         catch (Exception ex)
@@ -1062,6 +1450,20 @@ public sealed class WizardForm : Form
 
     private void OnBackToOverviewClicked(object? sender, EventArgs e)
     {
+        // Remove dynamically created labels (port remap notices etc.)
+        foreach (var c in _launchTempControls)
+        {
+            _stepLaunch.Controls.Remove(c);
+            c.Dispose();
+        }
+        _launchTempControls.Clear();
+
+        // Clear log
+        _txtLog.Clear();
+        _txtLog.Visible = false;
+        _btnBackOverview.Visible = false;
+        _btnClose.Visible = false;
+
         SetLaunchMode(false);
         RefreshProfileDropdown();
         RefreshRecentProjects();
@@ -1076,12 +1478,19 @@ public sealed class WizardForm : Form
         _lblRecent.Visible = !launching;
         _lstRecent.Visible = !launching;
         _btnBrowse.Visible = !launching;
+        _lblAgent.Visible = !launching && _cboAgent.Items.Count > 0;
+        _cboAgent.Visible = !launching && _cboAgent.Items.Count > 0;
+        _lblProfileInfo.Visible = !launching && _lblProfileInfo.Text.Length > 0;
         _lblPlugins.Visible = !launching && _pluginChecks.Count > 0;
         _pluginPanel.Visible = !launching && _pluginChecks.Count > 0;
         _btnLaunch.Visible = !launching;
         _btnBackToProfiles.Visible = !launching;
         _btnEditUserEnv.Visible = !launching;
-        _btnSettings.Visible = !launching;
+
+        // Hide VS Code link during launch transition; it will be shown
+        // after launch completes with the actual (post-remap) port
+        if (!launching)
+            _lnkVsCode.Visible = false;
 
         // Path and profile: keep visible but readonly during launch
         _txtPath.ReadOnly = launching;
@@ -1167,5 +1576,34 @@ public sealed class WizardForm : Form
         var stdout = proc.StandardOutput.ReadToEnd();
         proc.WaitForExit();
         return (proc.ExitCode, stdout);
+    }
+
+    /// <summary>
+    /// For VS Code only mode: override the entrypoint in docker-compose.yml to use
+    /// install-vscode.sh (setup + code-server, no agent) instead of install.sh.
+    /// For normal mode: ensure no entrypoint override is present.
+    /// </summary>
+    private static void SetComposeVsCodeOnly(string composePath, bool vsCodeOnly)
+    {
+        if (!File.Exists(composePath)) return;
+        var lines = File.ReadAllLines(composePath).ToList();
+
+        // Remove any existing entrypoint override we previously injected
+        lines.RemoveAll(l => l.TrimStart().StartsWith("entrypoint:") && l.Contains("# vscode-only"));
+
+        if (vsCodeOnly)
+        {
+            // Find the "    build:" line and insert entrypoint override after it
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (lines[i].TrimEnd().StartsWith("    build:"))
+                {
+                    lines.Insert(i + 1, "    entrypoint: [\"/install-vscode.sh\"]  # vscode-only");
+                    break;
+                }
+            }
+        }
+
+        ResourceManager.WriteLf(composePath, string.Join("\n", lines) + "\n");
     }
 }

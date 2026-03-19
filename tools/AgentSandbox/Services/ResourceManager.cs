@@ -10,13 +10,14 @@ public static class ResourceManager
 {
     private static readonly Assembly Asm = Assembly.GetExecutingAssembly();
     private const string Prefix = "AgentSandbox.Resources.";
-    private const string VersionStamp = "2.0.0";
+    private const string VersionStamp = "2.4.0";
 
     public static string AppDataRoot { get; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AgentSandbox");
 
     public static string SandboxDir => Path.Combine(AppDataRoot, "sandbox");
     public static string FragmentsDir => Path.Combine(SandboxDir, "fragments");
+    public static string AdditionsFragmentsDir => Path.Combine(SandboxDir, "additions");
     public static string TemplatesDir => Path.Combine(AppDataRoot, "templates");
     public static string PreparedDir => Path.Combine(AppDataRoot, "prepared");
     public static string ProjectsDir => Path.Combine(AppDataRoot, "projects");
@@ -25,7 +26,21 @@ public static class ResourceManager
     {
         var stampFile = Path.Combine(AppDataRoot, ".version");
         var oldVersion = File.Exists(stampFile) ? File.ReadAllText(stampFile).Trim() : "";
-        if (oldVersion == VersionStamp)
+
+        // Re-extract if version changed OR if exe is newer than stamp file
+        var needsExtract = oldVersion != VersionStamp;
+        if (!needsExtract && File.Exists(stampFile))
+        {
+            try
+            {
+                var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                if (!string.IsNullOrEmpty(exePath) && File.Exists(exePath))
+                    needsExtract = File.GetLastWriteTimeUtc(exePath) > File.GetLastWriteTimeUtc(stampFile);
+            }
+            catch { /* ignore — fall back to version check */ }
+        }
+
+        if (!needsExtract)
             return;
 
         // Migrate from v1 to v2: clean stale project configurations
@@ -136,6 +151,15 @@ public static class ResourceManager
             return Path.Combine(FragmentsDir, fileName);
         }
 
+        // additions/ subdirectory files (e.g. "additions.vscode-server.sh")
+        // but NOT "additions.json" which is a top-level sandbox file
+        if (embeddedName.StartsWith("additions.") && !embeddedName.Equals("additions.json", StringComparison.OrdinalIgnoreCase))
+        {
+            var fileName = embeddedName["additions.".Length..];
+            fileName = RestoreFileName(fileName);
+            return Path.Combine(AdditionsFragmentsDir, fileName);
+        }
+
         if (embeddedName.StartsWith("templates."))
         {
             var fileName = embeddedName["templates.".Length..];
@@ -179,6 +203,9 @@ public static class ResourceManager
 
     public static string ReadFragment(string fileName) =>
         NormalizeLf(File.ReadAllText(Path.Combine(FragmentsDir, fileName)));
+
+    public static string ReadAdditionFragment(string fileName) =>
+        NormalizeLf(File.ReadAllText(Path.Combine(AdditionsFragmentsDir, fileName)));
 
     public static string ReadTemplate(string fileName) =>
         NormalizeLf(File.ReadAllText(Path.Combine(TemplatesDir, fileName)));

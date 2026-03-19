@@ -114,35 +114,48 @@ public sealed class SettingsForm : Form
             _cboDefaultAgent.SelectedIndex = 0;
         y += 48;
 
-        // ─── Environment variables section (bordered panel) ───
-        var envSectionLabel = new Label
+        // ─── Environment variables section (collapsible) ───
+        var envToggle = new CheckBox
         {
-            Text = "API keys & environment variables",
-            Font = new Font("Segoe UI", 11f, FontStyle.Bold),
+            Text = "API keys & environment variables (rarely needed — most agents use login)",
+            Font = new Font("Segoe UI", 10f, FontStyle.Bold),
             ForeColor = TextDark,
             Location = new Point(pad, y),
             AutoSize = true
-        };
-        y += 26;
-        var envSectionHint = new Label
-        {
-            Text = "Stored encrypted. Used as defaults when launching sandboxes.",
-            ForeColor = TextMuted,
-            Font = new Font("Segoe UI", 9f),
-            Location = new Point(pad, y),
-            Size = new Size(520, 20),
-            AutoEllipsis = true
         };
         y += 32;
 
         var envPanel = new Panel
         {
             Location = new Point(pad, y),
-            Size = new Size(528, 392),
+            Size = new Size(528, 400),
             BackColor = Color.FromArgb(250, 250, 250),
-            BorderStyle = BorderStyle.FixedSingle
+            BorderStyle = BorderStyle.FixedSingle,
+            Visible = false
         };
-        int py = 16;
+        var envHintInside = new Label
+        {
+            Text = "Stored encrypted. Used as defaults when launching sandboxes. Most agents use 'login' instead.",
+            ForeColor = TextMuted,
+            Font = new Font("Segoe UI", 8.5f),
+            Location = new Point(16, 8),
+            Size = new Size(496, 20)
+        };
+        envPanel.Controls.Add(envHintInside);
+
+        // Track button positions for collapse/expand
+        var btnY = y + 400 + 24;
+        envToggle.CheckedChanged += (_, _) =>
+        {
+            envPanel.Visible = envToggle.Checked;
+            // Reposition buttons
+            var newBtnY = envToggle.Checked ? btnY : y + 24;
+            foreach (Control c in Controls)
+                if (c is Button b && (b.Text == "Cancel" || b.Text == "Save"))
+                    b.Top = newBtnY;
+            Size = new Size(Size.Width, envToggle.Checked ? 760 : 360);
+        };
+        int py = 32;
         (string label, string key)[] fields =
         [
             ("ANTHROPIC_API_KEY (Claude Code)", "ANTHROPIC_API_KEY"),
@@ -221,11 +234,18 @@ public sealed class SettingsForm : Form
         btnSave.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(AccentBlue, 0.1f);
         btnSave.Click += OnSaveClicked;
 
+        // Buttons — position depends on env panel visibility
+        btnCancel.Location = new Point(pad, y + 24);
+        btnSave.Location = new Point(456, y + 24);
+
         Controls.AddRange([
             lblAgentSection, lblAgentHint, _cboDefaultAgent,
-            envSectionLabel, envSectionHint, envPanel,
+            envToggle, envPanel,
             btnCancel, btnSave
         ]);
+
+        // Start collapsed
+        Size = new Size(600, 360);
     }
 
     private sealed class AgentItem

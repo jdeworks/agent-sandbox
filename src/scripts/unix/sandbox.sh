@@ -169,7 +169,7 @@ remap_compose_ports() {
             free_port=$(find_free_port "$host_port")
             if [ "$free_port" != "$host_port" ]; then
                 echo "${prefix}${free_port}:${container_port}${suffix}" >> "$tmpfile"
-                echo "[sandbox] Port $host_port in use -> remapped to $free_port:$container_port"
+                echo "[sandbox] ⚠ Port $host_port in use -> remapped to $free_port:$container_port"
                 any_remapped=true
             else
                 echo "$line" >> "$tmpfile"
@@ -180,6 +180,14 @@ remap_compose_ports() {
     done < "$compose_file"
 
     mv "$tmpfile" "$compose_file"
+
+    if $any_remapped; then
+        echo ""
+        echo "  ╔══════════════════════════════════════════════════════╗"
+        echo "  ║  Some ports were remapped — check URLs above        ║"
+        echo "  ╚══════════════════════════════════════════════════════╝"
+        echo ""
+    fi
 }
 
 # Consider container ready if (1) ready file exists, or (2) logs show "[sandbox] Ready."
