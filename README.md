@@ -39,8 +39,10 @@ sandbox-python ~/my-project
 
 **GUI:** Double-click `agent-sandbox.exe` to launch the wizard:
 
-1. **Profiles** — create profiles by picking agents, languages, and plugins. Each profile builds a Docker image.
-2. **Launch** — select a project folder and profile, then click Launch. The app scaffolds the project, starts the container, and opens the agent in a new terminal window.
+1. **Profiles** — create, delete, rebuild, import, and export profiles. Each profile builds a Docker image with your selected agents, languages, plugins, and additions (e.g. VS Code Server).
+2. **Launch** — select a project folder, profile, and agent from the dropdown. Toggle plugins on/off per launch. Recent projects are listed for quick access. If a container is already running, you can attach a new session or restart it.
+
+Select **VS Code only (no agent)** from the agent dropdown to start the container with just VS Code Server — no agent process runs.
 
 Settings (gear icon) lets you save API keys and pick a default agent.
 
@@ -59,7 +61,7 @@ agent-sandbox sandbox C:\path\to\project       Launch a sandbox
 Each profile generates:
 - A `Dockerfile.base` with the selected agents and language runtimes
 - A `docker-compose.yml.tpl` with named volumes, ports, and environment
-- An `install.sh` entrypoint that auto-installs dependencies on startup
+- An `install.sh` entrypoint that auto-installs dependencies on startup (plus `install-vscode.sh` for VS Code only mode)
 - Agent instruction files (AGENTS.md, CLAUDE.md, .cursorrules) assembled from base + language fragments
 
 ## Command Reference
@@ -180,7 +182,7 @@ Optional tools that can be baked into the container image during profile creatio
 |----------|-------------|-------------|------|
 | VS Code Server | Browser-based VS Code editor ([code-server](https://github.com/coder/code-server)) | 4040 | ~300MB |
 
-When enabled, the addition's port is automatically included in the Docker port mappings. VS Code Server starts in the background when the container launches and is accessible at `http://localhost:4040` with no authentication (localhost-only).
+When enabled, the addition's port is automatically included in the Docker port mappings. VS Code Server starts in the background when the container launches and is accessible at `http://localhost:4040` with no authentication (localhost-only). On the Windows GUI, you can also select **VS Code only (no agent)** from the agent dropdown to run just the editor.
 
 VS Code extensions and user data persist across container restarts via named volumes (`asb_vscode_extensions_<project>`, `asb_vscode_data_<project>`).
 
@@ -261,7 +263,7 @@ Ports are dynamically selected during profile creation. Base ports (3000, 8080) 
 
 ### Multiple Sandboxes
 
-You can run multiple sandboxes simultaneously. Auto port remapping: when a port is already in use, it is remapped to the next free port (e.g. `Port 3000 in use -> remapped to 3001:3000`). The container-side port stays the same; only the host-side mapping changes.
+You can run multiple sandboxes simultaneously. If a port conflict is detected during container startup, it is automatically remapped to the next free port (e.g. `Port 3000 in use -> remapped to 3001:3000`). The container-side port stays the same; only the host-side mapping changes.
 
 ## Profile Import/Export
 
@@ -300,7 +302,7 @@ For expert users, `sandbox-setup` offers (under **Advanced options**):
 
 These are stored in `profile.json` and reproduced on import/export.
 
-> **Note:** Custom Dockerfile lines and startup commands are currently available in the Unix CLI only. Windows GUI support is planned.
+Custom Dockerfile lines and startup commands are available in both the Unix CLI and the Windows GUI (under **Advanced options** during profile creation).
 
 ## The `.sandbox` File
 
