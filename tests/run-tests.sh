@@ -326,9 +326,6 @@ README="$REPO_DIR/README.md"
 grep -q 'Quick Start' "$README" 2>/dev/null && \
     log_pass "README: Quick Start section" || log_fail "README: No Quick Start"
 
-grep -q 'sandbox-cleanup-sudo' "$README" 2>/dev/null && \
-    log_pass "README: cleanup-sudo documented" || log_fail "README: No cleanup-sudo"
-
 grep -q 'Profiles' "$README" 2>/dev/null && \
     log_pass "README: Profiles section" || log_fail "README: No Profiles"
 

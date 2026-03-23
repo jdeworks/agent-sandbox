@@ -32,17 +32,6 @@ cd ~/my-project && sandbox-me
 
 `sandbox-setup` builds a named Docker image with your selected tools. `sandbox-me` reads a `.sandbox` file in the project root (or creates one) and launches the container.
 
-### Linux / macOS / WSL (v1, still works)
-
-```bash
-# One-time setup (aliases, optional default profiles)
-./src/scripts/unix/setup.sh
-source ~/.bash_aliases
-
-# Sandbox any project
-sandbox-python ~/my-project
-```
-
 ### Windows
 
 **GUI:** Double-click `agent-sandbox.exe` to launch the wizard:
@@ -99,18 +88,6 @@ Each profile generates:
 | **Edit override** | `sandbox-me --edit-override` | — |
 | **Edit user env** | `sandbox-me --edit-env` | — |
 
-### v1 Commands (still work)
-
-| Action | Linux / macOS / WSL | Windows (CLI) |
-|--------|---------------------|---------------|
-| **Setup** | `./src/scripts/unix/setup.sh` | `agent-sandbox setup` |
-| **Prepare profile** | `prepare` (interactive) | `agent-sandbox prepare C:\path` |
-| **Launch sandbox** | `sandbox-<profile> /path` | `agent-sandbox sandbox C:\path` |
-| **List projects** | `sandbox-list` | `agent-sandbox list` |
-| **Disk usage** | `sandbox-stats` | `agent-sandbox stats` |
-| **Remove project** | `sandbox-cleanup <name>` | `agent-sandbox cleanup <name>` |
-| **Cleanup with sudo** | `sandbox-cleanup-sudo [name]` | — |
-
 ## Template Profiles (Quick Start)
 
 Don't know what to pick? Start from a template — pre-configured profiles for common use cases:
@@ -142,15 +119,11 @@ The sandbox supports multiple CLI coding agents. During `sandbox-setup` you choo
 
 Agent definitions (commands, install scripts, auth files, env vars) are in `src/sandbox/agents.json`.
 
-## Terminal & Detach Keys
+## Terminal Behavior
 
-When the agent runs in a terminal window (Windows GUI or Unix CLI), the Docker session uses `--detach-keys="ctrl-]"`:
+On **Windows**, the agent launches in Windows Terminal (`wt.exe`) if available, falling back to `cmd.exe`. Windows Terminal supports standard Ctrl+C/Ctrl+V for copy/paste — select text and press Ctrl+C to copy; Ctrl+C without a selection sends SIGINT to the agent. Type `exit` to leave the agent session.
 
-- **Ctrl+]** — safely detach from the agent session (container keeps running)
-- **Ctrl+C** — sends SIGINT to the agent process. On Windows this may close the window; use Ctrl+] instead to detach safely
-- To copy text in the terminal: right-click (Windows cmd) or Ctrl+Shift+C (Windows Terminal)
-
-On Windows, the agent window stays open after the session ends (`cmd /k`) so you can review output.
+On **Unix**, the Docker session uses `--detach-keys="ctrl-]"` so you can press Ctrl+] to detach from the agent without stopping the container.
 
 ## Plugins
 

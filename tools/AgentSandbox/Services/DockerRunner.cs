@@ -91,13 +91,30 @@ public static class DockerRunner
     {
         if (newWindow)
         {
-            var psi = new ProcessStartInfo
+            // Prefer Windows Terminal (wt.exe) — Ctrl+C copies text when selected,
+            // sends SIGINT only when nothing is selected. Falls back to cmd.exe.
+            ProcessStartInfo psi;
+            var wtPath = FindExecutable("wt.exe");
+            if (wtPath != null)
             {
-                FileName = "cmd.exe",
-                Arguments = $"/k title Agent Sandbox - {containerName} && docker exec -it --detach-keys=\"ctrl-]\" \"{containerName}\" {command}",
-                UseShellExecute = true,
-                CreateNoWindow = false
-            };
+                psi = new ProcessStartInfo
+                {
+                    FileName = wtPath,
+                    Arguments = $"--title \"Agent Sandbox - {containerName}\" -- docker exec -it \"{containerName}\" {command}",
+                    UseShellExecute = true,
+                    CreateNoWindow = false
+                };
+            }
+            else
+            {
+                psi = new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/k title Agent Sandbox - {containerName} && docker exec -it --detach-keys=\"ctrl-]\" \"{containerName}\" {command}",
+                    UseShellExecute = true,
+                    CreateNoWindow = false
+                };
+            }
             using var proc = Process.Start(psi);
             return proc != null ? 0 : 1;
         }
@@ -270,5 +287,27 @@ public static class DockerRunner
         proc.WaitForExit();
         var stderr = stderrTask.Result;
         return (proc.ExitCode, stdout, stderr);
+    }
+
+    /// <summary>Find an executable on PATH or in common locations.</summary>
+    private static string? FindExecutable(string name)
+    {
+        // Check PATH first
+        var pathDirs = Environment.GetEnvironmentVariable("PATH")?.Split(';') ?? [];
+        foreach (var dir in pathDirs)
+        {
+            var full = Path.Combine(dir, name);
+            if (File.Exists(full)) return full;
+        }
+
+        // Common Windows Terminal locations
+        if (name == "wt.exe")
+        {
+            var localApps = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var wtPackage = Path.Combine(localApps, "Microsoft", "WindowsApps", "wt.exe");
+            if (File.Exists(wtPackage)) return wtPackage;
+        }
+
+        return null;
     }
 }

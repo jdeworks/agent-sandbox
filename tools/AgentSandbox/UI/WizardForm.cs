@@ -1580,8 +1580,7 @@ public sealed class WizardForm : Form
                     Log($"[sandbox] Launching agent: {agentCommand}");
                     DockerRunner.ExecInteractive(containerTarget, agentCommand, newWindow: true);
                     Log("[sandbox] Agent launched in new window.");
-                    Log("[sandbox] TIP: Press Ctrl+] to detach from the agent. Ctrl+C may close the window.");
-                    Log("[sandbox]      To copy text, right-click or use Ctrl+Shift+C in Windows Terminal.");
+                    Log("[sandbox] TIP: Select text and press Ctrl+C to copy. Type 'exit' to leave the agent.");
                 }
             });
 
