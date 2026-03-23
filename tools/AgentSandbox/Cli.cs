@@ -886,9 +886,31 @@ internal static class Cli
                 return 1;
             }
 
+            // Find running containers using this profile
+            var affectedProjects = ProjectScaffolder.GetRecentProjects()
+                .Where(p => p.Profile == name).ToList();
+            var runningNames = affectedProjects
+                .Where(p => DockerRunner.IsContainerRunning($"sandbox-{p.Name}"))
+                .Select(p => p.Name).ToList();
+
+            if (runningNames.Count > 0)
+                Console.WriteLine($"  {runningNames.Count} running container(s) will be stopped: {string.Join(", ", runningNames)}");
+
             Console.Write($"Delete profile '{name}'? [y/N]: ");
             if (Console.ReadLine()?.Trim().ToLower() != "y")
                 return 0;
+
+            // Fully remove containers (profile is going away)
+            foreach (var proj in runningNames)
+            {
+                Console.WriteLine($"  Removing container for project '{proj}'...");
+                var projDir = ProjectScaffolder.GetProjectDir(proj);
+                var composePath = Path.Combine(projDir, "docker-compose.yml");
+                if (File.Exists(composePath))
+                    DockerRunner.ComposeDownVolumes(composePath, projDir);
+                else
+                    DockerRunner.StopContainer($"sandbox-{proj}");
+            }
 
             DockerRunner.RemoveImage($"agent-sandbox-{name}:latest");
             Directory.Delete(dir, true);

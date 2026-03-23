@@ -1,8 +1,7 @@
 ########################################
 # Flutter dependency installation
 ########################################
-if [ -f "/workspace/src/pubspec.yaml" ]; then
-    cd /workspace/src
+if [ -f "pubspec.yaml" ]; then
     PUBSPEC_HASH=$(md5sum pubspec.yaml 2>/dev/null | cut -d' ' -f1)
     CACHED_HASH=$(cat /workspace/.sandbox/.pubspec_hash 2>/dev/null)
 

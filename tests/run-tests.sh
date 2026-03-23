@@ -1087,6 +1087,903 @@ grep -q '{{NODE_VERSION}}' "$TPL" && \
     log_pass "Template has no hardcoded agent installs" || log_fail "Template still has hardcoded agent installs"
 
 # ==============================================================================
+# TEST 20: Profile Generation — Conditional Content
+# ==============================================================================
+log_section "20.1 OpenCode-only Profile Has OpenCode Volumes"
+
+OC_ONLY_DIR="$TEMP_DIR/test-oc-only"
+SELECTED_AGENTS="opencode" PRIMARY_AGENT="opencode" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$OC_ONLY_DIR" "test-oc-only" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$OC_ONLY_DIR/docker-compose.yml.tpl" ]; then
+    grep -q 'opencode_data' "$OC_ONLY_DIR/docker-compose.yml.tpl" && \
+        log_pass "OpenCode profile: compose has opencode_data volume" || log_fail "OpenCode profile: compose missing opencode_data"
+
+    grep -q 'opencode_cache' "$OC_ONLY_DIR/docker-compose.yml.tpl" && \
+        log_pass "OpenCode profile: compose has opencode_cache volume" || log_fail "OpenCode profile: compose missing opencode_cache"
+
+    grep -q '/opt/opencode/bin' "$OC_ONLY_DIR/docker-compose.yml.tpl" && \
+        log_pass "OpenCode profile: PATH has /opt/opencode/bin" || log_fail "OpenCode profile: PATH missing /opt/opencode/bin"
+else
+    log_fail "OpenCode-only profile generation failed"
+fi
+
+if [ -f "$OC_ONLY_DIR/install.sh" ]; then
+    grep -q 'mkdir -p /workspace/.cache/opencode' "$OC_ONLY_DIR/install.sh" && \
+        log_pass "OpenCode profile: install.sh has cache mkdir" || log_fail "OpenCode profile: install.sh missing cache mkdir"
+else
+    log_fail "OpenCode-only install.sh not generated"
+fi
+
+log_section "20.2 Claude-only Profile Does NOT Have OpenCode Volumes"
+
+CLAUDE_ONLY_DIR="$TEMP_DIR/test-claude-only"
+SELECTED_AGENTS="claude" PRIMARY_AGENT="claude" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$CLAUDE_ONLY_DIR" "test-claude-only" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$CLAUDE_ONLY_DIR/docker-compose.yml.tpl" ]; then
+    ! grep -q 'opencode_data' "$CLAUDE_ONLY_DIR/docker-compose.yml.tpl" && \
+        log_pass "Claude profile: compose has NO opencode_data" || log_fail "Claude profile: compose still has opencode_data"
+
+    ! grep -q 'opencode_sessions' "$CLAUDE_ONLY_DIR/docker-compose.yml.tpl" && \
+        log_pass "Claude profile: compose has NO opencode_sessions" || log_fail "Claude profile: compose still has opencode_sessions"
+
+    ! grep -q 'opencode_cache' "$CLAUDE_ONLY_DIR/docker-compose.yml.tpl" && \
+        log_pass "Claude profile: compose has NO opencode_cache" || log_fail "Claude profile: compose still has opencode_cache"
+
+    ! grep -q '/opt/opencode/bin' "$CLAUDE_ONLY_DIR/docker-compose.yml.tpl" && \
+        log_pass "Claude profile: PATH has NO /opt/opencode/bin" || log_fail "Claude profile: PATH still has /opt/opencode/bin"
+else
+    log_fail "Claude-only profile generation failed"
+fi
+
+if [ -f "$CLAUDE_ONLY_DIR/install.sh" ]; then
+    ! grep -q 'mkdir -p /workspace/.cache/opencode' "$CLAUDE_ONLY_DIR/install.sh" && \
+        log_pass "Claude profile: install.sh has NO opencode cache mkdir" || log_fail "Claude profile: install.sh still has opencode cache mkdir"
+else
+    log_fail "Claude-only install.sh not generated"
+fi
+
+if [ -f "$CLAUDE_ONLY_DIR/Dockerfile.base" ]; then
+    grep -q "claude.ai/install.sh" "$CLAUDE_ONLY_DIR/Dockerfile.base" && \
+        log_pass "Claude profile: Dockerfile has claude install" || log_fail "Claude profile: Dockerfile missing claude install"
+
+    ! grep -q "opencode.ai/install" "$CLAUDE_ONLY_DIR/Dockerfile.base" && \
+        log_pass "Claude profile: Dockerfile has NO opencode install" || log_fail "Claude profile: Dockerfile still has opencode install"
+else
+    log_fail "Claude-only Dockerfile.base not generated"
+fi
+
+log_section "20.3 Multi-agent Profile Has Correct Volumes"
+
+MULTI_OC_DIR="$TEMP_DIR/test-multi-oc"
+SELECTED_AGENTS="opencode,claude" PRIMARY_AGENT="opencode" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$MULTI_OC_DIR" "test-multi-oc" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$MULTI_OC_DIR/docker-compose.yml.tpl" ]; then
+    grep -q 'opencode_data' "$MULTI_OC_DIR/docker-compose.yml.tpl" && \
+        log_pass "Multi-agent profile: compose has opencode_data (opencode selected)" || log_fail "Multi-agent: missing opencode_data"
+else
+    log_fail "Multi-agent profile generation failed"
+fi
+
+if [ -f "$MULTI_OC_DIR/Dockerfile.base" ]; then
+    grep -q "opencode.ai/install" "$MULTI_OC_DIR/Dockerfile.base" && \
+        log_pass "Multi-agent: Dockerfile has opencode install" || log_fail "Multi-agent: Dockerfile missing opencode"
+    grep -q "claude.ai/install" "$MULTI_OC_DIR/Dockerfile.base" && \
+        log_pass "Multi-agent: Dockerfile has claude install" || log_fail "Multi-agent: Dockerfile missing claude"
+else
+    log_fail "Multi-agent Dockerfile.base not generated"
+fi
+
+log_section "20.4 AGENTS.md Contains Container Environment Section"
+
+# Re-use an already generated profile's AGENTS.md
+AGENTSMD_DIR="$TEMP_DIR/test-agentsmd"
+SELECTED_AGENTS="claude" PRIMARY_AGENT="claude" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$AGENTSMD_DIR" "test-agentsmd" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$AGENTSMD_DIR/AGENTS.md" ]; then
+    grep -q "Container Environment" "$AGENTSMD_DIR/AGENTS.md" && \
+        log_pass "AGENTS.md has Container Environment section" || log_fail "AGENTS.md missing Container Environment"
+
+    grep -q "localhost.*inside the container" "$AGENTSMD_DIR/AGENTS.md" && \
+        log_pass "AGENTS.md has localhost network guidance" || log_fail "AGENTS.md missing localhost guidance"
+
+    grep -qi "headless" "$AGENTSMD_DIR/AGENTS.md" && \
+        log_pass "AGENTS.md has headless browser note" || log_fail "AGENTS.md missing headless browser note"
+else
+    log_fail "AGENTS.md not generated"
+fi
+
+log_section "20.5 AGENTS.md Port List Matches Profile Ports"
+
+PORTS_DIR="$TEMP_DIR/test-ports-md"
+SELECTED_AGENTS="claude" PRIMARY_AGENT="claude" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$PORTS_DIR" "test-ports-md" "node" "3000,5173,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$PORTS_DIR/AGENTS.md" ]; then
+    grep -q '3000' "$PORTS_DIR/AGENTS.md" && grep -q '5173' "$PORTS_DIR/AGENTS.md" && grep -q '8080' "$PORTS_DIR/AGENTS.md" && \
+        log_pass "AGENTS.md port list includes 3000, 5173, 8080" || log_fail "AGENTS.md port list incomplete"
+else
+    log_fail "AGENTS.md not generated for port test"
+fi
+
+log_section "20.6 Profile Round-trip: Claude-only Has No OpenCode Contamination"
+
+RT_DIR="$TEMP_DIR/test-roundtrip"
+SELECTED_AGENTS="claude" PRIMARY_AGENT="claude" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$RT_DIR" "test-roundtrip" "python,node" "3000,5000,8000,8080" "python:3.12" "" >/dev/null 2>&1
+
+if [ -f "$RT_DIR/Dockerfile.base" ] && [ -f "$RT_DIR/docker-compose.yml.tpl" ] && [ -f "$RT_DIR/install.sh" ]; then
+    # Full round-trip check: nothing OpenCode-specific should leak
+    ! grep -q 'opencode' "$RT_DIR/docker-compose.yml.tpl" && \
+        log_pass "Round-trip: no opencode references in compose" || log_fail "Round-trip: opencode leaked into compose"
+
+    ! grep -q 'opencode' "$RT_DIR/install.sh" && \
+        log_pass "Round-trip: no opencode references in install.sh" || log_fail "Round-trip: opencode leaked into install.sh"
+
+    grep -q "exec claude" "$RT_DIR/install.sh" && \
+        log_pass "Round-trip: install.sh exec's claude" || log_fail "Round-trip: install.sh doesn't exec claude"
+else
+    log_fail "Round-trip profile generation incomplete"
+fi
+
+log_section "20.7 C# ProfileGenerator Has Conditional OpenCode Checks"
+
+PROFGEN="$CSHARP_DIR/Services/ProfileGenerator.cs"
+if [ -f "$PROFGEN" ]; then
+    grep -q 'spec.Agents.Contains("opencode")' "$PROFGEN" && \
+        log_pass "ProfileGenerator has conditional opencode check" || log_fail "ProfileGenerator missing conditional opencode check"
+
+    # Verify Dockerfile.base.tpl no longer has hardcoded /opt/opencode/bin in PATH
+    ! grep -q '/opt/opencode/bin' "$CSHARP_DIR/Resources/Dockerfile.base.tpl" && \
+        log_pass "Dockerfile.base.tpl: PATH no longer hardcodes /opt/opencode/bin" || log_fail "Dockerfile.base.tpl: still has hardcoded /opt/opencode/bin"
+else
+    log_fail "ProfileGenerator.cs not found"
+fi
+
+# ==============================================================================
+# TEST 21: Profile Combinations — Agent Variants
+# ==============================================================================
+
+log_section "21.1 Cursor-only Profile"
+
+CURSOR_DIR="$TEMP_DIR/test-cursor-only"
+SELECTED_AGENTS="cursor" PRIMARY_AGENT="cursor" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$CURSOR_DIR" "test-cursor" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$CURSOR_DIR/Dockerfile.base" ]; then
+    grep -q "cursor.com/install" "$CURSOR_DIR/Dockerfile.base" && \
+        log_pass "Cursor profile: Dockerfile has cursor install" || log_fail "Cursor profile: Dockerfile missing cursor install"
+
+    ! grep -q "opencode.ai/install" "$CURSOR_DIR/Dockerfile.base" && \
+        log_pass "Cursor profile: Dockerfile has NO opencode install" || log_fail "Cursor profile: Dockerfile still has opencode"
+
+    ! grep -q "claude.ai/install" "$CURSOR_DIR/Dockerfile.base" && \
+        log_pass "Cursor profile: Dockerfile has NO claude install" || log_fail "Cursor profile: Dockerfile still has claude"
+else
+    log_fail "Cursor-only Dockerfile.base not generated"
+fi
+
+if [ -f "$CURSOR_DIR/install.sh" ]; then
+    grep -q "exec agent" "$CURSOR_DIR/install.sh" && \
+        log_pass "Cursor profile: install.sh exec's 'agent' command" || log_fail "Cursor profile: install.sh wrong exec command"
+
+    ! grep -q 'mkdir -p /workspace/.cache/opencode' "$CURSOR_DIR/install.sh" && \
+        log_pass "Cursor profile: no opencode cache dir" || log_fail "Cursor profile: still has opencode cache dir"
+else
+    log_fail "Cursor-only install.sh not generated"
+fi
+
+if [ -f "$CURSOR_DIR/docker-compose.yml.tpl" ]; then
+    ! grep -q 'opencode_data' "$CURSOR_DIR/docker-compose.yml.tpl" && \
+        log_pass "Cursor profile: compose has NO opencode volumes" || log_fail "Cursor profile: compose still has opencode volumes"
+
+    ! grep -q '/opt/opencode/bin' "$CURSOR_DIR/docker-compose.yml.tpl" && \
+        log_pass "Cursor profile: PATH has NO /opt/opencode/bin" || log_fail "Cursor profile: PATH still has /opt/opencode/bin"
+
+    grep -q '/root/.cursor/bin' "$CURSOR_DIR/docker-compose.yml.tpl" && \
+        log_pass "Cursor profile: PATH has /root/.cursor/bin" || log_fail "Cursor profile: PATH missing /root/.cursor/bin"
+else
+    log_fail "Cursor-only docker-compose.yml.tpl not generated"
+fi
+
+log_section "21.2 Copilot-only Profile"
+
+COPILOT_ONLY_DIR="$TEMP_DIR/test-copilot-only"
+SELECTED_AGENTS="copilot" PRIMARY_AGENT="copilot" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$COPILOT_ONLY_DIR" "test-copilot-only" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$COPILOT_ONLY_DIR/Dockerfile.base" ]; then
+    grep -q "@github/copilot" "$COPILOT_ONLY_DIR/Dockerfile.base" && \
+        log_pass "Copilot profile: Dockerfile has copilot npm install" || log_fail "Copilot profile: Dockerfile missing copilot install"
+
+    ! grep -q "opencode.ai/install" "$COPILOT_ONLY_DIR/Dockerfile.base" && \
+        log_pass "Copilot profile: Dockerfile has NO opencode" || log_fail "Copilot profile: Dockerfile still has opencode"
+else
+    log_fail "Copilot-only Dockerfile.base not generated"
+fi
+
+if [ -f "$COPILOT_ONLY_DIR/install.sh" ]; then
+    grep -q "exec gh copilot agent" "$COPILOT_ONLY_DIR/install.sh" && \
+        log_pass "Copilot profile: install.sh has 'exec gh copilot agent'" || log_fail "Copilot profile: install.sh wrong exec command"
+else
+    log_fail "Copilot-only install.sh not generated"
+fi
+
+if [ -f "$COPILOT_ONLY_DIR/docker-compose.yml.tpl" ]; then
+    ! grep -q 'opencode_data' "$COPILOT_ONLY_DIR/docker-compose.yml.tpl" && \
+        log_pass "Copilot profile: compose has NO opencode volumes" || log_fail "Copilot profile: compose still has opencode volumes"
+else
+    log_fail "Copilot-only docker-compose.yml.tpl not generated"
+fi
+
+log_section "21.3 All Non-OpenCode Agents (cursor+claude+copilot)"
+
+THREE_AGENT_DIR="$TEMP_DIR/test-three-agents"
+SELECTED_AGENTS="cursor,claude,copilot" PRIMARY_AGENT="cursor" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$THREE_AGENT_DIR" "test-three" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$THREE_AGENT_DIR/Dockerfile.base" ]; then
+    grep -q "cursor.com/install" "$THREE_AGENT_DIR/Dockerfile.base" && \
+        log_pass "3-agent: Dockerfile has cursor" || log_fail "3-agent: Dockerfile missing cursor"
+
+    grep -q "claude.ai/install" "$THREE_AGENT_DIR/Dockerfile.base" && \
+        log_pass "3-agent: Dockerfile has claude" || log_fail "3-agent: Dockerfile missing claude"
+
+    grep -q "@github/copilot" "$THREE_AGENT_DIR/Dockerfile.base" && \
+        log_pass "3-agent: Dockerfile has copilot" || log_fail "3-agent: Dockerfile missing copilot"
+
+    ! grep -q "opencode.ai/install" "$THREE_AGENT_DIR/Dockerfile.base" && \
+        log_pass "3-agent: Dockerfile has NO opencode" || log_fail "3-agent: Dockerfile has opencode (not selected)"
+else
+    log_fail "3-agent Dockerfile.base not generated"
+fi
+
+if [ -f "$THREE_AGENT_DIR/docker-compose.yml.tpl" ]; then
+    ! grep -q 'opencode_data' "$THREE_AGENT_DIR/docker-compose.yml.tpl" && \
+        log_pass "3-agent: compose has NO opencode volumes" || log_fail "3-agent: compose still has opencode volumes"
+
+    ! grep -q '/opt/opencode/bin' "$THREE_AGENT_DIR/docker-compose.yml.tpl" && \
+        log_pass "3-agent: PATH has NO /opt/opencode/bin" || log_fail "3-agent: PATH still has /opt/opencode/bin"
+else
+    log_fail "3-agent docker-compose.yml.tpl not generated"
+fi
+
+if [ -f "$THREE_AGENT_DIR/install.sh" ]; then
+    grep -q "exec agent" "$THREE_AGENT_DIR/install.sh" && \
+        log_pass "3-agent: primary is cursor ('agent' command)" || log_fail "3-agent: wrong primary agent"
+else
+    log_fail "3-agent install.sh not generated"
+fi
+
+# ==============================================================================
+# TEST 22: Profile Combinations — VS Code + Agent Interactions
+# ==============================================================================
+
+log_section "22.1 VS Code + Claude (No OpenCode)"
+
+VSCODE_CLAUDE_DIR="$TEMP_DIR/test-vscode-claude"
+SELECTED_AGENTS="claude" PRIMARY_AGENT="claude" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$VSCODE_CLAUDE_DIR" "test-vsc" "node" "3000,4040,8080" "" "vscode-server" >/dev/null 2>&1
+
+if [ -f "$VSCODE_CLAUDE_DIR/docker-compose.yml.tpl" ]; then
+    # Should have vscode volumes (from additions.json) but NOT opencode volumes
+    grep -q 'vscode_extensions' "$VSCODE_CLAUDE_DIR/docker-compose.yml.tpl" && \
+        log_pass "VS Code+Claude: compose has vscode extension volumes" || log_fail "VS Code+Claude: missing vscode volumes"
+
+    grep -q 'vscode_data' "$VSCODE_CLAUDE_DIR/docker-compose.yml.tpl" && \
+        log_pass "VS Code+Claude: compose has vscode data volumes" || log_fail "VS Code+Claude: missing vscode data"
+
+    ! grep -q 'opencode_data' "$VSCODE_CLAUDE_DIR/docker-compose.yml.tpl" && \
+        log_pass "VS Code+Claude: compose has NO opencode volumes" || log_fail "VS Code+Claude: has opencode volumes"
+
+    ! grep -q '/opt/opencode/bin' "$VSCODE_CLAUDE_DIR/docker-compose.yml.tpl" && \
+        log_pass "VS Code+Claude: PATH has NO /opt/opencode/bin" || log_fail "VS Code+Claude: PATH has /opt/opencode/bin"
+
+    grep -q '"4040:4040"' "$VSCODE_CLAUDE_DIR/docker-compose.yml.tpl" && \
+        log_pass "VS Code+Claude: port 4040 mapped" || log_fail "VS Code+Claude: port 4040 missing"
+else
+    log_fail "VS Code+Claude docker-compose.yml.tpl not generated"
+fi
+
+if [ -f "$VSCODE_CLAUDE_DIR/Dockerfile.base" ]; then
+    grep -q "code-server" "$VSCODE_CLAUDE_DIR/Dockerfile.base" && \
+        log_pass "VS Code+Claude: Dockerfile has code-server install" || log_fail "VS Code+Claude: Dockerfile missing code-server"
+
+    grep -q "claude.ai/install" "$VSCODE_CLAUDE_DIR/Dockerfile.base" && \
+        log_pass "VS Code+Claude: Dockerfile has claude install" || log_fail "VS Code+Claude: Dockerfile missing claude"
+
+    ! grep -q "opencode.ai/install" "$VSCODE_CLAUDE_DIR/Dockerfile.base" && \
+        log_pass "VS Code+Claude: Dockerfile has NO opencode" || log_fail "VS Code+Claude: Dockerfile has opencode"
+else
+    log_fail "VS Code+Claude Dockerfile.base not generated"
+fi
+
+if [ -f "$VSCODE_CLAUDE_DIR/install.sh" ]; then
+    grep -q "code-server" "$VSCODE_CLAUDE_DIR/install.sh" && \
+        log_pass "VS Code+Claude: install.sh has code-server startup" || log_fail "VS Code+Claude: install.sh missing code-server"
+
+    grep -q "exec claude" "$VSCODE_CLAUDE_DIR/install.sh" && \
+        log_pass "VS Code+Claude: install.sh exec's claude" || log_fail "VS Code+Claude: install.sh wrong exec"
+else
+    log_fail "VS Code+Claude install.sh not generated"
+fi
+
+if [ -f "$VSCODE_CLAUDE_DIR/install-vscode.sh" ]; then
+    grep -q "VS Code Server mode" "$VSCODE_CLAUDE_DIR/install-vscode.sh" && \
+        log_pass "VS Code+Claude: install-vscode.sh has VS Code mode" || log_fail "VS Code+Claude: install-vscode.sh missing VS Code mode"
+
+    ! grep -q "exec claude" "$VSCODE_CLAUDE_DIR/install-vscode.sh" && \
+        log_pass "VS Code+Claude: install-vscode.sh does NOT exec claude" || log_fail "VS Code+Claude: install-vscode.sh should not exec agent"
+else
+    log_fail "VS Code+Claude install-vscode.sh not generated"
+fi
+
+if [ -f "$VSCODE_CLAUDE_DIR/AGENTS.md" ]; then
+    grep -q "VS Code Server" "$VSCODE_CLAUDE_DIR/AGENTS.md" && \
+        log_pass "VS Code+Claude: AGENTS.md has VS Code section" || log_fail "VS Code+Claude: AGENTS.md missing VS Code section"
+else
+    log_fail "VS Code+Claude AGENTS.md not generated"
+fi
+
+log_section "22.2 No Additions (no VS Code)"
+
+NO_ADD_DIR="$TEMP_DIR/test-no-additions"
+SELECTED_AGENTS="claude" PRIMARY_AGENT="claude" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$NO_ADD_DIR" "test-noadd" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$NO_ADD_DIR/docker-compose.yml.tpl" ]; then
+    ! grep -q 'vscode_extensions' "$NO_ADD_DIR/docker-compose.yml.tpl" && \
+        log_pass "No additions: compose has NO vscode volumes" || log_fail "No additions: compose has vscode volumes"
+
+    ! grep -q '4040' "$NO_ADD_DIR/docker-compose.yml.tpl" && \
+        log_pass "No additions: compose has NO port 4040" || log_fail "No additions: compose has port 4040"
+else
+    log_fail "No-additions docker-compose.yml.tpl not generated"
+fi
+
+if [ -f "$NO_ADD_DIR/Dockerfile.base" ]; then
+    ! grep -q "code-server" "$NO_ADD_DIR/Dockerfile.base" && \
+        log_pass "No additions: Dockerfile has NO code-server" || log_fail "No additions: Dockerfile has code-server"
+else
+    log_fail "No-additions Dockerfile.base not generated"
+fi
+
+if [ -f "$NO_ADD_DIR/AGENTS.md" ]; then
+    ! grep -q "VS Code Server" "$NO_ADD_DIR/AGENTS.md" && \
+        log_pass "No additions: AGENTS.md has NO VS Code section" || log_fail "No additions: AGENTS.md has VS Code section"
+else
+    log_fail "No-additions AGENTS.md not generated"
+fi
+
+# ==============================================================================
+# TEST 23: Profile Combinations — Multi-Language
+# ==============================================================================
+
+log_section "23.1 Python + Node + Go: Language Fragments"
+
+MULTI_LANG_DIR="$TEMP_DIR/test-multi-lang"
+SELECTED_AGENTS="claude" PRIMARY_AGENT="claude" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$MULTI_LANG_DIR" "test-mlang" "python,node,go" "3000,5000,8000,8080" "python:3.12,go:system" "" >/dev/null 2>&1
+
+if [ -f "$MULTI_LANG_DIR/Dockerfile.base" ]; then
+    grep -q "python" "$MULTI_LANG_DIR/Dockerfile.base" && \
+        log_pass "Multi-lang: Dockerfile has python layer" || log_fail "Multi-lang: Dockerfile missing python"
+
+    grep -q "golang\|/usr/local/go" "$MULTI_LANG_DIR/Dockerfile.base" && \
+        log_pass "Multi-lang: Dockerfile has go layer" || log_fail "Multi-lang: Dockerfile missing go"
+else
+    log_fail "Multi-lang Dockerfile.base not generated"
+fi
+
+if [ -f "$MULTI_LANG_DIR/docker-compose.yml.tpl" ]; then
+    grep -q 'pip_cache' "$MULTI_LANG_DIR/docker-compose.yml.tpl" && \
+        log_pass "Multi-lang: compose has python pip_cache volume" || log_fail "Multi-lang: compose missing pip_cache"
+
+    grep -q 'npm_cache' "$MULTI_LANG_DIR/docker-compose.yml.tpl" && \
+        log_pass "Multi-lang: compose has node npm_cache volume" || log_fail "Multi-lang: compose missing npm_cache"
+
+    grep -q 'gopath' "$MULTI_LANG_DIR/docker-compose.yml.tpl" && \
+        log_pass "Multi-lang: compose has go gopath volume" || log_fail "Multi-lang: compose missing gopath"
+
+    grep -q '/workspace/.venv/bin' "$MULTI_LANG_DIR/docker-compose.yml.tpl" && \
+        log_pass "Multi-lang: PATH has python venv" || log_fail "Multi-lang: PATH missing python venv"
+
+    grep -q '/workspace/go/bin' "$MULTI_LANG_DIR/docker-compose.yml.tpl" && \
+        log_pass "Multi-lang: PATH has go bin" || log_fail "Multi-lang: PATH missing go bin"
+else
+    log_fail "Multi-lang docker-compose.yml.tpl not generated"
+fi
+
+if [ -f "$MULTI_LANG_DIR/install.sh" ]; then
+    # Python and Go fragments should be included in install.sh
+    # (node fragment typically has npm-related setup)
+    grep -q "python\|pip\|venv" "$MULTI_LANG_DIR/install.sh" && \
+        log_pass "Multi-lang: install.sh has python fragment" || log_fail "Multi-lang: install.sh missing python fragment"
+else
+    log_fail "Multi-lang install.sh not generated"
+fi
+
+if [ -f "$MULTI_LANG_DIR/AGENTS.md" ]; then
+    # Language-specific AGENTS.md fragments should be appended
+    [ -f "$SANDBOX_CORE/fragments/python.agents.md" ] && {
+        grep -q "pip\|Python\|python" "$MULTI_LANG_DIR/AGENTS.md" && \
+            log_pass "Multi-lang: AGENTS.md has python guidance" || log_fail "Multi-lang: AGENTS.md missing python guidance"
+    }
+    [ -f "$SANDBOX_CORE/fragments/node.agents.md" ] && {
+        grep -q "npm\|Node\|node" "$MULTI_LANG_DIR/AGENTS.md" && \
+            log_pass "Multi-lang: AGENTS.md has node guidance" || log_fail "Multi-lang: AGENTS.md missing node guidance"
+    }
+else
+    log_fail "Multi-lang AGENTS.md not generated"
+fi
+
+log_section "23.2 Version Pinning in Docker Compose"
+
+if [ -f "$MULTI_LANG_DIR/docker-compose.yml.tpl" ]; then
+    grep -q 'PYTHON_VERSION=3.12' "$MULTI_LANG_DIR/docker-compose.yml.tpl" && \
+        log_pass "Multi-lang: compose has PYTHON_VERSION=3.12" || log_fail "Multi-lang: compose missing PYTHON_VERSION"
+
+    grep -q 'NODE_VERSION=' "$MULTI_LANG_DIR/docker-compose.yml.tpl" && \
+        log_pass "Multi-lang: compose has NODE_VERSION" || log_fail "Multi-lang: compose missing NODE_VERSION"
+else
+    log_fail "Multi-lang docker-compose.yml.tpl not generated (version test)"
+fi
+
+# ==============================================================================
+# TEST 24: Profile Combinations — Custom Startup + Agent Selection
+# ==============================================================================
+
+log_section "24.1 Custom Startup Commands with Claude Agent"
+
+CUSTOM_CLAUDE_DIR="$TEMP_DIR/test-custom-claude"
+SELECTED_AGENTS="claude" PRIMARY_AGENT="claude" \
+CUSTOM_STARTUP_BEFORE="echo 'pre-agent-hook'" \
+CUSTOM_STARTUP_AFTER="my-background-service --port=9090 &" \
+    bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$CUSTOM_CLAUDE_DIR" "test-cust-cl" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$CUSTOM_CLAUDE_DIR/install.sh" ]; then
+    grep -q "pre-agent-hook" "$CUSTOM_CLAUDE_DIR/install.sh" && \
+        log_pass "Custom+Claude: install.sh has pre-agent command" || log_fail "Custom+Claude: install.sh missing pre-agent command"
+
+    grep -q "my-background-service" "$CUSTOM_CLAUDE_DIR/install.sh" && \
+        log_pass "Custom+Claude: install.sh has background command" || log_fail "Custom+Claude: install.sh missing background command"
+
+    grep -q "exec claude" "$CUSTOM_CLAUDE_DIR/install.sh" && \
+        log_pass "Custom+Claude: install.sh exec's claude" || log_fail "Custom+Claude: install.sh wrong exec"
+
+    # Verify ordering: pre-agent BEFORE exec
+    pre_line=$(grep -n "pre-agent-hook" "$CUSTOM_CLAUDE_DIR/install.sh" | head -1 | cut -d: -f1)
+    exec_line=$(grep -n "exec claude" "$CUSTOM_CLAUDE_DIR/install.sh" | head -1 | cut -d: -f1)
+    if [ -n "$pre_line" ] && [ -n "$exec_line" ] && [ "$pre_line" -lt "$exec_line" ]; then
+        log_pass "Custom+Claude: pre-agent command appears before exec"
+    else
+        log_fail "Custom+Claude: ordering wrong (pre=$pre_line exec=$exec_line)"
+    fi
+else
+    log_fail "Custom+Claude install.sh not generated"
+fi
+
+if [ -f "$CUSTOM_CLAUDE_DIR/install-vscode.sh" ]; then
+    grep -q "pre-agent-hook" "$CUSTOM_CLAUDE_DIR/install-vscode.sh" && \
+        log_pass "Custom+Claude: install-vscode.sh also has pre-agent command" || log_fail "Custom+Claude: install-vscode.sh missing pre-agent"
+
+    ! grep -q "exec claude" "$CUSTOM_CLAUDE_DIR/install-vscode.sh" && \
+        log_pass "Custom+Claude: install-vscode.sh does NOT exec claude" || log_fail "Custom+Claude: install-vscode.sh should not exec agent"
+else
+    log_fail "Custom+Claude install-vscode.sh not generated"
+fi
+
+log_section "24.2 Custom Dockerfile Lines with Cursor Agent"
+
+CUSTOM_DF_CURSOR_DIR="$TEMP_DIR/test-customdf-cursor"
+SELECTED_AGENTS="cursor" PRIMARY_AGENT="cursor" \
+CUSTOM_DOCKERFILE_LINES="RUN apt-get update && apt-get install -y htop vim" \
+    bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$CUSTOM_DF_CURSOR_DIR" "test-dfcur" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$CUSTOM_DF_CURSOR_DIR/Dockerfile.base" ]; then
+    grep -q "htop" "$CUSTOM_DF_CURSOR_DIR/Dockerfile.base" && \
+        log_pass "CustomDF+Cursor: Dockerfile has custom lines" || log_fail "CustomDF+Cursor: Dockerfile missing custom lines"
+
+    grep -q "cursor.com/install" "$CUSTOM_DF_CURSOR_DIR/Dockerfile.base" && \
+        log_pass "CustomDF+Cursor: Dockerfile has cursor install" || log_fail "CustomDF+Cursor: Dockerfile missing cursor"
+
+    ! grep -q "opencode.ai/install" "$CUSTOM_DF_CURSOR_DIR/Dockerfile.base" && \
+        log_pass "CustomDF+Cursor: Dockerfile has NO opencode" || log_fail "CustomDF+Cursor: Dockerfile has opencode"
+else
+    log_fail "CustomDF+Cursor Dockerfile.base not generated"
+fi
+
+# ==============================================================================
+# TEST 25: Profile Combinations — Port Edge Cases
+# ==============================================================================
+
+log_section "25.1 Many Ports (8+)"
+
+MANY_PORTS_DIR="$TEMP_DIR/test-many-ports"
+SELECTED_AGENTS="claude" PRIMARY_AGENT="claude" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$MANY_PORTS_DIR" "test-manyp" "node" "3000,4200,5000,5173,8000,8080,8501,9090" "" "" >/dev/null 2>&1
+
+if [ -f "$MANY_PORTS_DIR/docker-compose.yml.tpl" ]; then
+    port_count=$(grep -c '"[0-9]\+:[0-9]\+"' "$MANY_PORTS_DIR/docker-compose.yml.tpl")
+    [ "$port_count" -ge 8 ] && \
+        log_pass "Many ports: compose has $port_count port mappings (>=8)" || log_fail "Many ports: compose only has $port_count mappings (expected >=8)"
+
+    grep -q '"9090:9090"' "$MANY_PORTS_DIR/docker-compose.yml.tpl" && \
+        log_pass "Many ports: high port 9090 mapped correctly" || log_fail "Many ports: high port 9090 missing"
+else
+    log_fail "Many-ports docker-compose.yml.tpl not generated"
+fi
+
+if [ -f "$MANY_PORTS_DIR/AGENTS.md" ]; then
+    grep -q '5173' "$MANY_PORTS_DIR/AGENTS.md" && grep -q '9090' "$MANY_PORTS_DIR/AGENTS.md" && \
+        log_pass "Many ports: AGENTS.md lists all ports including 5173 and 9090" || log_fail "Many ports: AGENTS.md port list incomplete"
+else
+    log_fail "Many-ports AGENTS.md not generated"
+fi
+
+log_section "25.2 Versions.env Generation"
+
+if [ -f "$MULTI_LANG_DIR/versions.env" ]; then
+    grep -q 'NODE_VERSION=' "$MULTI_LANG_DIR/versions.env" && \
+        log_pass "versions.env has NODE_VERSION" || log_fail "versions.env missing NODE_VERSION"
+
+    grep -q 'PYTHON_VERSION=3.12' "$MULTI_LANG_DIR/versions.env" && \
+        log_pass "versions.env has PYTHON_VERSION=3.12" || log_fail "versions.env missing PYTHON_VERSION"
+else
+    log_fail "versions.env not generated"
+fi
+
+# ==============================================================================
+# TEST 26: Profile Combinations — C# Cross-Platform Parity
+# ==============================================================================
+
+log_section "26.1 C# ProfileGenerator Handles All Agent Scenarios"
+
+PROFGEN="$CSHARP_DIR/Services/ProfileGenerator.cs"
+if [ -f "$PROFGEN" ]; then
+    # Conditional volumes for opencode
+    grep -q 'spec.Agents.Contains("opencode")' "$PROFGEN" && \
+        log_pass "C# ProfileGenerator: conditional opencode volumes" || log_fail "C# ProfileGenerator: missing conditional opencode check"
+
+    # Conditional PATH for opencode
+    grep -q 'opt/opencode/bin' "$PROFGEN" && \
+        log_pass "C# ProfileGenerator: references /opt/opencode/bin" || log_fail "C# ProfileGenerator: missing opencode PATH reference"
+
+    # Conditional cache dir for opencode
+    grep -q 'Ensure OpenCode cache' "$PROFGEN" && \
+        log_pass "C# ProfileGenerator: has opencode cache section" || log_fail "C# ProfileGenerator: missing opencode cache section"
+
+    # Agent command resolution from agents.json
+    grep -q 'spec.Agents\[0\]' "$PROFGEN" && \
+        log_pass "C# ProfileGenerator: resolves primary agent command" || log_fail "C# ProfileGenerator: missing primary agent resolution"
+
+    # VS Code install-vscode.sh generation
+    grep -q 'install-vscode.sh' "$PROFGEN" && \
+        log_pass "C# ProfileGenerator: generates install-vscode.sh" || log_fail "C# ProfileGenerator: missing install-vscode.sh"
+
+    # AGENTS.md generation with port list
+    grep -q 'Available Ports' "$PROFGEN" && \
+        log_pass "C# ProfileGenerator: AGENTS.md includes port list" || log_fail "C# ProfileGenerator: AGENTS.md missing port list"
+else
+    log_fail "ProfileGenerator.cs not found"
+fi
+
+log_section "26.2 C# ProjectScaffolder Has Delete and Port Injection"
+
+SCAFFOLDER="$CSHARP_DIR/Services/ProjectScaffolder.cs"
+if [ -f "$SCAFFOLDER" ]; then
+    grep -q 'DeleteProject' "$SCAFFOLDER" && \
+        log_pass "C# ProjectScaffolder: has DeleteProject method" || log_fail "C# ProjectScaffolder: missing DeleteProject"
+
+    grep -q 'InjectDetectedPorts' "$SCAFFOLDER" && \
+        log_pass "C# ProjectScaffolder: has InjectDetectedPorts method" || log_fail "C# ProjectScaffolder: missing InjectDetectedPorts"
+else
+    log_fail "ProjectScaffolder.cs not found"
+fi
+
+log_section "26.3 C# WizardForm VS Code Check Is Conditional"
+
+WIZARD="$CSHARP_DIR/UI/WizardForm.cs"
+if [ -f "$WIZARD" ]; then
+    # The VS Code Dockerfile check must be wrapped in _profileHasVsCode
+    grep -q '_profileHasVsCode' "$WIZARD" && grep -q 'code-server' "$WIZARD" && \
+        log_pass "C# WizardForm: VS Code check is guarded by _profileHasVsCode" || log_fail "C# WizardForm: VS Code check may be unconditional"
+
+    # Stop container button exists
+    grep -q 'OnStopContainerClicked\|_btnStopContainer' "$WIZARD" && \
+        log_pass "C# WizardForm: has Stop Container button" || log_fail "C# WizardForm: missing Stop Container button"
+
+    # Remove project button exists
+    grep -q 'OnRemoveProjectClicked\|_btnRemoveProject' "$WIZARD" && \
+        log_pass "C# WizardForm: has Remove Project button" || log_fail "C# WizardForm: missing Remove Project button"
+
+    # Profile delete stops containers
+    grep -q 'ComposeDownVolumes.*projDir\|ComposeDownVolumes' "$WIZARD" && \
+        log_pass "C# WizardForm: profile delete uses ComposeDownVolumes" || log_fail "C# WizardForm: profile delete may not clean up containers"
+
+    # Launch-time port detection
+    grep -q 'InjectDetectedPorts' "$WIZARD" && \
+        log_pass "C# WizardForm: launch calls InjectDetectedPorts" || log_fail "C# WizardForm: launch missing port detection"
+else
+    log_fail "WizardForm.cs not found"
+fi
+
+# ==============================================================================
+# TEST 27: Stable Folder Name & New Features
+# ==============================================================================
+
+log_section "27.1 Compose Template Uses FOLDER_NAME Placeholder"
+
+if [ -f "$SANDBOX_CORE/generate_profile.sh" ]; then
+    grep -q '{{FOLDER_NAME}}' "$SANDBOX_CORE/generate_profile.sh" && \
+        log_pass "generate_profile.sh uses {{FOLDER_NAME}} placeholder" || log_fail "generate_profile.sh missing {{FOLDER_NAME}}"
+fi
+
+PROFGEN="$CSHARP_DIR/Services/ProfileGenerator.cs"
+if [ -f "$PROFGEN" ]; then
+    grep -q '{{FOLDER_NAME}}' "$PROFGEN" && \
+        log_pass "ProfileGenerator.cs uses {{FOLDER_NAME}} placeholder" || log_fail "ProfileGenerator.cs missing {{FOLDER_NAME}}"
+fi
+
+# Verify generated compose template uses FOLDER_NAME
+FOLDER_DIR="$TEMP_DIR/test-folder-name"
+SELECTED_AGENTS="claude" PRIMARY_AGENT="claude" bash "$SANDBOX_CORE/generate_profile.sh" "$SANDBOX_CORE" "$FOLDER_DIR" "test-folder" "node" "3000,8080" "" "" >/dev/null 2>&1
+
+if [ -f "$FOLDER_DIR/docker-compose.yml.tpl" ]; then
+    grep -q 'working_dir: /workspace/{{FOLDER_NAME}}' "$FOLDER_DIR/docker-compose.yml.tpl" && \
+        log_pass "Compose template: working_dir uses {{FOLDER_NAME}}" || log_fail "Compose template: working_dir still hardcoded"
+
+    grep -q '{{WORKSPACE_PATH}}:/workspace/{{FOLDER_NAME}}' "$FOLDER_DIR/docker-compose.yml.tpl" && \
+        log_pass "Compose template: volume mount uses {{FOLDER_NAME}}" || log_fail "Compose template: volume mount still hardcoded"
+
+    ! grep -q '/workspace/src' "$FOLDER_DIR/docker-compose.yml.tpl" && \
+        log_pass "Compose template: no /workspace/src references" || log_fail "Compose template: still has /workspace/src"
+else
+    log_fail "Folder-name compose template not generated"
+fi
+
+log_section "27.2 No /workspace/src in Fragments"
+
+# Verify no fragments reference /workspace/src
+src_refs=$(grep -rl '/workspace/src' "$SANDBOX_CORE/fragments/" 2>/dev/null || true)
+[ -z "$src_refs" ] && \
+    log_pass "No /workspace/src in src fragments" || log_fail "Still files with /workspace/src in fragments: $src_refs"
+
+win_refs=$(grep -rl '/workspace/src' "$CSHARP_DIR/Resources/fragments/" "$CSHARP_DIR/Resources/additions/" 2>/dev/null || true)
+[ -z "$win_refs" ] && \
+    log_pass "No /workspace/src in Resources fragments" || log_fail "Still files with /workspace/src in Resources: $win_refs"
+
+log_section "27.3 AGENTS.md Has New Sections"
+
+if [ -f "$FOLDER_DIR/AGENTS.md" ]; then
+    grep -q "Getting Started" "$FOLDER_DIR/AGENTS.md" && \
+        log_pass "AGENTS.md has Getting Started section" || log_fail "AGENTS.md missing Getting Started"
+
+    grep -q "Command Safety" "$FOLDER_DIR/AGENTS.md" && \
+        log_pass "AGENTS.md has Command Safety section" || log_fail "AGENTS.md missing Command Safety"
+
+    grep -q "non-interactively" "$FOLDER_DIR/AGENTS.md" && \
+        log_pass "AGENTS.md mentions non-interactive bash" || log_fail "AGENTS.md missing non-interactive note"
+
+    grep -q "safe to experiment" "$FOLDER_DIR/AGENTS.md" && \
+        log_pass "AGENTS.md mentions safe sandbox" || log_fail "AGENTS.md missing safe sandbox note"
+else
+    log_fail "AGENTS.md not generated for section test"
+fi
+
+log_section "27.4 esbuild in Node Fragment"
+
+if [ -f "$SANDBOX_CORE/fragments/languages/node.sh" ]; then
+    grep -q "esbuild" "$SANDBOX_CORE/fragments/languages/node.sh" && \
+        log_pass "node.sh installs esbuild" || log_fail "node.sh missing esbuild"
+else
+    log_fail "node.sh not found"
+fi
+
+if [ -f "$CSHARP_DIR/Resources/fragments/node.sh" ]; then
+    grep -q "esbuild" "$CSHARP_DIR/Resources/fragments/node.sh" && \
+        log_pass "Resources node.sh installs esbuild" || log_fail "Resources node.sh missing esbuild"
+else
+    log_fail "Resources node.sh not found"
+fi
+
+log_section "27.5 Ctrl+C Fix: detach-keys in DockerRunner"
+
+DOCKER_RUNNER="$CSHARP_DIR/Services/DockerRunner.cs"
+if [ -f "$DOCKER_RUNNER" ]; then
+    grep -q 'detach-keys' "$DOCKER_RUNNER" && \
+        log_pass "DockerRunner uses --detach-keys" || log_fail "DockerRunner missing --detach-keys"
+
+    grep -q '/k' "$DOCKER_RUNNER" && \
+        log_pass "DockerRunner uses cmd /k (keeps window open)" || log_fail "DockerRunner still uses cmd /c"
+else
+    log_fail "DockerRunner.cs not found"
+fi
+
+log_section "27.6 FOLDER_NAME Substitution in ProjectScaffolder"
+
+SCAFFOLDER="$CSHARP_DIR/Services/ProjectScaffolder.cs"
+if [ -f "$SCAFFOLDER" ]; then
+    grep -q 'FOLDER_NAME' "$SCAFFOLDER" && \
+        log_pass "ProjectScaffolder substitutes FOLDER_NAME" || log_fail "ProjectScaffolder missing FOLDER_NAME substitution"
+else
+    log_fail "ProjectScaffolder.cs not found"
+fi
+
+# ==============================================================================
+# TEST 28: README Accuracy Validation
+# ==============================================================================
+log_section "28.1 README References Current Features"
+
+README="$REPO_DIR/README.md"
+if [ -f "$README" ]; then
+    # Stable folder name
+    grep -q 'FOLDER_NAME' "$README" && \
+        log_pass "README mentions FOLDER_NAME template variable" || log_fail "README missing FOLDER_NAME"
+
+    grep -q 'your-folder-name\|actual project folder name\|folder name is preserved' "$README" && \
+        log_pass "README documents stable folder name feature" || log_fail "README missing stable folder name documentation"
+
+    # No /workspace/src references (should be gone)
+    ! grep -q '/workspace/src' "$README" && \
+        log_pass "README has no /workspace/src references" || log_fail "README still references /workspace/src"
+
+    # Ctrl+C / detach keys
+    grep -q 'detach' "$README" && grep -q 'Ctrl' "$README" && \
+        log_pass "README documents detach keys" || log_fail "README missing detach key documentation"
+
+    # esbuild
+    grep -q 'esbuild' "$README" && \
+        log_pass "README mentions esbuild availability" || log_fail "README missing esbuild"
+
+    # OpenCode conditional volumes
+    grep -q 'only.*OpenCode.*selected\|only when OpenCode' "$README" && \
+        log_pass "README documents conditional OpenCode volumes" || log_fail "README missing conditional OpenCode volume note"
+
+    # Container lifecycle (profile delete stops containers)
+    grep -q 'Deleting a profile.*stop\|stops.*running containers' "$README" && \
+        log_pass "README documents profile delete stops containers" || log_fail "README missing profile delete behavior"
+
+    # Stop Container button
+    grep -q 'Stop Container' "$README" && \
+        log_pass "README mentions Stop Container button" || log_fail "README missing Stop Container button"
+
+    # Remove project
+    grep -q 'Remove.*button\|Removing a project' "$README" && \
+        log_pass "README mentions Remove project feature" || log_fail "README missing Remove project"
+
+    # Port detection at launch
+    grep -q 'Port.*[Dd]etect.*launch\|re-detected at launch' "$README" && \
+        log_pass "README documents launch-time port detection" || log_fail "README missing launch-time port detection"
+
+    # AGENTS.md dynamic generation
+    grep -q 'dynamically generated per profile' "$README" && \
+        log_pass "README documents dynamic AGENTS.md generation" || log_fail "README missing dynamic AGENTS.md documentation"
+
+    grep -q 'Available Ports.*listing.*exact ports\|exact ports published' "$README" && \
+        log_pass "README documents per-profile port list in AGENTS.md" || log_fail "README missing AGENTS.md port list documentation"
+else
+    log_fail "README.md not found"
+fi
+
+log_section "28.2 README Matches Current Agent Instructions"
+
+INSTRUCTIONS="$SANDBOX_CORE/instructions.base.md"
+if [ -f "$INSTRUCTIONS" ]; then
+    grep -q "Getting Started" "$INSTRUCTIONS" && \
+        log_pass "instructions.base.md has Getting Started section" || log_fail "instructions.base.md missing Getting Started"
+
+    grep -q "Command Safety" "$INSTRUCTIONS" && \
+        log_pass "instructions.base.md has Command Safety section" || log_fail "instructions.base.md missing Command Safety"
+
+    grep -q "Container Environment" "$INSTRUCTIONS" && \
+        log_pass "instructions.base.md has Container Environment section" || log_fail "instructions.base.md missing Container Environment"
+
+    ! grep -q '/workspace/src' "$INSTRUCTIONS" && \
+        log_pass "instructions.base.md has no /workspace/src" || log_fail "instructions.base.md still references /workspace/src"
+else
+    log_fail "instructions.base.md not found"
+fi
+
+log_section "28.3 CLAUDE.md Has Pre-Commit Checklist"
+
+CLAUDEMD="$REPO_DIR/CLAUDE.md"
+if [ -f "$CLAUDEMD" ]; then
+    grep -q 'Pre-Commit Checklist' "$CLAUDEMD" && \
+        log_pass "CLAUDE.md has Pre-Commit Checklist" || log_fail "CLAUDE.md missing Pre-Commit Checklist"
+
+    grep -q 'README.md must be up to date' "$CLAUDEMD" && \
+        log_pass "CLAUDE.md requires README validation" || log_fail "CLAUDE.md missing README requirement"
+
+    grep -q 'dev.*branch\|Always work on.*dev' "$CLAUDEMD" && \
+        log_pass "CLAUDE.md specifies dev branch" || log_fail "CLAUDE.md missing dev branch rule"
+else
+    log_fail "CLAUDE.md not found"
+fi
+
+# ==============================================================================
+# TEST 29: Template Profiles
+# ==============================================================================
+log_section "29.1 Template JSON Files Are Valid"
+
+TEMPLATES_PROFILE_DIR="$REPO_DIR/src/templates/profiles"
+if [ -d "$TEMPLATES_PROFILE_DIR" ]; then
+    for tfile in "$TEMPLATES_PROFILE_DIR"/*.json; do
+        tname=$(basename "$tfile" .json)
+        # Valid JSON
+        jq . "$tfile" >/dev/null 2>&1 && \
+            log_pass "Template $tname: valid JSON" || { log_fail "Template $tname: invalid JSON"; continue; }
+
+        # Has required _template fields
+        jq -e '._template.id' "$tfile" >/dev/null 2>&1 && \
+            log_pass "Template $tname: has _template.id" || log_fail "Template $tname: missing _template.id"
+
+        jq -e '._template.label' "$tfile" >/dev/null 2>&1 && \
+            log_pass "Template $tname: has _template.label" || log_fail "Template $tname: missing _template.label"
+
+        jq -e '._template.description' "$tfile" >/dev/null 2>&1 && \
+            log_pass "Template $tname: has _template.description" || log_fail "Template $tname: missing _template.description"
+
+        jq -e '._template.agents_md_extra' "$tfile" >/dev/null 2>&1 && \
+            log_pass "Template $tname: has agents_md_extra" || log_fail "Template $tname: missing agents_md_extra"
+
+        # Has required profile fields
+        jq -e '.profile.name' "$tfile" >/dev/null 2>&1 && \
+            log_pass "Template $tname: has profile.name" || log_fail "Template $tname: missing profile.name"
+
+        jq -e '.profile.agents | length > 0' "$tfile" >/dev/null 2>&1 && \
+            log_pass "Template $tname: has at least one agent" || log_fail "Template $tname: no agents"
+
+        jq -e '.profile.languages | length > 0' "$tfile" >/dev/null 2>&1 && \
+            log_pass "Template $tname: has at least one language" || log_fail "Template $tname: no languages"
+
+        # Format marker
+        jq -e '._format == "agent-sandbox-profile/1"' "$tfile" >/dev/null 2>&1 && \
+            log_pass "Template $tname: has correct _format" || log_fail "Template $tname: wrong _format"
+    done
+else
+    log_fail "Template profiles directory not found"
+fi
+
+log_section "29.2 Template Profiles Exist in C# Resources"
+
+WIN_TEMPLATES="$CSHARP_DIR/Resources/templates/profiles"
+for tname in static-website web-app python-dev; do
+    [ -f "$WIN_TEMPLATES/$tname.json" ] && \
+        log_pass "Resources has $tname.json template" || log_fail "Resources missing $tname.json template"
+done
+
+log_section "29.3 TemplateLoader Service Exists"
+
+[ -f "$CSHARP_DIR/Services/TemplateLoader.cs" ] && \
+    log_pass "TemplateLoader.cs exists" || log_fail "TemplateLoader.cs not found"
+
+grep -q 'LoadAll' "$CSHARP_DIR/Services/TemplateLoader.cs" 2>/dev/null && \
+    log_pass "TemplateLoader has LoadAll method" || log_fail "TemplateLoader missing LoadAll"
+
+grep -q 'ToProfileSpec' "$CSHARP_DIR/Services/TemplateLoader.cs" 2>/dev/null && \
+    log_pass "TemplateLoader has ToProfileSpec method" || log_fail "TemplateLoader missing ToProfileSpec"
+
+log_section "29.4 WizardForm Has Use Template Button"
+
+grep -q 'Use Template\|UseTemplate\|OnUseTemplateClicked' "$CSHARP_DIR/UI/WizardForm.cs" 2>/dev/null && \
+    log_pass "WizardForm has Use Template button" || log_fail "WizardForm missing Use Template"
+
+log_section "29.5 GH_TOKEN in API Key Passthrough"
+
+SCAFFOLDER="$CSHARP_DIR/Services/ProjectScaffolder.cs"
+grep -q 'GH_TOKEN' "$SCAFFOLDER" 2>/dev/null && \
+    log_pass "ProjectScaffolder forwards GH_TOKEN" || log_fail "ProjectScaffolder missing GH_TOKEN"
+
+grep -q 'GITHUB_TOKEN' "$SCAFFOLDER" 2>/dev/null && \
+    log_pass "ProjectScaffolder forwards GITHUB_TOKEN" || log_fail "ProjectScaffolder missing GITHUB_TOKEN"
+
+SANDBOX_SH="$SANDBOX_SCRIPTS/sandbox.sh"
+grep -q 'GH_TOKEN' "$SANDBOX_SH" 2>/dev/null && \
+    log_pass "sandbox.sh forwards GH_TOKEN" || log_fail "sandbox.sh missing GH_TOKEN"
+
+log_section "29.6 README Documents Templates and GH_TOKEN"
+
+grep -q 'Template Profiles\|template profile' "$README" && \
+    log_pass "README documents template profiles" || log_fail "README missing template profiles"
+
+grep -q 'GH_TOKEN' "$README" && \
+    log_pass "README documents GH_TOKEN" || log_fail "README missing GH_TOKEN documentation"
+
+grep -q 'dynamically generated per profile' "$README" && \
+    log_pass "README documents dynamic AGENTS.md" || log_fail "README missing dynamic AGENTS.md"
+
+# ==============================================================================
 # SUMMARY
 # ==============================================================================
 echo ""

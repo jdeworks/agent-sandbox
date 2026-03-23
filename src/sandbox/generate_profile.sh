@@ -76,7 +76,7 @@ mkdir -p "$PROFILE_DIR"
 generate_dockerfile() {
     # Build agent Dockerfile layers (only selected agents)
     local agent_layers=""
-    IFS=',' read -ra AGENTS_LIST <<< "${SELECTED_AGENTS:-opencode}"
+    IFS=',' read -ra AGENTS_LIST <<< "${SELECTED_AGENTS:-claude}"
     for agent in "${AGENTS_LIST[@]}"; do
         [ -z "$agent" ] && continue
         local alines
@@ -249,7 +249,16 @@ generate_compose() {
         fi
     done
 
-    path_parts+=("/root/.local/bin:/root/.cursor/bin:/root/.claude/bin:/root/.npm-global/bin:/opt/opencode/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+    local base_path="/root/.local/bin:/root/.cursor/bin:/root/.claude/bin:/root/.npm-global/bin"
+    local has_opencode=false
+    for agent in "${AGENTS_LIST[@]}"; do
+        [ "$agent" = "opencode" ] && has_opencode=true
+    done
+    if $has_opencode; then
+        base_path+=":/opt/opencode/bin"
+    fi
+    base_path+=":/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    path_parts+=("$base_path")
     local path_env
     path_env=$(IFS=':'; echo "${path_parts[*]}")
 
@@ -260,26 +269,32 @@ generate_compose() {
     done
     port_lines="${port_lines%$'\n'}"
 
+    local opencode_vols=""
+    local opencode_vol_defs=""
+    if $has_opencode; then
+        opencode_vols+=$'\n'"      - ./opencode_data:/workspace/.config/opencode"
+        opencode_vols+=$'\n'"      - ./opencode_sessions:/workspace/.local/share/opencode"
+        opencode_vols+=$'\n'"      - ./logs:/workspace/.local/share/opencode/log"
+        opencode_vols+=$'\n'"      - asb_opencode_cache_{{PROJECT_NAME}}:/workspace/.cache/opencode"
+        opencode_vol_defs=$'\n'"  asb_opencode_cache_{{PROJECT_NAME}}:"
+    fi
+
     cat > "$PROFILE_DIR/docker-compose.yml.tpl" <<YAML
 services:
   agent:
     build: .
     container_name: sandbox-{{PROJECT_NAME}}
-    working_dir: /workspace/src
+    working_dir: /workspace/{{FOLDER_NAME}}
     environment:
       - HOME=/workspace
       - PATH=${path_env}
       - HOST_UID={{HOST_UID}}
       - HOST_GID={{HOST_GID}}
 ${env_lines}    volumes:
-      - {{WORKSPACE_PATH}}:/workspace/src${vol_mounts}
-      - ./opencode_data:/workspace/.config/opencode
-      - ./opencode_sessions:/workspace/.local/share/opencode
-      - ./logs:/workspace/.local/share/opencode/log
+      - {{WORKSPACE_PATH}}:/workspace/{{FOLDER_NAME}}${vol_mounts}${opencode_vols}
       - asb_agent_config_{{PROJECT_NAME}}:/workspace/.agent-config
       - asb_agent_data_{{PROJECT_NAME}}:/workspace/.agent-data
       - asb_sandbox_data_{{PROJECT_NAME}}:/workspace/.sandbox-vol
-      - asb_opencode_cache_{{PROJECT_NAME}}:/workspace/.cache/opencode
       - ./sandbox_data:/workspace/.sandbox
     ports:
 ${port_lines}
@@ -294,8 +309,7 @@ ${port_lines}
 volumes:
 ${vol_defs}  asb_agent_config_{{PROJECT_NAME}}:
   asb_agent_data_{{PROJECT_NAME}}:
-  asb_sandbox_data_{{PROJECT_NAME}}:
-  asb_opencode_cache_{{PROJECT_NAME}}:
+  asb_sandbox_data_{{PROJECT_NAME}}:${opencode_vol_defs}
 YAML
 }
 
@@ -307,11 +321,24 @@ generate_install() {
 #!/usr/bin/env bash
 set -e
 
+HEADER
+
+    # Conditionally add OpenCode cache dir
+    local has_opencode=false
+    for agent in "${AGENTS_LIST[@]}"; do
+        [ "$agent" = "opencode" ] && has_opencode=true
+    done
+    if $has_opencode; then
+        cat >> "$PROFILE_DIR/install.sh" <<'OCINST'
 ########################################
 # Ensure OpenCode cache dir exists
 ########################################
 mkdir -p /workspace/.cache/opencode
 
+OCINST
+    fi
+
+    cat >> "$PROFILE_DIR/install.sh" <<'HEADER2'
 [ -d /workspace/.cache ] && chmod -R a+rwX /workspace/.cache
 [ -d /workspace/.config ] && chmod -R a+rwX /workspace/.config
 [ -d /workspace/.npm ] && chmod -R a+rwX /workspace/.npm
@@ -328,7 +355,7 @@ for bin in agent claude; do
 done
 export PATH="/root/.local/bin:$PATH"
 
-HEADER
+HEADER2
 
     for lang in "${SELECTED[@]}"; do
         local frag="$FRAGMENTS_DIR/${lang}.sh"

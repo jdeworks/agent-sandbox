@@ -23,7 +23,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_{{NODE_VERSION}}.x | bash - \
 # {{AGENT_LAYERS}}
 
 # Ensure all CLI agent bin dirs are on PATH (installers may use ~/.local/bin)
-ENV PATH="/root/.local/bin:/root/.cursor/bin:/root/.claude/bin:/root/.npm-global/bin:/opt/opencode/bin:${PATH}"
+ENV PATH="/root/.local/bin:/root/.cursor/bin:/root/.claude/bin:/root/.npm-global/bin:${PATH}"
 
 # {{LANGUAGE_LAYERS}}
 

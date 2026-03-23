@@ -1,6 +1,22 @@
 # Sandbox Agent Instructions
 
-You are running inside an isolated container sandbox. The project root is the current directory at `/workspace/src`.
+You are running inside an isolated container sandbox. The project root is the current directory.
+
+## Getting Started
+
+This is a **sandboxed Docker container** — it is safe to experiment freely.
+Any changes you make cannot affect the host machine. If something breaks,
+the container can simply be restarted from a clean state.
+
+- **Install packages**: Use `apt-get`, `npm`, `pip`, etc. directly. Record
+  system packages in `Dockerfile.extension` so they persist across restarts.
+- **Run commands**: All shell commands execute inside the container. You have
+  full root access.
+- **Dev servers**: Start servers on `0.0.0.0` using one of the published
+  ports (see "Available Ports" below). The user accesses them at
+  `http://localhost:<port>` on their machine.
+- **File changes**: Edits to project files in the current directory are
+  immediately reflected on the host (it's a shared volume mount).
 
 ## ⚠️ CRITICAL: Read Before Making ANY Changes
 
@@ -118,6 +134,37 @@ are already on the PATH.
 ## Dev Servers
 
 When starting dev servers (backend, frontend, API, etc.), bind to `0.0.0.0` (not only `127.0.0.1`) so they are reachable from the host.
+
+## Command Safety
+
+Your bash/shell tool runs commands **non-interactively** — there is no stdin
+attached. Commands that prompt for confirmation (e.g. `rm` on write-protected
+files, `apt-get` without `-y`) will **hang indefinitely**.
+
+- **Always ask the user** before running destructive commands (delete, overwrite,
+  format). Use your own permission/approval UI — do not rely on shell prompts.
+- For package managers: use `-y` or `--yes` flags (`apt-get install -y`, etc.)
+- For file operations: use `-f` when you have confirmed with the user
+- If a command hangs, it is likely waiting for stdin — cancel and retry with
+  appropriate flags.
+
+## Container Environment
+
+You are running inside a Docker container. Key differences from a normal dev machine:
+
+- **Ports**: Dev servers bind to `0.0.0.0` inside the container. The user
+  accesses them at `http://localhost:<port>` on their host machine. Only the
+  ports listed in "Available Ports" below are forwarded — if you need a port
+  that isn't listed, tell the user to re-run sandbox preparation.
+- **No desktop/GUI**: There is no display server. Do NOT attempt to open a
+  browser with `xdg-open` or similar. Headless browsers (Playwright, Puppeteer
+  in headless mode) work fine for testing.
+- **Network**: `localhost` inside the container refers to the container itself,
+  not the user's machine. External network access (npm registry, APIs) works
+  normally.
+- **File system**: Only the current directory is mapped to the user's project.
+  Changes outside this directory (and outside recorded Dockerfile.extension
+  commands) are lost on restart.
 
 ## Adding New Languages or Frameworks
 

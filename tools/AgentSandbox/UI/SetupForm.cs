@@ -797,23 +797,26 @@ public class SetupForm : Form
                 Log($"[setup] Generating profile '{name}'...");
                 ProfileGenerator.Generate(spec, _languages);
                 var profileDir = Path.Combine(ResourceManager.PreparedDir, name);
-                var manifest = System.Text.Json.JsonSerializer.Serialize(new
+                var manifestObj = new Dictionary<string, object>
                 {
-                    name,
-                    agents = spec.Agents,
-                    plugins = spec.Plugins,
-                    custom_plugins = spec.CustomPlugins,
-                    skills = spec.Skills,
-                    languages = spec.Languages,
-                    versions = spec.Versions,
-                    additions = spec.Additions,
-                    vscode_extensions = spec.VscodeExtensions,
-                    mcp_servers = spec.McpServers,
-                    custom_dockerfile_lines = spec.CustomDockerfileLines,
-                    custom_startup_before = spec.CustomStartupBefore,
-                    custom_startup_after = spec.CustomStartupAfter,
-                    created = DateTime.Now.ToString("O")
-                }, new JsonSerializerOptions { WriteIndented = true });
+                    ["name"] = name,
+                    ["agents"] = spec.Agents,
+                    ["plugins"] = spec.Plugins,
+                    ["custom_plugins"] = spec.CustomPlugins,
+                    ["skills"] = spec.Skills,
+                    ["languages"] = spec.Languages,
+                    ["versions"] = spec.Versions,
+                    ["additions"] = spec.Additions,
+                    ["vscode_extensions"] = spec.VscodeExtensions,
+                    ["mcp_servers"] = spec.McpServers,
+                    ["custom_dockerfile_lines"] = spec.CustomDockerfileLines,
+                    ["custom_startup_before"] = spec.CustomStartupBefore,
+                    ["custom_startup_after"] = spec.CustomStartupAfter,
+                    ["created"] = DateTime.Now.ToString("O")
+                };
+                if (!string.IsNullOrEmpty(spec.Template))
+                    manifestObj["template"] = spec.Template;
+                var manifest = System.Text.Json.JsonSerializer.Serialize(manifestObj, new JsonSerializerOptions { WriteIndented = true });
                 ResourceManager.WriteLf(Path.Combine(profileDir, "profile.json"), manifest);
 
                 var dfPath = Path.Combine(profileDir, "Dockerfile.base");
@@ -926,6 +929,35 @@ public class SetupForm : Form
         var result = new List<string>();
         for (int i = 0; i < clb.Items.Count; i++) if (clb.GetItemChecked(i)) result.Add(keys[i]);
         return result;
+    }
+
+    /// <summary>
+    /// Pre-fill the wizard from a template's ProfileSpec.
+    /// Call after construction to set up all steps with template values.
+    /// </summary>
+    public void PreFillFromTemplate(ProfileSpec spec)
+    {
+        // Step 0: Profile name
+        _nameBox.Text = spec.Name;
+
+        // Step 1: Agents
+        for (int i = 0; i < _agentKeys.Count; i++)
+            _agentList.SetItemChecked(i, spec.Agents.Contains(_agentKeys[i]));
+
+        // Step 2: VS Code
+        _chkVsCode.Checked = spec.Additions.Contains("vscode-server");
+
+        // Step 3: Languages
+        for (int i = 0; i < _langKeys.Count; i++)
+        {
+            var key = _langKeys[i];
+            if (key == "node") continue; // always checked
+            _langList.SetItemChecked(i, spec.Languages.Contains(key));
+        }
+
+        // Version overrides
+        foreach (var (lang, ver) in spec.Versions)
+            _versionOverrides[lang] = ver;
     }
 
     protected override void Dispose(bool disposing)

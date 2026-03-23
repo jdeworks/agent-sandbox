@@ -32,6 +32,7 @@ public sealed class WizardForm : Form
     private Button _btnBrowse = null!;
     private Label _lblRecent = null!;
     private ListView _lstRecent = null!;
+    private Button _btnRemoveProject = null!;
     private ComboBox _cboProfile = null!;
     private Panel _pluginPanel = null!;
     private Label _lblPlugins = null!;
@@ -43,6 +44,9 @@ public sealed class WizardForm : Form
     private readonly List<Control> _launchTempControls = new();
     private bool _profileHasVsCode;
     private int _vsCodePort = 4040;
+    private Button _btnStopContainer = null!;
+    private string _lastLaunchedComposePath = "";
+    private string _lastLaunchedProjectDir = "";
     private readonly List<CheckBox> _pluginChecks = new();
     private readonly List<string> _pluginKeys = new();
     private Button _btnLaunch = null!;
@@ -127,6 +131,16 @@ public sealed class WizardForm : Form
         StyleFilledButton(_btnCreateProfile, AccentBlue, Color.White);
         _btnCreateProfile.Click += OnCreateProfileClicked;
 
+        var btnUseTemplate = new Button
+        {
+            Text = "Use Template",
+            Location = new Point(204, 96),
+            Size = new Size(160, 44),
+            Font = new Font("Segoe UI", 10f, FontStyle.Bold)
+        };
+        StyleFlatButton(btnUseTemplate, AccentBlue);
+        btnUseTemplate.Click += OnUseTemplateClicked;
+
         _lstProfiles = new ListView
         {
             Location = new Point(32, 152),
@@ -204,8 +218,19 @@ public sealed class WizardForm : Form
             ShowStep(1);
         };
 
-        _stepProfiles.Controls.AddRange([headerPanel, _btnCreateProfile, _lstProfiles,
-            _lblNoProfiles, _btnDeleteProfile, btnRebuildProfile, btnExportProfile, btnImportProfile, _btnContinueToProject]);
+        var btnStopAllContainers = new Button
+        {
+            Text = "Stop All Containers",
+            Location = new Point(520, 504),
+            Size = new Size(152, 44)
+        };
+        StyleFlatButton(btnStopAllContainers, Color.FromArgb(200, 80, 80));
+        btnStopAllContainers.Click += OnStopAllContainersClicked;
+
+        _btnContinueToProject.Location = new Point(32, 556);
+
+        _stepProfiles.Controls.AddRange([headerPanel, _btnCreateProfile, btnUseTemplate, _lstProfiles,
+            _lblNoProfiles, _btnDeleteProfile, btnRebuildProfile, btnExportProfile, btnImportProfile, btnStopAllContainers, _btnContinueToProject]);
         Controls.Add(_stepProfiles);
 
         RefreshProfileList();
@@ -215,6 +240,23 @@ public sealed class WizardForm : Form
     {
         using var setupForm = new SetupForm(_languages, _portConfigs);
         if (setupForm.ShowDialog(this) == DialogResult.OK)
+        {
+            RefreshProfileList();
+        }
+    }
+
+    private void OnUseTemplateClicked(object? sender, EventArgs e)
+    {
+        var templates = TemplateLoader.LoadAll();
+        if (templates.Count == 0)
+        {
+            MessageBox.Show("No templates found. Ensure template files exist in the templates/profiles/ directory.",
+                "No Templates", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var picker = new TemplatePickerForm(templates, _languages, _portConfigs);
+        if (picker.ShowDialog(this) == DialogResult.OK)
         {
             RefreshProfileList();
         }
@@ -230,14 +272,34 @@ public sealed class WizardForm : Form
         }
 
         var name = _lstProfiles.SelectedItems[0].Text;
-        var result = MessageBox.Show(
-            $"Delete profile '{name}'?\nThis will remove the profile directory and its Docker image.",
-            "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
 
+        // Find containers using this profile
+        var affectedProjects = ProjectScaffolder.GetRecentProjects()
+            .Where(p => p.Profile == name).ToList();
+        var runningNames = affectedProjects
+            .Where(p => DockerRunner.IsContainerRunning($"sandbox-{p.Name}"))
+            .Select(p => p.Name).ToList();
+
+        var msg = $"Delete profile '{name}'?\nThis will remove the profile directory and its Docker image.";
+        if (runningNames.Count > 0)
+            msg += $"\n\n{runningNames.Count} running container(s) will be stopped:\n  " + string.Join("\n  ", runningNames);
+
+        var result = MessageBox.Show(msg, "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
         if (result != DialogResult.Yes) return;
 
         try
         {
+            // Fully remove all containers that use this profile (profile is going away)
+            foreach (var proj in runningNames)
+            {
+                var projDir = ProjectScaffolder.GetProjectDir(proj);
+                var composePath = Path.Combine(projDir, "docker-compose.yml");
+                if (File.Exists(composePath))
+                    DockerRunner.ComposeDownVolumes(composePath, projDir);
+                else
+                    DockerRunner.StopContainer($"sandbox-{proj}");
+            }
+
             var profileDir = Path.Combine(ResourceManager.PreparedDir, name);
             if (Directory.Exists(profileDir))
                 Directory.Delete(profileDir, true);
@@ -251,6 +313,53 @@ public sealed class WizardForm : Form
         }
 
         RefreshProfileList();
+    }
+
+    private void OnStopAllContainersClicked(object? sender, EventArgs e)
+    {
+        if (_lstProfiles.SelectedItems.Count == 0)
+        {
+            MessageBox.Show("Select a profile first.", "Stop All Containers",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var profileName = _lstProfiles.SelectedItems[0].Text;
+        var runningProjects = ProjectScaffolder.GetRecentProjects()
+            .Where(p => p.Profile == profileName && DockerRunner.IsContainerRunning($"sandbox-{p.Name}"))
+            .ToList();
+
+        if (runningProjects.Count == 0)
+        {
+            MessageBox.Show($"No running containers for profile '{profileName}'.", "Stop All Containers",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var result = MessageBox.Show(
+            $"Stop {runningProjects.Count} running container(s) for profile '{profileName}'?",
+            "Confirm Stop", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+        if (result != DialogResult.Yes) return;
+
+        var stopped = 0;
+        foreach (var proj in runningProjects)
+        {
+            try
+            {
+                var projDir = ProjectScaffolder.GetProjectDir(proj.Name);
+                var composePath = Path.Combine(projDir, "docker-compose.yml");
+                if (File.Exists(composePath))
+                    DockerRunner.ComposeDown(composePath, projDir);
+                else
+                    DockerRunner.StopContainer($"sandbox-{proj.Name}");
+                stopped++;
+            }
+            catch { }
+        }
+
+        MessageBox.Show($"Stopped {stopped} container(s).", "Stop All Containers",
+            MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private async void OnRebuildProfileClicked(object? sender, EventArgs e)
@@ -564,6 +673,19 @@ public sealed class WizardForm : Form
         _lstRecent.Columns.Add("Workspace Path", 240);
         _lstRecent.SelectedIndexChanged += OnRecentProjectSelected;
 
+        _btnRemoveProject = new Button
+        {
+            Text = "Remove",
+            Location = new Point(586, 138),
+            Size = new Size(86, 24),
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 8.5f),
+            ForeColor = Color.FromArgb(200, 80, 80),
+            BackColor = Color.FromArgb(45, 45, 48)
+        };
+        _btnRemoveProject.FlatAppearance.BorderColor = Color.FromArgb(200, 80, 80);
+        _btnRemoveProject.Click += OnRemoveProjectClicked;
+
         var lblProfile = new Label
         {
             Text = "Profile",
@@ -714,13 +836,23 @@ public sealed class WizardForm : Form
         StyleFilledButton(_btnClose, Color.FromArgb(63, 63, 70), Color.White);
         _btnClose.Click += (_, _) => Close();
 
+        _btnStopContainer = new Button
+        {
+            Text = "Stop Container",
+            Location = new Point(328, 620),
+            Size = new Size(140, 40),
+            Visible = false
+        };
+        StyleFlatButton(_btnStopContainer, Color.FromArgb(200, 80, 80));
+        _btnStopContainer.Click += OnStopContainerClicked;
+
         _stepLaunch.Controls.AddRange([headerPanel, lblPath, _txtPath, _btnBrowse,
-            _lblRecent, _lstRecent, lblProfile, _cboProfile,
+            _lblRecent, _lstRecent, _btnRemoveProject, lblProfile, _cboProfile,
             _lblAgent, _cboAgent, _btnLaunch,
             _lblProfileInfo, _lnkVsCode,
             _lblPlugins, _pluginPanel,
             _btnBackToProfiles, _btnEditUserEnv,
-            _txtLog, _btnBackOverview, _btnClose]);
+            _txtLog, _btnBackOverview, _btnClose, _btnStopContainer]);
         Controls.Add(_stepLaunch);
 
         RefreshProfileDropdown();
@@ -733,6 +865,35 @@ public sealed class WizardForm : Form
         var item = _lstRecent.SelectedItems[0];
         _txtPath.Text = item.SubItems[3].Text;
         AutoSelectProfileForPath(item.SubItems[3].Text, item.SubItems[1].Text);
+    }
+
+    private void OnRemoveProjectClicked(object? sender, EventArgs e)
+    {
+        if (_lstRecent.SelectedItems.Count == 0)
+        {
+            MessageBox.Show("Select a project to remove.", "Remove Project",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var projectName = _lstRecent.SelectedItems[0].Text;
+        var result = MessageBox.Show(
+            $"Remove project '{projectName}'?\nThis will stop any running container and delete the project data.",
+            "Confirm Remove", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+        if (result != DialogResult.Yes) return;
+
+        try
+        {
+            ProjectScaffolder.DeleteProject(projectName);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error removing project: {ex.Message}", "Error",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+
+        RefreshRecentProjects();
     }
 
     /// <summary>Auto-select the profile for a project path. Reads .sandbox file first, then falls back to hint.</summary>
@@ -1319,8 +1480,25 @@ public sealed class WizardForm : Form
                 ProjectScaffolder.WriteRuntimeEnv(projectName);
                 ProjectScaffolder.SyncHostAuth(projectName, Log);
 
+                // Re-detect framework ports from the actual project (catches Vite etc. added after profile creation)
+                var profileJsonPath = Path.Combine(profileDir, "profile.json");
+                if (File.Exists(profileJsonPath))
+                {
+                    try
+                    {
+                        using var pDoc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(profileJsonPath));
+                        var profileLangs = new List<string>();
+                        if (pDoc.RootElement.TryGetProperty("languages", out var langsEl) && langsEl.ValueKind == System.Text.Json.JsonValueKind.Array)
+                            profileLangs.AddRange(langsEl.EnumerateArray().Select(l => l.GetString() ?? "").Where(l => l != ""));
+                        ProjectScaffolder.InjectDetectedPorts(projectName, workspacePath, profileLangs, _portConfigs, Log);
+                    }
+                    catch { /* best effort — don't block launch */ }
+                }
+
                 // VS Code only mode: override entrypoint to skip agent entirely
                 var composePath = Path.Combine(projectDir, "docker-compose.yml");
+                _lastLaunchedComposePath = composePath;
+                _lastLaunchedProjectDir = projectDir;
                 SetComposeVsCodeOnly(composePath, vsCodeOnly);
 
                 // Compose up with port retry
@@ -1376,10 +1554,13 @@ public sealed class WizardForm : Form
                     }
                 _vsCodePort = actualVsPort;
 
-                // Verify code-server is actually in the Dockerfile
-                var dfCheck = Path.Combine(profileDir, "Dockerfile.base");
-                if (File.Exists(dfCheck) && !File.ReadAllText(dfCheck).Contains("code-server"))
-                    Log("[sandbox] WARNING: VS Code Server is not in this profile's Dockerfile. Rebuild the profile to add it.");
+                // Verify code-server is actually in the Dockerfile (only warn if profile expects it)
+                if (_profileHasVsCode)
+                {
+                    var dfCheck = Path.Combine(profileDir, "Dockerfile.base");
+                    if (File.Exists(dfCheck) && !File.ReadAllText(dfCheck).Contains("code-server"))
+                        Log("[sandbox] WARNING: VS Code Server is not in this profile's Dockerfile. Rebuild the profile to add it.");
+                }
 
                 if (vsCodeOnly)
                 {
@@ -1399,6 +1580,8 @@ public sealed class WizardForm : Form
                     Log($"[sandbox] Launching agent: {agentCommand}");
                     DockerRunner.ExecInteractive(containerTarget, agentCommand, newWindow: true);
                     Log("[sandbox] Agent launched in new window.");
+                    Log("[sandbox] TIP: Press Ctrl+] to detach from the agent. Ctrl+C may close the window.");
+                    Log("[sandbox]      To copy text, right-click or use Ctrl+Shift+C in Windows Terminal.");
                 }
             });
 
@@ -1407,6 +1590,8 @@ public sealed class WizardForm : Form
             {
                 _btnBackOverview.Visible = true;
                 _btnClose.Visible = true;
+                _btnStopContainer.Visible = true;
+                _btnStopContainer.Enabled = true;
 
                 // Update VS Code link with actual port (may differ from pre-launch value)
                 if (_profileHasVsCode && _vsCodePort > 0)
@@ -1463,10 +1648,34 @@ public sealed class WizardForm : Form
         _txtLog.Visible = false;
         _btnBackOverview.Visible = false;
         _btnClose.Visible = false;
+        _btnStopContainer.Visible = false;
 
         SetLaunchMode(false);
         RefreshProfileDropdown();
         RefreshRecentProjects();
+    }
+
+    private void OnStopContainerClicked(object? sender, EventArgs e)
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(_lastLaunchedComposePath) && File.Exists(_lastLaunchedComposePath))
+                DockerRunner.ComposeDown(_lastLaunchedComposePath, _lastLaunchedProjectDir);
+            AppendLog("[sandbox] Container stopped.");
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"[sandbox] Error stopping container: {ex.Message}");
+        }
+
+        _btnStopContainer.Enabled = false;
+        _btnStopContainer.Text = "Stopped";
+    }
+
+    private void AppendLog(string msg)
+    {
+        if (InvokeRequired) { Invoke(() => AppendLog(msg)); return; }
+        _txtLog.AppendText(msg + Environment.NewLine);
     }
 
     /// <summary>
@@ -1477,6 +1686,7 @@ public sealed class WizardForm : Form
         // Pre-launch controls: hide during launch, show when returning
         _lblRecent.Visible = !launching;
         _lstRecent.Visible = !launching;
+        _btnRemoveProject.Visible = !launching;
         _btnBrowse.Visible = !launching;
         _lblAgent.Visible = !launching && _cboAgent.Items.Count > 0;
         _cboAgent.Visible = !launching && _cboAgent.Items.Count > 0;

@@ -19,4 +19,5 @@ public class ProfileSpec
     public List<string> CustomDockerfileLines { get; set; } = new();
     public List<string> CustomStartupBefore { get; set; } = new();
     public List<string> CustomStartupAfter { get; set; } = new();
+    public string Template { get; set; } = "";
 }

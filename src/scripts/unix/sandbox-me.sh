@@ -297,7 +297,8 @@ if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$CONTAINER_NAME"; the
         # Determine agent to launch
         AGENT_CMD=$(get_agent_command_v2 "$PROFILE_DIR")
         echo "[sandbox-me] Attaching (using $AGENT_CMD)..."
-        docker exec -it "$CONTAINER_NAME" $AGENT_CMD
+        echo "[sandbox-me] TIP: Press Ctrl+] to detach. Ctrl+C may exit the agent."
+        docker exec -it --detach-keys="ctrl-]" "$CONTAINER_NAME" $AGENT_CMD
         exit 0
     elif [ "$reuse_choice" = "3" ]; then
         exit 0
@@ -444,7 +445,8 @@ docker_wait_for_ready "$RUNNING_CONTAINER" || true
 ########################################
 AGENT_CMD=$(get_agent_command_v2 "$PROFILE_DIR")
 echo "[sandbox-me] Attaching to $CONTAINER_NAME (using $AGENT_CMD)..."
-docker exec -it "$RUNNING_CONTAINER" $AGENT_CMD
+echo "[sandbox-me] TIP: Press Ctrl+] to detach. Ctrl+C may exit the agent."
+docker exec -it --detach-keys="ctrl-]" "$RUNNING_CONTAINER" $AGENT_CMD
 
 ########################################
 # Post-session: check Dockerfile.extension

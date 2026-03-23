@@ -94,7 +94,7 @@ public static class DockerRunner
             var psi = new ProcessStartInfo
             {
                 FileName = "cmd.exe",
-                Arguments = $"/c docker exec -it \"{containerName}\" {command}",
+                Arguments = $"/k title Agent Sandbox - {containerName} && docker exec -it --detach-keys=\"ctrl-]\" \"{containerName}\" {command}",
                 UseShellExecute = true,
                 CreateNoWindow = false
             };

@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using AgentSandbox.Models;
 
 namespace AgentSandbox.Services;
 
@@ -14,7 +15,7 @@ public static class ProjectScaffolder
     public record RecentProject(string Name, string Profile, string WorkspacePath, string LastStarted);
 
     private static readonly string[] ApiKeyVars =
-        ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "OPENCODE_API_KEY", "GEMINI_API_KEY", "CURSOR_API_KEY", "GITHUB_COPILOT_API_KEY"];
+        ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "OPENCODE_API_KEY", "GEMINI_API_KEY", "CURSOR_API_KEY", "GITHUB_COPILOT_API_KEY", "GH_TOKEN", "GITHUB_TOKEN"];
 
     public static string GetProjectDir(string projectName) =>
         Path.Combine(ResourceManager.ProjectsDir, projectName);
@@ -79,6 +80,22 @@ public static class ProjectScaffolder
         }
     }
 
+    /// <summary>
+    /// Stop the container (if running) and delete the project's scaffolded directory.
+    /// </summary>
+    public static void DeleteProject(string projectName)
+    {
+        var projectDir = GetProjectDir(projectName);
+        var composeFile = Path.Combine(projectDir, "docker-compose.yml");
+        if (File.Exists(composeFile))
+            DockerRunner.ComposeDownVolumes(composeFile, projectDir);
+        else if (DockerRunner.IsContainerRunning($"sandbox-{projectName}"))
+            DockerRunner.StopContainer($"sandbox-{projectName}");
+
+        if (Directory.Exists(projectDir))
+            Directory.Delete(projectDir, true);
+    }
+
     public static List<RecentProject> GetRecentProjects()
     {
         var result = new List<RecentProject>();
@@ -126,9 +143,11 @@ public static class ProjectScaffolder
             throw new FileNotFoundException($"Profile is missing docker-compose.yml.tpl. Re-create the profile '{profileName}'.", composeTplPath);
         var composeTpl = File.ReadAllText(composeTplPath);
         var dockerPath = workspacePath.Replace('\\', '/');
+        var folderName = Path.GetFileName(workspacePath.TrimEnd('\\', '/'));
         var compose = composeTpl
             .Replace("{{PROJECT_NAME}}", projectName)
             .Replace("{{WORKSPACE_PATH}}", dockerPath)
+            .Replace("{{FOLDER_NAME}}", folderName)
             .Replace("{{HOST_UID}}", "")  // Unix scripts substitute; Windows runs container as root
             .Replace("{{HOST_GID}}", "");
         ResourceManager.WriteLf(Path.Combine(projectDir, "docker-compose.yml"), compose);
@@ -229,9 +248,11 @@ public static class ProjectScaffolder
             throw new FileNotFoundException($"Profile is missing docker-compose.yml.tpl. Re-create the profile.", composeTplPath);
         var composeTpl = File.ReadAllText(composeTplPath);
         var dockerPath = workspacePath.Replace('\\', '/');
+        var folderName = Path.GetFileName(workspacePath.TrimEnd('\\', '/'));
         var compose = composeTpl
             .Replace("{{PROJECT_NAME}}", projectName)
             .Replace("{{WORKSPACE_PATH}}", dockerPath)
+            .Replace("{{FOLDER_NAME}}", folderName)
             .Replace("{{HOST_UID}}", "")
             .Replace("{{HOST_GID}}", "");
         ResourceManager.WriteLf(Path.Combine(projectDir, "docker-compose.yml"), compose);
@@ -439,6 +460,51 @@ public static class ProjectScaffolder
             return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// Re-detect framework ports from the actual project folder and add any
+    /// missing ones to docker-compose.yml so dev servers are reachable.
+    /// </summary>
+    public static void InjectDetectedPorts(string projectName, string workspacePath,
+        List<string> profileLanguages, Dictionary<string, PortConfig> portConfigs, Action<string>? log = null)
+    {
+        var composePath = Path.Combine(GetProjectDir(projectName), "docker-compose.yml");
+        if (!File.Exists(composePath) || !Directory.Exists(workspacePath)) return;
+
+        var (detectedPorts, detectedFrameworks) = PortDetector.Detect(workspacePath, profileLanguages, portConfigs);
+
+        // Parse existing ports from compose
+        var lines = File.ReadAllLines(composePath).ToList();
+        var portRegex = new Regex(@"""(\d+):(\d+)""");
+        var existingPorts = new HashSet<int>();
+        foreach (var line in lines)
+        {
+            var m = portRegex.Match(line);
+            if (m.Success && int.TryParse(m.Groups[2].Value, out var cp))
+                existingPorts.Add(cp);
+        }
+
+        var newPorts = detectedPorts.Where(p => !existingPorts.Contains(p)).ToList();
+        if (newPorts.Count == 0) return;
+
+        // Find the last port line and insert after it
+        var lastPortIdx = -1;
+        for (int i = 0; i < lines.Count; i++)
+            if (portRegex.IsMatch(lines[i]))
+                lastPortIdx = i;
+
+        if (lastPortIdx < 0) return; // no ports section found
+
+        var indent = "      ";
+        foreach (var port in newPorts)
+        {
+            lastPortIdx++;
+            lines.Insert(lastPortIdx, $"{indent}- \"{port}:{port}\"");
+            log?.Invoke($"[sandbox] Detected framework port {port} — adding to container");
+        }
+
+        ResourceManager.WriteLf(composePath, string.Join("\n", lines) + "\n");
     }
 
     public static void RemoveProject(string projectName)

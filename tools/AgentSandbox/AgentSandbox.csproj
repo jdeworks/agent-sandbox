@@ -15,6 +15,10 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <AssemblyName>agent-sandbox</AssemblyName>
     <Version>1.0.0</Version>
+    <Authors>jdeworks</Authors>
+    <Company>jdeworks</Company>
+    <Product>Agent Sandbox</Product>
+    <Copyright>Copyright © jdeworks</Copyright>
   </PropertyGroup>
 
   <ItemGroup>

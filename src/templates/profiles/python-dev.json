@@ -1,0 +1,25 @@
+{
+  "_format": "agent-sandbox-profile/1",
+  "_template": {
+    "id": "python-dev",
+    "label": "Python Development",
+    "description": "Python scripts, web APIs, automation, and data science. Includes pip, venv, and common Python tooling.",
+    "use_cases": "Build Python applications — CLI tools, REST APIs (Flask/FastAPI/Django), data processing scripts, automation, and lightweight data science. Node.js is included for any frontend needs.",
+    "agents_md_extra": "## Template: Python Development\n\nThis sandbox is set up for Python development with a virtual environment.\n\n- A Python venv is auto-created at `/workspace/.venv` and activated on startup\n- Install packages with `pip install <package>` (auto-recorded)\n- For web APIs: use Flask (port 5000), FastAPI/uvicorn (port 8000), or Django (port 8000)\n- For data work: install pandas, numpy, matplotlib via pip\n- Node.js is available if you need a frontend or build tools"
+  },
+  "profile": {
+    "name": "python-dev",
+    "agents": ["opencode"],
+    "languages": ["python", "node"],
+    "versions": {},
+    "additions": [],
+    "plugins": [],
+    "custom_plugins": [],
+    "skills": [],
+    "vscode_extensions": [],
+    "mcp_servers": [],
+    "custom_dockerfile_lines": [],
+    "custom_startup_before": [],
+    "custom_startup_after": []
+  }
+}

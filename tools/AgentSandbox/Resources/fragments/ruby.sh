@@ -9,15 +9,15 @@ if ! command -v bundler &>/dev/null; then
     gem install bundler --no-document -q
 fi
 
-if [ -f "/workspace/src/Gemfile" ]; then
-    fingerprint="/workspace/src/Gemfile"
-    [ -f "/workspace/src/Gemfile.lock" ] && fingerprint="/workspace/src/Gemfile.lock"
+if [ -f "Gemfile" ]; then
+    fingerprint="Gemfile"
+    [ -f "Gemfile.lock" ] && fingerprint="Gemfile.lock"
     current_md5=$(md5sum "$fingerprint" | awk '{print $1}')
     stored_md5=""
     [ -f /workspace/.gems/.gemfile.md5 ] && stored_md5=$(cat /workspace/.gems/.gemfile.md5)
     if [ "$current_md5" != "$stored_md5" ]; then
         echo "[sandbox] Installing Ruby dependencies..."
-        (cd /workspace/src && bundle config set --local path /workspace/.gems && bundle install -q)
+        bundle config set --local path /workspace/.gems && bundle install -q
         echo "$current_md5" > /workspace/.gems/.gemfile.md5
     else
         echo "[sandbox] Ruby dependencies up to date."

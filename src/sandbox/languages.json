@@ -172,7 +172,7 @@
     "volumes": {
       "composer_cache_{{PROJECT_NAME}}": "/workspace/.composer"
     },
-    "path_prepend": "/workspace/src/vendor/bin"
+    "path_prepend": "$PWD/vendor/bin"
   },
   "python": {
     "label": "Python 3",

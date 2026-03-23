@@ -40,7 +40,7 @@ sandbox-python ~/my-project
 **GUI:** Double-click `agent-sandbox.exe` to launch the wizard:
 
 1. **Profiles** — create, delete, rebuild, import, and export profiles. Each profile builds a Docker image with your selected agents, languages, plugins, and additions (e.g. VS Code Server).
-2. **Launch** — select a project folder, profile, and agent from the dropdown. Toggle plugins on/off per launch. Recent projects are listed for quick access. If a container is already running, you can attach a new session or restart it.
+2. **Launch** — select a project folder, profile, and agent from the dropdown. Toggle plugins on/off per launch (session-only, does not modify the profile). Recent projects are listed for quick access with a **Remove** button. If a container is already running, you can reattach, rebuild, or cancel. A **Stop Container** button appears after launch; **Stop All Containers** is available on the Profiles step.
 
 Select **VS Code only (no agent)** from the agent dropdown to start the container with just VS Code Server — no agent process runs.
 
@@ -54,15 +54,19 @@ agent-sandbox sandbox C:\path\to\project       Launch a sandbox
 
 ## How It Works
 
-1. **Setup** creates profiles -- Docker images tailored to specific agents and languages
+1. **Setup** creates profiles — Docker images tailored to specific agents and languages
 2. **Sandbox** launches a container from a profile, mounts your project, and starts the selected agent
-3. Your source code is bind-mounted; config, sessions, and caches live in Docker named volumes (prefixed `asb_`)
+3. Your source code is bind-mounted at `/workspace/<your-folder-name>` (the actual project folder name is preserved inside the container). Config, sessions, and caches live in Docker named volumes (prefixed `asb_`)
 
 Each profile generates:
 - A `Dockerfile.base` with the selected agents and language runtimes
-- A `docker-compose.yml.tpl` with named volumes, ports, and environment
-- An `install.sh` entrypoint that auto-installs dependencies on startup (plus `install-vscode.sh` for VS Code only mode)
-- Agent instruction files (AGENTS.md, CLAUDE.md, .cursorrules) assembled from base + language fragments
+- A `docker-compose.yml.tpl` template with named volumes, ports, and environment (template variables like `{{WORKSPACE_PATH}}`, `{{FOLDER_NAME}}`, `{{PROJECT_NAME}}` are substituted at launch time)
+- An `install.sh` entrypoint that auto-installs dependencies on startup (plus `install-vscode.sh` for VS Code-only mode)
+- Agent instruction files (AGENTS.md, CLAUDE.md, .cursorrules) — **dynamically generated per profile**. Each AGENTS.md is assembled from:
+  - Base instructions (Getting Started, Command Safety, Container Environment)
+  - Language-specific guidance fragments (e.g. Python venv usage, Node npm patterns)
+  - Addition-specific instructions (e.g. VS Code Server access details)
+  - An **Available Ports** section listing the exact ports published for this profile (e.g. "3000, 5173, 8080"), so the agent knows which ports to use for dev servers
 
 ## Command Reference
 
@@ -73,11 +77,11 @@ Each profile generates:
 | **Create profile** | `sandbox-setup` | `agent-sandbox setup` |
 | **Launch sandbox** | `sandbox-me` (from project dir) | `agent-sandbox sandbox C:\path` |
 | **List profiles** | `sandbox-setup --list` | `agent-sandbox profiles` |
-| **Delete profile** | `sandbox-setup --delete <name>` | `agent-sandbox profiles delete <name>` |
+| **Delete profile** | `sandbox-setup --delete <name>` | `agent-sandbox profiles delete <name>` or Delete button |
 | **Rebuild profile** | `sandbox-setup --rebuild <name>` | — |
 | **Export profile** | `sandbox-setup --export <name> [file]` | Export button on Profiles step |
 | **Import profile** | `sandbox-setup --import <file.json>` | Import button on Profiles step |
-| **Stop sandbox** | `sandbox-me --stop` | — |
+| **Stop sandbox** | `sandbox-me --stop` | Stop Container button on launch view |
 | **Show status** | `sandbox-me --status` | — |
 | **Disk usage** | `sandbox-me --stats` | `agent-sandbox stats` |
 | **Remove project** | `sandbox-me --remove-project` | `agent-sandbox cleanup <name>` |
@@ -97,6 +101,24 @@ Each profile generates:
 | **Remove project** | `sandbox-cleanup <name>` | `agent-sandbox cleanup <name>` |
 | **Cleanup with sudo** | `sandbox-cleanup-sudo [name]` | — |
 
+## Template Profiles (Quick Start)
+
+Don't know what to pick? Start from a template — pre-configured profiles for common use cases:
+
+| Template | Languages | Additions | Description |
+|----------|-----------|-----------|-------------|
+| **Static Website** | Node | — | HTML/CSS/JS, GitHub Pages, Tailwind, Vite |
+| **Web Application** | Node, Python | VS Code Server | React/Vue/Svelte frontend + Flask/FastAPI/Express backend |
+| **Python Development** | Python, Node | — | Scripts, APIs, data science, automation |
+
+All templates default to **OpenCode** as the agent (free tier available).
+
+**Windows GUI:** Click **"Use Template"** on the Profiles step → pick a template → **Quick Start** (build immediately) or **Customize** (open setup wizard pre-filled).
+
+**Unix CLI:** Run `sandbox-setup` → select a numbered template or `c` for custom. Optional "Customize before building?" prompt lets you tweak before build.
+
+Templates are defined in `src/templates/profiles/`. Each template includes use-case-specific guidance that is appended to the agent's AGENTS.md instruction file.
+
 ## CLI Agents
 
 The sandbox supports multiple CLI coding agents. During `sandbox-setup` you choose which to install:
@@ -109,6 +131,16 @@ The sandbox supports multiple CLI coding agents. During `sandbox-setup` you choo
 | GitHub Copilot | `gh copilot agent` | GitHub Copilot CLI |
 
 Agent definitions (commands, install scripts, auth files, env vars) are in `src/sandbox/agents.json`.
+
+## Terminal & Detach Keys
+
+When the agent runs in a terminal window (Windows GUI or Unix CLI), the Docker session uses `--detach-keys="ctrl-]"`:
+
+- **Ctrl+]** — safely detach from the agent session (container keeps running)
+- **Ctrl+C** — sends SIGINT to the agent process. On Windows this may close the window; use Ctrl+] instead to detach safely
+- To copy text in the terminal: right-click (Windows cmd) or Ctrl+Shift+C (Windows Terminal)
+
+On Windows, the agent window stays open after the session ends (`cmd /k`) so you can review output.
 
 ## Plugins
 
@@ -165,7 +197,7 @@ To enable a custom OpenCode plugin after installation, add it to the `"plugin"` 
 | Go | `go.mod`, `go.sum`, `*.go` | golang-go; auto-runs `go mod download` |
 | Java | `pom.xml`, `build.gradle`, `build.gradle.kts`, `gradlew`, `mvnw`, `*.java` | OpenJDK 21, Maven; auto-resolves deps |
 | Kotlin | `*.kt`, `*.kts` | OpenJDK 21 + Gradle; auto-resolves deps |
-| Node.js | `package.json`, `*.js`, `*.ts`, `*.jsx`, `*.tsx` | npm dependency auto-install (always included in base image) |
+| Node.js | `package.json`, `*.js`, `*.ts`, `*.jsx`, `*.tsx` | npm dependency auto-install, esbuild globally available (always included in base image) |
 | PHP | `composer.json`, `composer.lock`, `artisan`, `*.php` | PHP + extensions, Composer; auto-runs `composer install` |
 | Python 3 | `requirements.txt`, `setup.py`, `pyproject.toml`, `Pipfile`, `*.py` | python3, venv, pip; auto-installs from requirements.txt |
 | React Native | `package.json` (with `react-native`) | React Native CLI; JS/TS dev and Metro bundler |
@@ -261,6 +293,10 @@ Ports are dynamically selected during profile creation. Base ports (3000, 8080) 
 | Ruby | Rails, Sinatra, Hanami | 3000, 4567, 2300 |
 | Rust | Actix, Axum, Rocket | 8080, 3000, 8000 |
 
+### Port Detection at Launch
+
+Framework ports are re-detected at launch time by scanning the actual project folder. If you add Vite (port 5173) or another framework after creating the profile, the port is automatically added to the container's port mappings on the next launch.
+
 ### Multiple Sandboxes
 
 You can run multiple sandboxes simultaneously. If a port conflict is detected during container startup, it is automatically remapped to the next free port (e.g. `Port 3000 in use -> remapped to 3001:3000`). The container-side port stays the same; only the host-side mapping changes.
@@ -322,9 +358,11 @@ All named Docker volumes are prefixed with `asb_` to avoid collisions:
 - `asb_agent_config_<project>` — Agent config (opencode.json, claude settings)
 - `asb_agent_data_<project>` — Agent sessions, auth tokens, logs
 - `asb_sandbox_data_<project>` — changes.txt, Dockerfile.extension
-- `asb_opencode_cache_<project>` — OpenCode cache
+- `asb_opencode_cache_<project>` — OpenCode cache (only when OpenCode agent is selected)
 - Language-specific volumes (e.g. `asb_venv_<project>`, `asb_cargo_registry_<project>`)
 - Addition volumes (e.g. `asb_vscode_extensions_<project>`, `asb_vscode_data_<project>`)
+
+OpenCode-specific volumes (`opencode_data`, `opencode_sessions`, `opencode_cache`) and PATH entries (`/opt/opencode/bin`) are only included when OpenCode is selected as an agent.
 
 ## Config Mirroring
 
@@ -355,7 +393,23 @@ Only items found on the host are shown during setup. Agent-specific mirrors are 
 ## Authentication & API Keys
 
 **API key passthrough:** Host environment variables are forwarded via `runtime.env`:
-`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CURSOR_API_KEY`, `GITHUB_COPILOT_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, `GEMINI_API_KEY`
+`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CURSOR_API_KEY`, `GITHUB_COPILOT_API_KEY`, `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, `GEMINI_API_KEY`, `GH_TOKEN`, `GITHUB_TOKEN`
+
+### Git Authentication via GH_TOKEN
+
+The easiest way to authenticate git operations inside the sandbox is to set `GH_TOKEN` or `GITHUB_TOKEN` on your host. The `gh` CLI and `git` (via credential helper) automatically pick up these tokens for HTTPS operations:
+
+```bash
+# On the host (add to your shell profile)
+export GH_TOKEN=ghp_your_personal_access_token
+
+# Now any sandbox you launch will inherit it automatically
+sandbox-me
+```
+
+The token is forwarded to the container via `runtime.env`. Inside the container, `gh auth status` will show authenticated, and `git push`/`git clone` over HTTPS will work without additional setup.
+
+You can also add the token to `user.env` for per-project overrides, or enter it in the Windows GUI Environment Variables step.
 
 **User overrides:** Add project-specific keys to `user.env` (loaded last, overrides `runtime.env`).
 
@@ -484,6 +538,12 @@ Profiles need to be recreated after migration.
   prepared/                  # Generated profiles
   projects/                  # Per-project data
 ```
+
+## Container Lifecycle
+
+- **Deleting a profile** automatically stops and removes all running containers that use it (with confirmation)
+- **Removing a project** stops its container and deletes the project's scaffolded data directory
+- **Stop All Containers** on the Profiles step stops every running container for the selected profile
 
 ## Security
 

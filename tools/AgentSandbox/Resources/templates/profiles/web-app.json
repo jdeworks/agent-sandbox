@@ -1,0 +1,25 @@
+{
+  "_format": "agent-sandbox-profile/1",
+  "_template": {
+    "id": "web-app",
+    "label": "Web Application",
+    "description": "Modern web apps with frontend framework and optional API backend. React, Vue, Svelte, Next.js, or similar with Python or Node backend.",
+    "use_cases": "Build full web applications with a frontend framework and optional backend API. Includes VS Code Server for browser-based editing. Supports React, Vue, Svelte, Next.js, Express, FastAPI, Flask, and more.",
+    "agents_md_extra": "## Template: Web Application\n\nThis sandbox is set up for web application development with both frontend and backend support.\n\n- **Frontend**: Use Vite, Next.js, or any Node-based framework. Dev server ports are auto-detected.\n- **Backend**: Python (Flask/FastAPI) or Node (Express) — both runtimes are available.\n- **VS Code**: A browser-based editor is running at http://localhost:4040\n- Start frontend and backend on different ports (e.g. frontend on 5173, API on 8000)\n- Both `npm` and `pip` are available for package management"
+  },
+  "profile": {
+    "name": "web-app",
+    "agents": ["opencode"],
+    "languages": ["node", "python"],
+    "versions": {},
+    "additions": ["vscode-server"],
+    "plugins": [],
+    "custom_plugins": [],
+    "skills": [],
+    "vscode_extensions": [],
+    "mcp_servers": [],
+    "custom_dockerfile_lines": [],
+    "custom_startup_before": [],
+    "custom_startup_after": []
+  }
+}

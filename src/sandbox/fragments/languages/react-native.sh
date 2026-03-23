@@ -1,8 +1,7 @@
 ########################################
 # React Native dependency installation
 ########################################
-if [ -f "/workspace/src/package.json" ] && grep -q "react-native" /workspace/src/package.json 2>/dev/null; then
-    cd /workspace/src
+if [ -f "package.json" ] && grep -q "react-native" package.json 2>/dev/null; then
     PKG_HASH=$(md5sum package.json 2>/dev/null | cut -d' ' -f1)
     CACHED_HASH=$(cat /workspace/.sandbox/.rn_pkg_hash 2>/dev/null)
 

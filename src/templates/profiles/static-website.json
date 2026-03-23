@@ -1,0 +1,25 @@
+{
+  "_format": "agent-sandbox-profile/1",
+  "_template": {
+    "id": "static-website",
+    "label": "Static Website",
+    "description": "Simple static sites — HTML, CSS, JavaScript. Perfect for GitHub Pages, landing pages, portfolios, and documentation sites.",
+    "use_cases": "Build and preview static websites. The agent can create HTML/CSS/JS files, use npm build tools (Vite, esbuild, Tailwind), and preview via a local dev server. NOT suited for server-side logic or databases.",
+    "agents_md_extra": "## Template: Static Website\n\nThis sandbox is set up for static website development. The project will be served via a local dev server on one of the available ports.\n\n- Use `npx vite` or `npx live-server` to preview the site\n- For GitHub Pages deployment, build to a `docs/` or `dist/` folder\n- Tailwind CSS, PostCSS, and esbuild are available via npm\n- No server-side runtime (Python, PHP, etc.) is installed — this is frontend only"
+  },
+  "profile": {
+    "name": "static-website",
+    "agents": ["opencode"],
+    "languages": ["node"],
+    "versions": {},
+    "additions": [],
+    "plugins": [],
+    "custom_plugins": [],
+    "skills": [],
+    "vscode_extensions": [],
+    "mcp_servers": [],
+    "custom_dockerfile_lines": [],
+    "custom_startup_before": [],
+    "custom_startup_after": []
+  }
+}

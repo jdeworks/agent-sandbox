@@ -268,7 +268,7 @@ sync_host_auth() {
 write_runtime_env() {
     local env_file="$1"
     > "$env_file"
-    local vars=(ANTHROPIC_API_KEY OPENAI_API_KEY OPENROUTER_API_KEY OPENCODE_API_KEY GEMINI_API_KEY CURSOR_API_KEY GITHUB_COPILOT_API_KEY)
+    local vars=(ANTHROPIC_API_KEY OPENAI_API_KEY OPENROUTER_API_KEY OPENCODE_API_KEY GEMINI_API_KEY CURSOR_API_KEY GITHUB_COPILOT_API_KEY GH_TOKEN GITHUB_TOKEN)
     for var in "${vars[@]}"; do
         if [ -n "${!var:-}" ]; then
             echo "${var}=${!var}" >> "$env_file"
@@ -345,6 +345,7 @@ else
 fi
 
 PROJECT_NAME="$(basename "$WORKSPACE_PATH")"
+FOLDER_NAME="$(basename "$WORKSPACE_PATH")"
 PROJECT_DIR="$PROJECTS_DIR/$PROJECT_NAME"
 
 # Handle name collision: different workspace mapped to same project name
@@ -406,6 +407,7 @@ if [ ! -d "$PROJECT_DIR" ]; then
     sed \
         -e "s|{{PROJECT_NAME}}|${PROJECT_NAME}|g" \
         -e "s|{{WORKSPACE_PATH}}|${WORKSPACE_PATH}|g" \
+        -e "s|{{FOLDER_NAME}}|${FOLDER_NAME}|g" \
         -e "s|{{HOST_UID}}|$(id -u)|g" \
         -e "s|{{HOST_GID}}|$(id -g)|g" \
         "$SANDBOX_PROFILE_DIR/docker-compose.yml.tpl" > "$PROJECT_DIR/docker-compose.yml"
@@ -449,6 +451,7 @@ else
     sed \
         -e "s|{{PROJECT_NAME}}|${PROJECT_NAME}|g" \
         -e "s|{{WORKSPACE_PATH}}|${WORKSPACE_PATH}|g" \
+        -e "s|{{FOLDER_NAME}}|${FOLDER_NAME}|g" \
         -e "s|{{HOST_UID}}|$(id -u)|g" \
         -e "s|{{HOST_GID}}|$(id -g)|g" \
         "$SANDBOX_PROFILE_DIR/docker-compose.yml.tpl" > "$PROJECT_DIR/docker-compose.yml"

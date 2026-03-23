@@ -9,5 +9,5 @@ if command -v code-server >/dev/null 2>&1; then
     --disable-telemetry \
     --user-data-dir /workspace/.vscode-server/data \
     --extensions-dir /workspace/.vscode-server/extensions \
-    /workspace/src &
+    $PWD &
 fi

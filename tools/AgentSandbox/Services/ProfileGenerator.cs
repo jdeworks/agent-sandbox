@@ -76,23 +76,26 @@ public static class ProfileGenerator
         Generate(spec, languages);
 
         // Write profile.json back (Generate deletes the directory)
-        var manifest = JsonSerializer.Serialize(new
+        var manifestObj = new Dictionary<string, object>
         {
-            name = spec.Name,
-            agents = spec.Agents,
-            plugins = spec.Plugins,
-            custom_plugins = spec.CustomPlugins,
-            skills = spec.Skills,
-            languages = spec.Languages,
-            versions = spec.Versions,
-            additions = spec.Additions,
-            vscode_extensions = spec.VscodeExtensions,
-            mcp_servers = spec.McpServers,
-            custom_dockerfile_lines = spec.CustomDockerfileLines,
-            custom_startup_before = spec.CustomStartupBefore,
-            custom_startup_after = spec.CustomStartupAfter,
-            regenerated = DateTime.Now.ToString("O")
-        }, new JsonSerializerOptions { WriteIndented = true });
+            ["name"] = spec.Name,
+            ["agents"] = spec.Agents,
+            ["plugins"] = spec.Plugins,
+            ["custom_plugins"] = spec.CustomPlugins,
+            ["skills"] = spec.Skills,
+            ["languages"] = spec.Languages,
+            ["versions"] = spec.Versions,
+            ["additions"] = spec.Additions,
+            ["vscode_extensions"] = spec.VscodeExtensions,
+            ["mcp_servers"] = spec.McpServers,
+            ["custom_dockerfile_lines"] = spec.CustomDockerfileLines,
+            ["custom_startup_before"] = spec.CustomStartupBefore,
+            ["custom_startup_after"] = spec.CustomStartupAfter,
+            ["regenerated"] = DateTime.Now.ToString("O")
+        };
+        if (!string.IsNullOrEmpty(spec.Template))
+            manifestObj["template"] = spec.Template;
+        var manifest = JsonSerializer.Serialize(manifestObj, new JsonSerializerOptions { WriteIndented = true });
         ResourceManager.WriteLf(Path.Combine(profileDir, "profile.json"), manifest);
     }
 
@@ -349,7 +352,11 @@ public static class ProfileGenerator
             additionsDoc.Dispose();
         }
 
-        pathParts.Add("/root/.local/bin:/root/.cursor/bin:/root/.claude/bin:/root/.npm-global/bin:/opt/opencode/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
+        var basePath = "/root/.local/bin:/root/.cursor/bin:/root/.claude/bin:/root/.npm-global/bin";
+        if (spec.Agents.Contains("opencode"))
+            basePath += ":/opt/opencode/bin";
+        basePath += ":/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+        pathParts.Add(basePath);
         var pathEnv = string.Join(":", pathParts);
 
         var sb = new StringBuilder();
@@ -357,7 +364,7 @@ public static class ProfileGenerator
         sb.AppendLine("  agent:");
         sb.AppendLine("    build: .");
         sb.AppendLine("    container_name: sandbox-{{PROJECT_NAME}}");
-        sb.AppendLine("    working_dir: /workspace/src");
+        sb.AppendLine("    working_dir: /workspace/{{FOLDER_NAME}}");
         sb.AppendLine("    environment:");
         sb.AppendLine($"      - HOME=/workspace");
         sb.AppendLine($"      - PATH={pathEnv}");
@@ -366,16 +373,19 @@ public static class ProfileGenerator
         foreach (var env in envLines)
             sb.AppendLine(env);
         sb.AppendLine("    volumes:");
-        sb.AppendLine("      - {{WORKSPACE_PATH}}:/workspace/src");
+        sb.AppendLine("      - {{WORKSPACE_PATH}}:/workspace/{{FOLDER_NAME}}");
         foreach (var vol in volMounts)
             sb.AppendLine(vol);
-        sb.AppendLine("      - ./opencode_data:/workspace/.config/opencode");
-        sb.AppendLine("      - ./opencode_sessions:/workspace/.local/share/opencode");
-        sb.AppendLine("      - ./logs:/workspace/.local/share/opencode/log");
+        if (spec.Agents.Contains("opencode"))
+        {
+            sb.AppendLine("      - ./opencode_data:/workspace/.config/opencode");
+            sb.AppendLine("      - ./opencode_sessions:/workspace/.local/share/opencode");
+            sb.AppendLine("      - ./logs:/workspace/.local/share/opencode/log");
+            sb.AppendLine("      - asb_opencode_cache_{{PROJECT_NAME}}:/workspace/.cache/opencode");
+        }
         sb.AppendLine("      - asb_agent_config_{{PROJECT_NAME}}:/workspace/.agent-config");
         sb.AppendLine("      - asb_agent_data_{{PROJECT_NAME}}:/workspace/.agent-data");
         sb.AppendLine("      - asb_sandbox_data_{{PROJECT_NAME}}:/workspace/.sandbox-vol");
-        sb.AppendLine("      - asb_opencode_cache_{{PROJECT_NAME}}:/workspace/.cache/opencode");
         sb.AppendLine("      - ./sandbox_data:/workspace/.sandbox");
         sb.AppendLine("    ports:");
         foreach (var port in spec.Ports)
@@ -393,8 +403,15 @@ public static class ProfileGenerator
             sb.AppendLine(vd);
         sb.AppendLine("  asb_agent_config_{{PROJECT_NAME}}:");
         sb.AppendLine("  asb_agent_data_{{PROJECT_NAME}}:");
-        sb.AppendLine("  asb_sandbox_data_{{PROJECT_NAME}}:");
-        sb.Append("  asb_opencode_cache_{{PROJECT_NAME}}:");
+        if (spec.Agents.Contains("opencode"))
+        {
+            sb.AppendLine("  asb_sandbox_data_{{PROJECT_NAME}}:");
+            sb.Append("  asb_opencode_cache_{{PROJECT_NAME}}:");
+        }
+        else
+        {
+            sb.Append("  asb_sandbox_data_{{PROJECT_NAME}}:");
+        }
 
         ResourceManager.WriteLf(Path.Combine(profileDir, "docker-compose.yml.tpl"), sb.ToString());
     }
@@ -405,10 +422,13 @@ public static class ProfileGenerator
         sb.AppendLine("#!/usr/bin/env bash");
         sb.AppendLine("set -e");
         sb.AppendLine();
-        sb.AppendLine("########################################");
-        sb.AppendLine("# Ensure OpenCode cache dir exists");
-        sb.AppendLine("########################################");
-        sb.AppendLine("mkdir -p /workspace/.cache/opencode");
+        if (spec.Agents.Contains("opencode"))
+        {
+            sb.AppendLine("########################################");
+            sb.AppendLine("# Ensure OpenCode cache dir exists");
+            sb.AppendLine("########################################");
+            sb.AppendLine("mkdir -p /workspace/.cache/opencode");
+        }
         sb.AppendLine();
         sb.AppendLine("[ -d /workspace/.cache ] && chmod -R a+rwX /workspace/.cache");
         sb.AppendLine("[ -d /workspace/.config ] && chmod -R a+rwX /workspace/.config");
@@ -577,6 +597,31 @@ public static class ProfileGenerator
                 catch (FileNotFoundException) { }
             }
             additionsDoc.Dispose();
+        }
+
+        // Template-specific agent instructions
+        if (!string.IsNullOrEmpty(spec.Template))
+        {
+            var templatesDir = Path.Combine(ResourceManager.TemplatesDir, "profiles");
+            var templateFile = Path.Combine(templatesDir, $"{spec.Template}.json");
+            if (File.Exists(templateFile))
+            {
+                try
+                {
+                    using var tDoc = JsonDocument.Parse(File.ReadAllText(templateFile));
+                    if (tDoc.RootElement.TryGetProperty("_template", out var tmpl) &&
+                        tmpl.TryGetProperty("agents_md_extra", out var extra))
+                    {
+                        var extraText = extra.GetString();
+                        if (!string.IsNullOrEmpty(extraText))
+                        {
+                            sb.AppendLine();
+                            sb.AppendLine(extraText);
+                        }
+                    }
+                }
+                catch { /* skip if template file is invalid */ }
+            }
         }
 
         if (spec.Ports.Count > 0)

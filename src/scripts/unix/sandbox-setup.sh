@@ -46,8 +46,36 @@ case "${1:-}" in
         [ -z "$profile" ] && { echo "Usage: sandbox-setup --delete <profile-name>"; exit 1; }
         target_dir="$SANDBOX_HOME/profiles/$profile"
         [ ! -d "$target_dir" ] && { echo "[setup] Profile '$profile' not found."; exit 1; }
+        # Find running containers using this profile
+        running_containers=()
+        if [ -d "$SANDBOX_HOME/projects" ]; then
+            for proj_dir in "$SANDBOX_HOME/projects"/*/; do
+                [ ! -d "$proj_dir" ] && continue
+                cfg="$proj_dir/config.env"
+                [ ! -f "$cfg" ] && continue
+                proj_profile=$(grep '^PROFILE=' "$cfg" 2>/dev/null | cut -d= -f2)
+                if [ "$proj_profile" = "$profile" ]; then
+                    proj_name=$(basename "$proj_dir")
+                    if docker ps --format '{{.Names}}' | grep -q "^sandbox-${proj_name}$" 2>/dev/null; then
+                        running_containers+=("$proj_name")
+                    fi
+                fi
+            done
+        fi
+        if [ ${#running_containers[@]} -gt 0 ]; then
+            echo "[setup] ${#running_containers[@]} running container(s) will be stopped: ${running_containers[*]}"
+        fi
         read -rp "Delete profile '$profile' and its Docker image? [y/N]: " confirm
         if [[ "$confirm" =~ ^[yY]$ ]]; then
+            for cname in "${running_containers[@]}"; do
+                echo "[setup] Removing container for project '$cname'..."
+                compose_file="$SANDBOX_HOME/projects/$cname/docker-compose.yml"
+                if [ -f "$compose_file" ]; then
+                    docker compose -f "$compose_file" --project-directory "$SANDBOX_HOME/projects/$cname" down -v 2>/dev/null || true
+                else
+                    docker rm -f "sandbox-$cname" 2>/dev/null || true
+                fi
+            done
             docker rmi "agent-sandbox-${profile}:latest" 2>/dev/null || true
             rm -rf "$target_dir"
             echo "[setup] Profile '$profile' deleted."
@@ -228,6 +256,111 @@ prereqs_check_all || {
 }
 
 mkdir -p "$SANDBOX_HOME/profiles" "$SANDBOX_HOME/projects"
+
+########################################
+# Template selection (optional quick start)
+########################################
+TEMPLATES_DIR="$SANDBOX_DIR/sandbox/../templates/profiles"
+# Normalize path
+TEMPLATES_DIR="$(cd "$(dirname "$TEMPLATES_DIR")" 2>/dev/null && cd templates/profiles 2>/dev/null && pwd)" 2>/dev/null || TEMPLATES_DIR=""
+
+use_template=""
+if [ -n "$TEMPLATES_DIR" ] && [ -d "$TEMPLATES_DIR" ] && ls "$TEMPLATES_DIR"/*.json >/dev/null 2>&1; then
+    echo ""
+    echo "Start from a template? (recommended for getting started)"
+    echo ""
+    tmpl_files=()
+    tmpl_idx=1
+    for tf in "$TEMPLATES_DIR"/*.json; do
+        tmpl_label=$(jq -r '._template.label // empty' "$tf" 2>/dev/null)
+        tmpl_desc=$(jq -r '._template.description // empty' "$tf" 2>/dev/null)
+        [ -z "$tmpl_label" ] && continue
+        tmpl_files+=("$tf")
+        printf "  %d) %s — %s\n" "$tmpl_idx" "$tmpl_label" "$tmpl_desc"
+        ((tmpl_idx++)) || true
+    done
+    echo "  c) Custom — full setup wizard"
+    echo ""
+    read -rp "Select [1-${#tmpl_files[@]}/c]: " tmpl_choice
+
+    if [[ "$tmpl_choice" =~ ^[0-9]+$ ]] && [ "$tmpl_choice" -ge 1 ] && [ "$tmpl_choice" -le "${#tmpl_files[@]}" ]; then
+        use_template="${tmpl_files[$((tmpl_choice - 1))]}"
+        tmpl_id=$(jq -r '._template.id // .profile.name' "$use_template")
+        echo ""
+        read -rp "Profile name [$tmpl_id]: " profile_name
+        profile_name="${profile_name:-$tmpl_id}"
+
+        if ! config_validate_profile_name "$profile_name"; then
+            echo "[setup] Invalid name. Using '$tmpl_id'."
+            profile_name="$tmpl_id"
+        fi
+        if [ -d "$SANDBOX_HOME/profiles/$profile_name" ]; then
+            suffix=2
+            while [ -d "$SANDBOX_HOME/profiles/${profile_name}-${suffix}" ]; do ((suffix++)); done
+            profile_name="${profile_name}-${suffix}"
+            echo "[setup] Name taken, using '$profile_name'."
+        fi
+
+        read -rp "Customize before building? [y/N]: " customize
+        if [[ "$customize" =~ ^[yY]$ ]]; then
+            # Fall through to normal wizard with pre-filled values
+            SELECTED_AGENTS=$(jq -r '.profile.agents // [] | join(",")' "$use_template")
+            SELECTED_LANGS=$(jq -r '.profile.languages // [] | join(",")' "$use_template")
+            SELECTED_ADDITIONS=$(jq -r '.profile.additions // [] | join(",")' "$use_template")
+            TEMPLATE_ID="$tmpl_id"
+            use_template=""  # Clear so we go through the wizard
+            echo "[setup] Starting wizard with template defaults. You can change any selection."
+        else
+            # Quick start: generate and build immediately
+            PROFILE_DIR="$SANDBOX_HOME/profiles/$profile_name"
+            t_agents=$(jq -r '.profile.agents // [] | join(",")' "$use_template")
+            t_langs=$(jq -r '.profile.languages // [] | join(",")' "$use_template")
+            t_additions=$(jq -r '.profile.additions // [] | join(",")' "$use_template")
+            t_agents_md_extra=$(jq -r '._template.agents_md_extra // empty' "$use_template")
+
+            # Compute ports
+            t_port_set="3000,8080"
+            for lang in $(echo "$t_langs" | tr ',' ' '); do
+                lang_ports=$(jq -r ".\"$lang\".default[]? // empty" "$SANDBOX_DIR/sandbox/ports.json" 2>/dev/null | tr '\n' ',')
+                [ -n "$lang_ports" ] && t_port_set="$t_port_set,$lang_ports"
+            done
+            for add in $(echo "$t_additions" | tr ',' ' '); do
+                add_port=$(jq -r ".\"$add\".port // empty" "$SANDBOX_DIR/sandbox/additions.json" 2>/dev/null)
+                [ -n "$add_port" ] && t_port_set="$t_port_set,$add_port"
+            done
+            # Deduplicate ports
+            t_ports=$(echo "$t_port_set" | tr ',' '\n' | sort -un | tr '\n' ',' | sed 's/,$//')
+
+            echo ""
+            echo "[setup] Building profile '$profile_name' from template..."
+            SELECTED_AGENTS="$t_agents" PRIMARY_AGENT="$(echo "$t_agents" | cut -d, -f1)" \
+                bash "$SANDBOX_DIR/sandbox/generate_profile.sh" \
+                "$SANDBOX_DIR/sandbox" "$PROFILE_DIR" "$profile_name" "$t_langs" "$t_ports" "" "$t_additions" >/dev/null 2>&1
+
+            # Append template-specific AGENTS.md content
+            if [ -n "$t_agents_md_extra" ] && [ -f "$PROFILE_DIR/AGENTS.md" ]; then
+                printf '\n%s\n' "$t_agents_md_extra" >> "$PROFILE_DIR/AGENTS.md"
+            fi
+
+            # Write profile.json
+            jq -n --arg name "$profile_name" --arg tmpl "$tmpl_id" \
+                --argjson agents "$(jq '.profile.agents' "$use_template")" \
+                --argjson langs "$(jq '.profile.languages' "$use_template")" \
+                --argjson adds "$(jq '.profile.additions' "$use_template")" \
+                '{name: $name, template: $tmpl, agents: $agents, languages: $langs, additions: $adds, plugins: [], custom_plugins: [], skills: [], vscode_extensions: [], mcp_servers: [], custom_dockerfile_lines: [], custom_startup_before: [], custom_startup_after: []}' \
+                > "$PROFILE_DIR/profile.json"
+
+            echo "[setup] Building Docker image..."
+            docker build -t "agent-sandbox-${profile_name}:latest" "$PROFILE_DIR" || {
+                echo "[setup] Build failed."
+                exit 1
+            }
+            echo ""
+            echo "[setup] Profile '$profile_name' ready! Run 'sandbox-me' from your project directory."
+            exit 0
+        fi
+    fi
+fi
 
 ########################################
 # Profile name
