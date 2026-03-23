@@ -27,6 +27,7 @@ internal static class Cli
               agent-sandbox cleanup prepared        CLI: clean up prepared profiles
               agent-sandbox profiles                 CLI: list prepared profiles
               agent-sandbox profiles delete <name>   CLI: delete a profile
+              agent-sandbox quick-start [template]   Zero-friction setup (default: static-website)
               agent-sandbox help                     Show this help
 
             Data stored in: %APPDATA%\AgentSandbox
@@ -128,6 +129,112 @@ internal static class Cli
         Console.WriteLine("    agent-sandbox sandbox C:\\path\\to\\project");
         Console.WriteLine();
         Console.WriteLine("  Or run 'agent-sandbox prepare C:\\path' for a custom multi-language profile.");
+        return 0;
+    }
+
+    // ─── Quick Start ─────────────────────────────────────────────────────
+
+    public static int RunQuickStart(string[] args)
+    {
+        var templateId = args.Length > 0 ? args[0] : "static-website";
+
+        Console.WriteLine("[setup] Quick Start...");
+
+        if (!DockerRunner.IsDockerAvailable())
+        {
+            Console.WriteLine("[setup] Error: Docker is not available.");
+            return 1;
+        }
+
+        var templates = TemplateLoader.LoadAll();
+        var template = templates.FirstOrDefault(t => t.Id == templateId);
+        if (template == null)
+        {
+            Console.WriteLine($"[setup] Template '{templateId}' not found.");
+            Console.WriteLine("Available templates:");
+            foreach (var t in templates)
+                Console.WriteLine($"  {t.Id,-20} {t.Label}");
+            return 1;
+        }
+
+        var spec = TemplateLoader.ToProfileSpec(template);
+
+        // Resolve name collisions
+        var profileDir = Path.Combine(ResourceManager.PreparedDir, spec.Name);
+        if (Directory.Exists(profileDir))
+        {
+            var suffix = 2;
+            while (Directory.Exists(Path.Combine(ResourceManager.PreparedDir, $"{spec.Name}-{suffix}")))
+                suffix++;
+            spec.Name = $"{spec.Name}-{suffix}";
+            profileDir = Path.Combine(ResourceManager.PreparedDir, spec.Name);
+        }
+
+        Console.WriteLine($"[setup] Building profile '{spec.Name}' ({template.Label})...");
+
+        var languages = ConfigLoader.LoadLanguages();
+        var portConfigs = ConfigLoader.LoadPorts();
+
+        // Compute ports
+        var ports = new HashSet<int>();
+        if (portConfigs.TryGetValue("base", out var baseCfg))
+            foreach (var p in baseCfg.Ports) ports.Add(p);
+        foreach (var lang in spec.Languages)
+            if (portConfigs.TryGetValue(lang, out var lc))
+                foreach (var p in lc.Default) ports.Add(p);
+        var additionsPath = Path.Combine(ResourceManager.SandboxDir, "additions.json");
+        if (File.Exists(additionsPath))
+        {
+            try
+            {
+                using var addDoc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(additionsPath));
+                foreach (var addition in spec.Additions)
+                    if (addDoc.RootElement.TryGetProperty(addition, out var aEl) &&
+                        aEl.TryGetProperty("port", out var portEl) && portEl.TryGetInt32(out var ap))
+                        ports.Add(ap);
+            }
+            catch { }
+        }
+        spec.Ports = ports.OrderBy(p => p).ToList();
+
+        ProfileGenerator.Generate(spec, languages);
+
+        // Write profile.json
+        var manifest = new Dictionary<string, object>
+        {
+            ["name"] = spec.Name,
+            ["template"] = spec.Template,
+            ["agents"] = spec.Agents,
+            ["languages"] = spec.Languages,
+            ["additions"] = spec.Additions,
+            ["plugins"] = spec.Plugins,
+            ["custom_plugins"] = spec.CustomPlugins,
+            ["skills"] = spec.Skills,
+            ["vscode_extensions"] = spec.VscodeExtensions,
+            ["mcp_servers"] = spec.McpServers,
+            ["custom_dockerfile_lines"] = spec.CustomDockerfileLines,
+            ["custom_startup_before"] = spec.CustomStartupBefore,
+            ["custom_startup_after"] = spec.CustomStartupAfter
+        };
+        var json = System.Text.Json.JsonSerializer.Serialize(manifest,
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        ResourceManager.WriteLf(Path.Combine(profileDir, "profile.json"), json);
+
+        // Build Docker image
+        var tag = $"agent-sandbox-{spec.Name}:latest";
+        Console.WriteLine("[setup] Building Docker image...");
+        var buildExit = DockerRunner.Build(Path.Combine(profileDir, "Dockerfile.base"), tag, profileDir);
+        if (buildExit != 0)
+        {
+            Console.WriteLine("[setup] Build failed.");
+            return 1;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"[setup] Ready! Run 'agent-sandbox sandbox <path>' to launch.");
+        Console.WriteLine($"  Profile:   {spec.Name}");
+        Console.WriteLine($"  Agent:     {spec.Agents.FirstOrDefault() ?? "opencode"}");
+        Console.WriteLine($"  Languages: {string.Join(", ", spec.Languages)}");
         return 0;
     }
 

@@ -6,7 +6,7 @@ namespace AgentSandbox;
 
 internal static class Program
 {
-    private static readonly string[] CliCommands = ["setup", "prepare", "sandbox", "list", "stats", "cleanup", "profiles", "help", "--help", "-h"];
+    private static readonly string[] CliCommands = ["setup", "prepare", "sandbox", "list", "stats", "cleanup", "profiles", "quick-start", "help", "--help", "-h"];
 
     [STAThread]
     static int Main(string[] args)
@@ -27,6 +27,7 @@ internal static class Program
                 "stats" => Cli.RunStats(),
                 "cleanup" => Cli.RunCleanup(args.Skip(1).ToArray()),
                 "profiles" => Cli.RunProfiles(args.Skip(1).ToArray()),
+                "quick-start" => Cli.RunQuickStart(args.Skip(1).ToArray()),
                 _ => Cli.ShowHelp()
             };
         }

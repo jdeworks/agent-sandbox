@@ -13,13 +13,21 @@ Isolated Docker sandbox for AI coding agents. Each project runs inside a locked-
 ### Linux / macOS / WSL (v2)
 
 ```bash
-# 1. Create a profile (interactive: pick agents, languages, plugins, MCP servers)
-./src/scripts/unix/sandbox-setup.sh
+# Fastest way to get started (zero prompts — OpenCode + Node)
+sandbox-setup --quick-start
 source ~/.bash_aliases
 
-# 2. Run from any project directory
+# Run from any project directory
 cd ~/my-project
 sandbox-me
+```
+
+Or for a custom profile with full control:
+
+```bash
+sandbox-setup              # Interactive: pick agents, languages, plugins
+source ~/.bash_aliases
+cd ~/my-project && sandbox-me
 ```
 
 `sandbox-setup` builds a named Docker image with your selected tools. `sandbox-me` reads a `.sandbox` file in the project root (or creates one) and launches the container.
@@ -48,6 +56,7 @@ Settings (gear icon) lets you save API keys and pick a default agent.
 
 **CLI:**
 ```
+agent-sandbox quick-start                      Zero-friction: build default profile and go
 agent-sandbox setup                            One-time: create default profiles
 agent-sandbox sandbox C:\path\to\project       Launch a sandbox
 ```
@@ -74,6 +83,7 @@ Each profile generates:
 
 | Action | Linux / macOS / WSL | Windows (CLI) |
 |--------|---------------------|---------------|
+| **Quick start** | `sandbox-setup --quick-start` | `agent-sandbox quick-start` |
 | **Create profile** | `sandbox-setup` | `agent-sandbox setup` |
 | **Launch sandbox** | `sandbox-me` (from project dir) | `agent-sandbox sandbox C:\path` |
 | **List profiles** | `sandbox-setup --list` | `agent-sandbox profiles` |

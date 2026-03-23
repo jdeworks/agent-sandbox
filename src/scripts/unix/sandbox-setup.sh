@@ -219,12 +219,96 @@ case "${1:-}" in
         echo "[setup] Profile '$imp_name' imported and built."
         exit 0
         ;;
+    --quick-start)
+        # Zero-friction: build the static-website template (OpenCode + Node) non-interactively
+        prereqs_check_all || { echo "[setup] Fix the missing prerequisites and re-run."; exit 1; }
+        mkdir -p "$SANDBOX_HOME/profiles" "$SANDBOX_HOME/projects"
+
+        qs_template="${2:-static-website}"
+        qs_templates_dir="$SANDBOX_DIR/../templates/profiles"
+        qs_templates_dir="$(cd "$(dirname "$qs_templates_dir")" 2>/dev/null && cd templates/profiles 2>/dev/null && pwd)" 2>/dev/null || qs_templates_dir=""
+        qs_file="$qs_templates_dir/$qs_template.json"
+
+        if [ -z "$qs_templates_dir" ] || [ ! -f "$qs_file" ]; then
+            echo "[setup] Template '$qs_template' not found."
+            [ -n "$qs_templates_dir" ] && [ -d "$qs_templates_dir" ] && {
+                echo "Available templates:"
+                for tf in "$qs_templates_dir"/*.json; do
+                    tl=$(jq -r '._template.label // empty' "$tf" 2>/dev/null)
+                    tid=$(jq -r '._template.id // empty' "$tf" 2>/dev/null)
+                    [ -n "$tl" ] && echo "  $tid — $tl"
+                done
+            }
+            exit 1
+        fi
+
+        qs_name=$(jq -r '._template.id // .profile.name' "$qs_file")
+        # Resolve name collisions
+        if [ -d "$SANDBOX_HOME/profiles/$qs_name" ]; then
+            suffix=2
+            while [ -d "$SANDBOX_HOME/profiles/${qs_name}-${suffix}" ]; do ((suffix++)); done
+            qs_name="${qs_name}-${suffix}"
+        fi
+
+        qs_agents=$(jq -r '.profile.agents // [] | join(",")' "$qs_file")
+        qs_langs=$(jq -r '.profile.languages // [] | join(",")' "$qs_file")
+        qs_additions=$(jq -r '.profile.additions // [] | join(",")' "$qs_file")
+        qs_agents_md_extra=$(jq -r '._template.agents_md_extra // empty' "$qs_file")
+
+        # Compute ports
+        qs_port_set="3000,8080"
+        for lang in $(echo "$qs_langs" | tr ',' ' '); do
+            lp=$(jq -r ".\"$lang\".default[]? // empty" "$SANDBOX_DIR/sandbox/ports.json" 2>/dev/null | tr '\n' ',')
+            [ -n "$lp" ] && qs_port_set="$qs_port_set,$lp"
+        done
+        for add in $(echo "$qs_additions" | tr ',' ' '); do
+            ap=$(jq -r ".\"$add\".port // empty" "$SANDBOX_DIR/sandbox/additions.json" 2>/dev/null)
+            [ -n "$ap" ] && qs_port_set="$qs_port_set,$ap"
+        done
+        qs_ports=$(echo "$qs_port_set" | tr ',' '\n' | sort -un | tr '\n' ',' | sed 's/,$//')
+
+        QS_PROFILE_DIR="$SANDBOX_HOME/profiles/$qs_name"
+        echo ""
+        echo "[setup] Quick Start: building profile '$qs_name' ($(jq -r '._template.label' "$qs_file"))..."
+        echo ""
+
+        SELECTED_AGENTS="$qs_agents" PRIMARY_AGENT="$(echo "$qs_agents" | cut -d, -f1)" \
+            bash "$SANDBOX_DIR/sandbox/generate_profile.sh" \
+            "$SANDBOX_DIR/sandbox" "$QS_PROFILE_DIR" "$qs_name" "$qs_langs" "$qs_ports" "" "$qs_additions" >/dev/null 2>&1
+
+        # Append template-specific AGENTS.md content
+        if [ -n "$qs_agents_md_extra" ] && [ -f "$QS_PROFILE_DIR/AGENTS.md" ]; then
+            printf '\n%s\n' "$qs_agents_md_extra" >> "$QS_PROFILE_DIR/AGENTS.md"
+        fi
+
+        # Write profile.json
+        jq -n --arg name "$qs_name" --arg tmpl "$qs_template" \
+            --argjson agents "$(jq '.profile.agents' "$qs_file")" \
+            --argjson langs "$(jq '.profile.languages' "$qs_file")" \
+            --argjson adds "$(jq '.profile.additions' "$qs_file")" \
+            '{name: $name, template: $tmpl, agents: $agents, languages: $langs, additions: $adds, plugins: [], custom_plugins: [], skills: [], vscode_extensions: [], mcp_servers: [], custom_dockerfile_lines: [], custom_startup_before: [], custom_startup_after: []}' \
+            > "$QS_PROFILE_DIR/profile.json"
+
+        echo "[setup] Building Docker image..."
+        docker build -t "agent-sandbox-${qs_name}:latest" \
+            -f "$QS_PROFILE_DIR/Dockerfile.base" "$QS_PROFILE_DIR" || {
+            echo "[setup] Build failed."
+            exit 1
+        }
+        echo ""
+        echo "[setup] Ready! Run 'sandbox-me' from your project directory."
+        echo "  Profile: $qs_name"
+        echo "  Agent:   $(echo "$qs_agents" | cut -d, -f1)"
+        echo "  Languages: $qs_langs"
+        exit 0
+        ;;
     --help|-h)
         cat <<'HELP'
 sandbox-setup — Create and manage sandbox profiles
 
 Usage:
   sandbox-setup                          Interactive profile creation
+  sandbox-setup --quick-start [template] Zero-friction setup (default: static-website)
   sandbox-setup --list                   List all profiles
   sandbox-setup --delete <name>          Delete a profile and its Docker image
   sandbox-setup --rebuild <name>         Rebuild a profile image (no cache)
@@ -232,7 +316,14 @@ Usage:
   sandbox-setup --export <name> [file]   Export a profile to JSON (stdout or file)
   sandbox-setup --import <file.json>     Import and build a profile from JSON
 
+Templates:
+  static-website    HTML/CSS/JS, GitHub Pages (OpenCode + Node)
+  web-app           Frontend + backend + VS Code Server (OpenCode + Node + Python)
+  python-dev        Scripts, APIs, data science (OpenCode + Python + Node)
+
 Examples:
+  sandbox-setup --quick-start            # Build static-website profile, zero prompts
+  sandbox-setup --quick-start web-app    # Build web-app profile, zero prompts
   sandbox-setup                          # Create a new profile interactively
   sandbox-setup --add-plugin my-dev oh-my-openagent
   sandbox-setup --rebuild my-dev
