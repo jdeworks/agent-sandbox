@@ -1742,7 +1742,10 @@ public sealed class WizardForm : Form
             });
 
             if (exitCode == 0)
+            {
                 AppendLog("[sandbox] Container stopped.");
+                DockerRunner.CloseAgentTerminals();
+            }
             else if (exitCode == -1)
                 AppendLog("[sandbox] No compose file found.");
             else

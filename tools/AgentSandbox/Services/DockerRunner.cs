@@ -136,6 +136,28 @@ public static class DockerRunner
         return (exit, (stdout + "\n" + stderr).Trim());
     }
 
+    /// <summary>Close terminal windows opened by ExecInteractive (matched by window title prefix).</summary>
+    public static void CloseAgentTerminals()
+    {
+        try
+        {
+            foreach (var proc in Process.GetProcesses())
+            {
+                try
+                {
+                    if (!string.IsNullOrEmpty(proc.MainWindowTitle) &&
+                        proc.MainWindowTitle.StartsWith("Agent Sandbox - ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        proc.CloseMainWindow();
+                    }
+                }
+                catch { /* process may have exited */ }
+                finally { proc.Dispose(); }
+            }
+        }
+        catch { /* best effort */ }
+    }
+
     public static int StopContainer(string containerName)
     {
         return Run("docker", $"stop \"{containerName}\"", null);
