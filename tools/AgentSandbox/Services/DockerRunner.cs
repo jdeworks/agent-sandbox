@@ -136,20 +136,46 @@ public static class DockerRunner
         return (exit, (stdout + "\n" + stderr).Trim());
     }
 
-    /// <summary>Close terminal windows opened by ExecInteractive (matched by window title prefix).</summary>
-    public static void CloseAgentTerminals()
+    /// <summary>
+    /// Close terminal windows opened by ExecInteractive for a given container.
+    /// Kills orphaned "docker exec" processes targeting sandbox containers,
+    /// then closes any cmd.exe windows with matching titles.
+    /// </summary>
+    public static void CloseAgentTerminals(string? containerName = null)
     {
+        // Kill docker exec processes targeting our containers
         try
         {
-            foreach (var proc in Process.GetProcesses())
+            // Use taskkill with wmic-style filter to find docker exec processes
+            // by command line. This is more reliable than MainWindowTitle matching.
+            var filter = containerName != null
+                ? $"exec%{containerName}%"
+                : "exec%sandbox-%";
+            var psi = new ProcessStartInfo
+            {
+                FileName = "wmic",
+                Arguments = $"process where \"name='docker.exe' and commandline like '%{filter}'\" call terminate",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            using var proc = Process.Start(psi);
+            proc?.WaitForExit(5000);
+        }
+        catch { /* best effort */ }
+
+        // Close cmd.exe windows with our title (cmd /k keeps window open after exit)
+        try
+        {
+            var titlePrefix = "Agent Sandbox - ";
+            foreach (var proc in Process.GetProcessesByName("cmd"))
             {
                 try
                 {
                     if (!string.IsNullOrEmpty(proc.MainWindowTitle) &&
-                        proc.MainWindowTitle.StartsWith("Agent Sandbox - ", StringComparison.OrdinalIgnoreCase))
-                    {
+                        proc.MainWindowTitle.StartsWith(titlePrefix, StringComparison.OrdinalIgnoreCase))
                         proc.CloseMainWindow();
-                    }
                 }
                 catch { /* process may have exited */ }
                 finally { proc.Dispose(); }
