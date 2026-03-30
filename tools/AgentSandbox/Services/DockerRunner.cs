@@ -91,8 +91,9 @@ public static class DockerRunner
     {
         if (newWindow)
         {
-            // Prefer Windows Terminal (wt.exe) — Ctrl+C copies text when selected,
-            // sends SIGINT only when nothing is selected. Falls back to cmd.exe.
+            // Use cmd /c so the terminal auto-closes when docker exec exits
+            // (either normally or when the container is stopped).
+            // Prefer Windows Terminal (wt.exe) for better Ctrl+C handling.
             ProcessStartInfo psi;
             var wtPath = FindExecutable("wt.exe");
             if (wtPath != null)
@@ -100,7 +101,7 @@ public static class DockerRunner
                 psi = new ProcessStartInfo
                 {
                     FileName = wtPath,
-                    Arguments = $"--title \"Agent Sandbox - {containerName}\" -- docker exec -it \"{containerName}\" {command}",
+                    Arguments = $"--title \"Agent Sandbox\" -- cmd /c docker exec -it \"{containerName}\" {command}",
                     UseShellExecute = true,
                     CreateNoWindow = false
                 };
@@ -110,7 +111,7 @@ public static class DockerRunner
                 psi = new ProcessStartInfo
                 {
                     FileName = "cmd.exe",
-                    Arguments = $"/k title Agent Sandbox - {containerName} && docker exec -it --detach-keys=\"ctrl-]\" \"{containerName}\" {command}",
+                    Arguments = $"/c title Agent Sandbox && docker exec -it --detach-keys=\"ctrl-]\" \"{containerName}\" {command}",
                     UseShellExecute = true,
                     CreateNoWindow = false
                 };
@@ -134,54 +135,6 @@ public static class DockerRunner
     {
         var (exit, stdout, stderr) = RunCaptureBoth("docker", $"logs --tail {tail} \"{containerIdOrName}\"");
         return (exit, (stdout + "\n" + stderr).Trim());
-    }
-
-    /// <summary>
-    /// Close terminal windows opened by ExecInteractive for a given container.
-    /// Kills orphaned "docker exec" processes targeting sandbox containers,
-    /// then closes any cmd.exe windows with matching titles.
-    /// </summary>
-    public static void CloseAgentTerminals(string? containerName = null)
-    {
-        // Kill docker exec processes targeting our containers
-        try
-        {
-            // Use taskkill with wmic-style filter to find docker exec processes
-            // by command line. This is more reliable than MainWindowTitle matching.
-            var filter = containerName != null
-                ? $"exec%{containerName}%"
-                : "exec%sandbox-%";
-            var psi = new ProcessStartInfo
-            {
-                FileName = "wmic",
-                Arguments = $"process where \"name='docker.exe' and commandline like '%{filter}'\" call terminate",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
-            using var proc = Process.Start(psi);
-            proc?.WaitForExit(5000);
-        }
-        catch { /* best effort */ }
-
-        // Close cmd.exe windows with our title (cmd /k keeps window open after exit)
-        try
-        {
-            var titlePrefix = "Agent Sandbox - ";
-            foreach (var proc in Process.GetProcessesByName("cmd"))
-            {
-                try
-                {
-                    if (!string.IsNullOrEmpty(proc.MainWindowTitle) &&
-                        proc.MainWindowTitle.StartsWith(titlePrefix, StringComparison.OrdinalIgnoreCase))
-                        proc.CloseMainWindow();
-                }
-                catch { /* process may have exited */ }
-                finally { proc.Dispose(); }
-            }
-        }
-        catch { /* best effort */ }
     }
 
     public static int StopContainer(string containerName)
