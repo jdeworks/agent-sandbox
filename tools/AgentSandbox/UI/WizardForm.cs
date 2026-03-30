@@ -633,8 +633,8 @@ public sealed class WizardForm : Form
         _btnBrowse = new Button
         {
             Text = "Browse\u2026",
-            Location = new Point(568, 102),
-            Size = new Size(104, 32)
+            Location = new Point(568, 104),
+            Size = new Size(104, 28)
         };
         StyleFlatButton(_btnBrowse, TextPrimary);
         _btnBrowse.Click += (_, _) =>
@@ -676,14 +676,11 @@ public sealed class WizardForm : Form
         _btnRemoveProject = new Button
         {
             Text = "Remove",
-            Location = new Point(586, 138),
-            Size = new Size(86, 24),
-            FlatStyle = FlatStyle.Flat,
-            Font = new Font("Segoe UI", 8.5f),
-            ForeColor = Color.FromArgb(200, 80, 80),
-            BackColor = Color.FromArgb(45, 45, 48)
+            Location = new Point(568, 136),
+            Size = new Size(104, 28),
+            Font = new Font("Segoe UI", 8.5f)
         };
-        _btnRemoveProject.FlatAppearance.BorderColor = Color.FromArgb(200, 80, 80);
+        StyleFlatButton(_btnRemoveProject, DangerRed);
         _btnRemoveProject.Click += OnRemoveProjectClicked;
 
         var lblProfile = new Label
@@ -1371,59 +1368,101 @@ public sealed class WizardForm : Form
                 var composeFile = Path.Combine(projectDir, "docker-compose.yml");
                 var containerId = DockerRunner.GetComposeContainerId(composeFile, projectDir) ?? containerName;
 
-                var selectedLabel = vsCodeOnly ? "VS Code Server" : agentCommand;
-                var dialogMsg = $"Container '{containerName}' is already running.\n\n" +
-                    $"Yes = Attach '{selectedLabel}' as a new session in the running container\n" +
-                    $"No = Restart the container with current settings\n" +
-                    $"Cancel = Do nothing";
+                // Detect if the running container uses a different profile
+                var runningProfile = ProjectScaffolder.GetProjectProfile(projectName);
+                var profileChanged = !string.IsNullOrEmpty(runningProfile) &&
+                    !runningProfile.Equals(profileName, StringComparison.OrdinalIgnoreCase);
 
-                var choice = MessageBox.Show(dialogMsg,
-                    "Container Running",
-                    MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question,
-                    MessageBoxDefaultButton.Button1,
-                    0, false);
-
-                // Relabel: Yes=Attach, No=Restart, Cancel=Cancel
-                if (choice == DialogResult.Cancel)
+                if (profileChanged)
                 {
-                    SetLaunchMode(false);
-                    return;
-                }
+                    // Different profile — attach doesn't make sense, must recreate
+                    var dialogMsg = $"Container '{containerName}' is running with profile '{runningProfile}'.\n" +
+                        $"You selected profile '{profileName}'.\n\n" +
+                        $"The container must be recreated to use the new profile.\n\n" +
+                        $"OK = Recreate with '{profileName}'\n" +
+                        $"Cancel = Do nothing";
 
-                if (choice == DialogResult.Yes)
-                {
-                    if (vsCodeOnly)
+                    var choice = MessageBox.Show(dialogMsg,
+                        "Profile Changed",
+                        MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+
+                    if (choice == DialogResult.Cancel)
                     {
-                        // VS Code — container already running, just show link
-                        var actualPort = 4040;
-                        var cf = Path.Combine(projectDir, "docker-compose.yml");
-                        if (File.Exists(cf))
-                            foreach (var line in File.ReadAllLines(cf))
+                        SetLaunchMode(false);
+                        return;
+                    }
+                }
+                else
+                {
+                    var selectedLabel = vsCodeOnly ? "VS Code Server" : agentCommand;
+                    var dialogMsg = $"Container '{containerName}' is already running.\n\n" +
+                        $"Yes = Attach '{selectedLabel}' as a new session in the running container\n" +
+                        $"No = Restart the container with current settings\n" +
+                        $"Cancel = Do nothing";
+
+                    var choice = MessageBox.Show(dialogMsg,
+                        "Container Running",
+                        MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question,
+                        MessageBoxDefaultButton.Button1,
+                        0, false);
+
+                    // Relabel: Yes=Attach, No=Restart, Cancel=Cancel
+                    if (choice == DialogResult.Cancel)
+                    {
+                        SetLaunchMode(false);
+                        return;
+                    }
+
+                    if (choice == DialogResult.Yes)
+                    {
+                        if (vsCodeOnly)
+                        {
+                            // VS Code — container already running, just show link
+                            var actualPort = 4040;
+                            var cf = Path.Combine(projectDir, "docker-compose.yml");
+                            if (File.Exists(cf))
+                                foreach (var line in File.ReadAllLines(cf))
+                                {
+                                    var pm = System.Text.RegularExpressions.Regex.Match(line, @"""(\d+):4040""");
+                                    if (pm.Success && int.TryParse(pm.Groups[1].Value, out var mp))
+                                    { actualPort = mp; break; }
+                                }
+                            _vsCodePort = actualPort;
+                            Log($"[sandbox] VS Code Server is running at http://localhost:{actualPort}");
+                        }
+                        else
+                        {
+                            // Verify container is still alive before attaching
+                            if (!DockerRunner.IsContainerRunningByIdOrName(containerId))
                             {
-                                var pm = System.Text.RegularExpressions.Regex.Match(line, @"""(\d+):4040""");
-                                if (pm.Success && int.TryParse(pm.Groups[1].Value, out var mp))
-                                { actualPort = mp; break; }
+                                Log("[sandbox] Container is no longer running.");
+                                Invoke(() =>
+                                {
+                                    _btnBackOverview.Visible = true;
+                                    _btnClose.Visible = true;
+                                });
+                                return;
                             }
-                        _vsCodePort = actualPort;
-                        Log($"[sandbox] VS Code Server is running at http://localhost:{actualPort}");
+
+                            // Attach new agent session in running container
+                            Log($"[sandbox] Attaching new session to {containerName}...");
+                            Log($"[sandbox] Launching: {agentCommand}");
+                            DockerRunner.ExecInteractive(containerId, agentCommand, newWindow: true);
+                            Log("[sandbox] Agent session launched in new window.");
+                        }
+                        Invoke(() =>
+                        {
+                            _btnBackOverview.Visible = true;
+                            _btnClose.Visible = true;
+                            _btnStopContainer.Visible = true;
+                            _btnStopContainer.Enabled = true;
+                            _btnStopContainer.Text = "Stop Container";
+                        });
+                        return;
                     }
-                    else
-                    {
-                        // Attach new agent session in running container
-                        Log($"[sandbox] Attaching new session to {containerName}...");
-                        Log($"[sandbox] Launching: {agentCommand}");
-                        DockerRunner.ExecInteractive(containerId, agentCommand, newWindow: true);
-                        Log("[sandbox] Agent session launched in new window.");
-                    }
-                    Invoke(() =>
-                    {
-                        _btnBackOverview.Visible = true;
-                        _btnClose.Visible = true;
-                    });
-                    return;
                 }
 
-                // Restart — stop existing container first
+                // Restart/recreate — stop existing container first
                 Log($"[sandbox] Stopping existing container '{containerName}'...");
                 await Task.Run(() =>
                 {
@@ -1438,6 +1477,7 @@ public sealed class WizardForm : Form
                 Log("[sandbox] Container stopped.");
             }
 
+            var launchOk = false;
             await Task.Run(() =>
             {
                 // Build image if needed
@@ -1530,7 +1570,18 @@ public sealed class WizardForm : Form
                 var containerId = DockerRunner.GetComposeContainerId(composeFile, projectDir);
                 if (!string.IsNullOrEmpty(containerId))
                 {
-                    DockerRunner.WaitForReady(containerId, 120, Log);
+                    if (!DockerRunner.WaitForReady(containerId, 120, Log))
+                    {
+                        Log("");
+                        Log("[sandbox] Container exited during startup. Last log output:");
+                        var (_, logs) = DockerRunner.GetContainerLogs(containerId, tail: 30);
+                        if (!string.IsNullOrEmpty(logs))
+                            foreach (var line in logs.Split('\n'))
+                                Log($"  {line}");
+                        Log("");
+                        Log($"[sandbox] Full logs: docker logs {containerId[..12]}");
+                        return;
+                    }
                 }
                 else
                 {
@@ -1577,47 +1628,65 @@ public sealed class WizardForm : Form
                     if (_profileHasVsCode)
                         Log($"[sandbox] VS Code Server also available at: http://localhost:{actualVsPort}");
 
+                    // Final check — container may have crashed between ready and now
+                    if (!DockerRunner.IsContainerRunningByIdOrName(containerTarget))
+                    {
+                        Log("[sandbox] Container exited before agent could attach. Last log output:");
+                        var (_, logs) = DockerRunner.GetContainerLogs(containerTarget, tail: 30);
+                        if (!string.IsNullOrEmpty(logs))
+                            foreach (var line in logs.Split('\n'))
+                                Log($"  {line}");
+                        return;
+                    }
+
                     Log($"[sandbox] Launching agent: {agentCommand}");
                     DockerRunner.ExecInteractive(containerTarget, agentCommand, newWindow: true);
                     Log("[sandbox] Agent launched in new window.");
                     Log("[sandbox] TIP: Select text and press Ctrl+C to copy. Type 'exit' to leave the agent.");
                 }
+
+                launchOk = true;
             });
 
-            // Show completion buttons + update VS Code link with actual port
+            // Show appropriate buttons based on outcome
             Invoke(() =>
             {
                 _btnBackOverview.Visible = true;
                 _btnClose.Visible = true;
-                _btnStopContainer.Visible = true;
-                _btnStopContainer.Enabled = true;
 
-                // Update VS Code link with actual port (may differ from pre-launch value)
-                if (_profileHasVsCode && _vsCodePort > 0)
+                if (launchOk)
                 {
-                    _lnkVsCode.Text = $"VS Code Server: http://localhost:{_vsCodePort}";
-                    _lnkVsCode.Tag = $"http://localhost:{_vsCodePort}";
-                    _lnkVsCode.Visible = true;
-                }
+                    _btnStopContainer.Visible = true;
+                    _btnStopContainer.Enabled = true;
+                    _btnStopContainer.Text = "Stop Container";
 
-                if (portRemaps.Count > 0)
-                {
-                    var remapText = string.Join("  |  ", portRemaps.Select(r =>
+                    // Update VS Code link with actual port (may differ from pre-launch value)
+                    if (_profileHasVsCode && _vsCodePort > 0)
                     {
-                        var m = System.Text.RegularExpressions.Regex.Match(r, @"Port (\d+).*remapped to (\d+):(\d+)");
-                        return m.Success ? $"localhost:{m.Groups[1].Value} \u2192 localhost:{m.Groups[2].Value}" : r;
-                    }));
-                    var notice = new Label
+                        _lnkVsCode.Text = $"VS Code Server: http://localhost:{_vsCodePort}";
+                        _lnkVsCode.Tag = $"http://localhost:{_vsCodePort}";
+                        _lnkVsCode.Visible = true;
+                    }
+
+                    if (portRemaps.Count > 0)
                     {
-                        Text = $"\u26a0 Port remapping: {remapText}",
-                        Left = 32, Top = _txtLog.Top - 28,
-                        Width = _txtLog.Width, Height = 22,
-                        Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-                        ForeColor = Color.FromArgb(180, 120, 0)
-                    };
-                    _stepLaunch.Controls.Add(notice);
-                    notice.BringToFront();
-                    _launchTempControls.Add(notice);
+                        var remapText = string.Join("  |  ", portRemaps.Select(r =>
+                        {
+                            var m = System.Text.RegularExpressions.Regex.Match(r, @"Port (\d+).*remapped to (\d+):(\d+)");
+                            return m.Success ? $"localhost:{m.Groups[1].Value} \u2192 localhost:{m.Groups[2].Value}" : r;
+                        }));
+                        var notice = new Label
+                        {
+                            Text = $"\u26a0 Port remapping: {remapText}",
+                            Left = 32, Top = _txtLog.Top - 28,
+                            Width = _txtLog.Width, Height = 22,
+                            Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                            ForeColor = Color.FromArgb(180, 120, 0)
+                        };
+                        _stepLaunch.Controls.Add(notice);
+                        notice.BringToFront();
+                        _launchTempControls.Add(notice);
+                    }
                 }
             });
         }
@@ -1714,6 +1783,7 @@ public sealed class WizardForm : Form
             _txtLog.Clear();
             _btnBackOverview.Location = new Point(32, 604);
             _btnClose.Location = new Point(208, 604);
+            _btnStopContainer.Location = new Point(328, 604);
         }
         else
         {
@@ -1723,9 +1793,13 @@ public sealed class WizardForm : Form
             _txtLog.Visible = false;
             _btnBackOverview.Location = new Point(32, 620);
             _btnClose.Location = new Point(208, 620);
+            _btnStopContainer.Location = new Point(328, 620);
         }
         _btnBackOverview.Visible = false;
         _btnClose.Visible = false;
+        _btnStopContainer.Visible = false;
+        _btnStopContainer.Enabled = true;
+        _btnStopContainer.Text = "Stop Container";
     }
 
     // ─── Helpers ────────────────────────────────────────────────────────

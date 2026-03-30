@@ -426,7 +426,7 @@ docker_remap_compose_ports "$PROJECT_DIR/docker-compose.yml"
 # Start container
 ########################################
 echo "[sandbox-me] Starting container $CONTAINER_NAME..."
-docker compose -f "$PROJECT_DIR/docker-compose.yml" --project-directory "$PROJECT_DIR" up -d --build
+docker compose -f "$PROJECT_DIR/docker-compose.yml" --project-directory "$PROJECT_DIR" up -d --build --force-recreate
 
 # Get actual container ID
 RUNNING_CONTAINER="$CONTAINER_NAME"

@@ -65,14 +65,6 @@ public static class ProfileImportExport
 
         var profileDir = Path.Combine(ResourceManager.PreparedDir, name);
 
-        // Write profile.json with resolved name
-        Directory.CreateDirectory(profileDir);
-        var profileObj = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(profileEl.GetRawText())
-                         ?? new Dictionary<string, JsonElement>();
-        profileObj["name"] = JsonSerializer.SerializeToElement(name);
-        ResourceManager.WriteLf(Path.Combine(profileDir, "profile.json"),
-            JsonSerializer.Serialize(profileObj, new JsonSerializerOptions { WriteIndented = true }));
-
         // Build ProfileSpec from imported data
         var spec = new ProfileSpec { Name = name };
 
@@ -129,9 +121,16 @@ public static class ProfileImportExport
         }
         spec.Ports = ports.OrderBy(p => p).ToList();
 
-        // Generate profile files
+        // Generate profile files (this recreates the profile directory)
         log($"[import] Generating profile '{name}'...");
         ProfileGenerator.Generate(spec, languages);
+
+        // Write profile.json after Generate (which wipes and recreates the directory)
+        var profileObj = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(profileEl.GetRawText())
+                         ?? new Dictionary<string, JsonElement>();
+        profileObj["name"] = JsonSerializer.SerializeToElement(name);
+        ResourceManager.WriteLf(Path.Combine(profileDir, "profile.json"),
+            JsonSerializer.Serialize(profileObj, new JsonSerializerOptions { WriteIndented = true }));
 
         // Handle custom npm packages and skills
         {

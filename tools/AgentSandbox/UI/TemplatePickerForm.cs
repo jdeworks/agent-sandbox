@@ -232,9 +232,9 @@ public sealed class TemplatePickerForm : Form
         {
             await Task.Run(() =>
             {
-                ProfileGenerator.RegenerateProfile(spec.Name, _languages, _portConfigs);
-
-                // Write profile.json with template info
+                // Write profile.json BEFORE RegenerateProfile so it can read the spec
+                var pDir = Path.Combine(ResourceManager.PreparedDir, spec.Name);
+                Directory.CreateDirectory(pDir);
                 var manifestObj = new Dictionary<string, object>
                 {
                     ["name"] = spec.Name,
@@ -255,8 +255,9 @@ public sealed class TemplatePickerForm : Form
                 };
                 var manifest = System.Text.Json.JsonSerializer.Serialize(manifestObj,
                     new JsonSerializerOptions { WriteIndented = true });
-                var pDir = Path.Combine(ResourceManager.PreparedDir, spec.Name);
                 ResourceManager.WriteLf(Path.Combine(pDir, "profile.json"), manifest);
+
+                ProfileGenerator.RegenerateProfile(spec.Name, _languages, _portConfigs);
 
                 var tag = $"agent-sandbox-{spec.Name}:latest";
                 var dfPath = Path.Combine(pDir, "Dockerfile.base");

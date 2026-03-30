@@ -485,20 +485,32 @@ internal static class Cli
 
         if (DockerRunner.IsContainerRunning(containerName))
         {
+            var runningProfile = ProjectScaffolder.GetProjectProfile(projectName);
+            var profileChanged = !string.IsNullOrEmpty(runningProfile) &&
+                !runningProfile.Equals(profileName, StringComparison.OrdinalIgnoreCase);
+
             Console.WriteLine();
             Console.WriteLine($"[sandbox] Container '{containerName}' is already running.");
-            Console.WriteLine("  1) Reattach");
-            Console.WriteLine("  2) Rebuild");
-            Console.Write("Choice [1]: ");
-            var choice = Console.ReadLine()?.Trim();
 
-            if (string.IsNullOrEmpty(choice) || choice == "1")
+            if (profileChanged)
             {
-                var reattachCmd = ProjectScaffolder.GetAgentCommand(projectName);
-                Console.WriteLine($"[sandbox] Attaching to {containerName}...");
-                DockerRunner.ExecInteractive(containerName, reattachCmd);
-                PostSessionCheck(projectName, containerName);
-                return 0;
+                Console.WriteLine($"[sandbox] Profile changed: '{runningProfile}' -> '{profileName}'. Recreating container.");
+            }
+            else
+            {
+                Console.WriteLine("  1) Reattach");
+                Console.WriteLine("  2) Rebuild");
+                Console.Write("Choice [1]: ");
+                var choice = Console.ReadLine()?.Trim();
+
+                if (string.IsNullOrEmpty(choice) || choice == "1")
+                {
+                    var reattachCmd = ProjectScaffolder.GetAgentCommand(projectName);
+                    Console.WriteLine($"[sandbox] Attaching to {containerName}...");
+                    DockerRunner.ExecInteractive(containerName, reattachCmd);
+                    PostSessionCheck(projectName, containerName);
+                    return 0;
+                }
             }
 
             Console.WriteLine("[sandbox] Stopping existing container...");
@@ -563,7 +575,12 @@ internal static class Cli
         }
 
         var runningContainer = DockerRunner.GetComposeContainerId(composeFile, projectDir) ?? containerName;
-        DockerRunner.WaitForReady(runningContainer, 120, msg => Console.Write(msg));
+        if (!DockerRunner.WaitForReady(runningContainer, 120, msg => Console.Write(msg)))
+        {
+            Console.WriteLine();
+            Console.WriteLine($"Error: Container exited during startup. Check logs: docker logs {runningContainer[..Math.Min(12, runningContainer.Length)]}");
+            return 1;
+        }
         Console.WriteLine();
 
         var agentCmd = ProjectScaffolder.GetAgentCommand(projectName);

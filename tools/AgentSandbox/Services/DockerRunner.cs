@@ -47,13 +47,13 @@ public static class DockerRunner
 
     public static int ComposeUp(string composeFile, string projectDir, Action<string>? onOutput = null)
     {
-        return Run("docker", $"compose -f \"{composeFile}\" --project-directory \"{projectDir}\" up -d --build", onOutput);
+        return Run("docker", $"compose -f \"{composeFile}\" --project-directory \"{projectDir}\" up -d --build --force-recreate", onOutput);
     }
 
     /// <summary>Run compose up and capture stdout+stderr. Used to parse port errors for retry.</summary>
     public static (int exitCode, string output) ComposeUpCapture(string composeFile, string projectDir)
     {
-        var (exit, stdout, stderr) = RunCaptureBoth("docker", $"compose -f \"{composeFile}\" --project-directory \"{projectDir}\" up -d --build");
+        var (exit, stdout, stderr) = RunCaptureBoth("docker", $"compose -f \"{composeFile}\" --project-directory \"{projectDir}\" up -d --build --force-recreate");
         return (exit, (stdout + "\n" + stderr).Trim());
     }
 
@@ -128,6 +128,12 @@ public static class DockerRunner
         using var execProc = Process.Start(execPsi);
         execProc?.WaitForExit();
         return execProc?.ExitCode ?? 1;
+    }
+
+    public static (int exitCode, string output) GetContainerLogs(string containerIdOrName, int tail = 50)
+    {
+        var (exit, stdout, stderr) = RunCaptureBoth("docker", $"logs --tail {tail} \"{containerIdOrName}\"");
+        return (exit, (stdout + "\n" + stderr).Trim());
     }
 
     public static int StopContainer(string containerName)

@@ -119,6 +119,28 @@ public static class ProjectScaffolder
         return result.OrderByDescending(p => p.LastStarted).ToList();
     }
 
+    public static string? GetProjectProfile(string projectName)
+    {
+        var configPath = Path.Combine(GetProjectDir(projectName), "config.env");
+        var config = ParseConfigEnv(configPath);
+        return config.GetValueOrDefault("PROFILE");
+    }
+
+    public static void UpdateProfile(string projectName, string profileName)
+    {
+        var configPath = Path.Combine(GetProjectDir(projectName), "config.env");
+        if (!File.Exists(configPath)) return;
+
+        var lines = File.ReadAllLines(configPath).ToList();
+        var idx = lines.FindIndex(l => l.StartsWith("PROFILE="));
+        var newLine = $"PROFILE={profileName}";
+        if (idx >= 0)
+            lines[idx] = newLine;
+        else
+            lines.Add(newLine);
+        ResourceManager.WriteLf(configPath, string.Join("\n", lines) + "\n");
+    }
+
     private static Dictionary<string, string> ParseConfigEnv(string path)
     {
         var dict = new Dictionary<string, string>();
@@ -257,10 +279,11 @@ public static class ProjectScaffolder
             .Replace("{{HOST_GID}}", "");
         ResourceManager.WriteLf(Path.Combine(projectDir, "docker-compose.yml"), compose);
 
-        // Always update Dockerfile to reference the current profile's image
+        // Always update Dockerfile and config.env to reference the current profile
         var profileName = Path.GetFileName(profileDir);
         var dockerfilePath = Path.Combine(projectDir, "Dockerfile");
         ResourceManager.WriteLf(dockerfilePath, $"FROM agent-sandbox-{profileName}:latest\n");
+        UpdateProfile(projectName, profileName);
 
         // Ensure opencode_data directory exists before copying AGENTS.md
         Directory.CreateDirectory(Path.Combine(projectDir, "opencode_data"));

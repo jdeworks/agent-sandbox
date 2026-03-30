@@ -160,6 +160,13 @@ public static class ResourceManager
             return Path.Combine(AdditionsFragmentsDir, fileName);
         }
 
+        if (embeddedName.StartsWith("templates.profiles."))
+        {
+            var fileName = embeddedName["templates.profiles.".Length..];
+            fileName = RestoreFileName(fileName);
+            return Path.Combine(TemplatesDir, "profiles", fileName);
+        }
+
         if (embeddedName.StartsWith("templates."))
         {
             var fileName = embeddedName["templates.".Length..];

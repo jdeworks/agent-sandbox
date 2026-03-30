@@ -521,7 +521,7 @@ prompt_agent_selection
 # Start container
 ########################################
 echo "[sandbox] Starting container $CONTAINER_NAME..."
-docker compose -f "$PROJECT_DIR/docker-compose.yml" --project-directory "$PROJECT_DIR" up -d --build
+docker compose -f "$PROJECT_DIR/docker-compose.yml" --project-directory "$PROJECT_DIR" up -d --build --force-recreate
 
 # Use the container compose actually started (by ID or name) so we never check the wrong one
 RUNNING_CONTAINER="$CONTAINER_NAME"
