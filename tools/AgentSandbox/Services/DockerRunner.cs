@@ -100,7 +100,7 @@ public static class DockerRunner
                 psi = new ProcessStartInfo
                 {
                     FileName = wtPath,
-                    Arguments = $"--title \"Agent Sandbox\" -- docker exec -it \"{containerName}\" {command}",
+                    Arguments = $"--title \"Agent Sandbox Terminal\" -- docker exec -it \"{containerName}\" {command}",
                     UseShellExecute = true,
                     CreateNoWindow = false
                 };
@@ -110,7 +110,7 @@ public static class DockerRunner
                 psi = new ProcessStartInfo
                 {
                     FileName = "cmd.exe",
-                    Arguments = $"/k title Agent Sandbox && docker exec -it --detach-keys=\"ctrl-]\" \"{containerName}\" {command}",
+                    Arguments = $"/k title Agent Sandbox Terminal && docker exec -it --detach-keys=\"ctrl-]\" \"{containerName}\" {command}",
                     UseShellExecute = true,
                     CreateNoWindow = false
                 };
@@ -146,7 +146,7 @@ public static class DockerRunner
             var psi = new ProcessStartInfo
             {
                 FileName = "taskkill",
-                Arguments = "/F /FI \"WINDOWTITLE eq Agent Sandbox\"",
+                Arguments = "/F /FI \"WINDOWTITLE eq Agent Sandbox Terminal\"",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
