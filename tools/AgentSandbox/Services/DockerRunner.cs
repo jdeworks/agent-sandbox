@@ -100,7 +100,7 @@ public static class DockerRunner
                 psi = new ProcessStartInfo
                 {
                     FileName = wtPath,
-                    Arguments = $"--title \"Agent Sandbox Terminal\" -- docker exec -it \"{containerName}\" {command}",
+                    Arguments = $"--title \"Agent Sandbox - {containerName}\" -- docker exec -it \"{containerName}\" {command}",
                     UseShellExecute = true,
                     CreateNoWindow = false
                 };
@@ -110,7 +110,7 @@ public static class DockerRunner
                 psi = new ProcessStartInfo
                 {
                     FileName = "cmd.exe",
-                    Arguments = $"/k title Agent Sandbox Terminal && docker exec -it --detach-keys=\"ctrl-]\" \"{containerName}\" {command}",
+                    Arguments = $"/k title Agent Sandbox - {containerName} && docker exec -it --detach-keys=\"ctrl-]\" \"{containerName}\" {command}",
                     UseShellExecute = true,
                     CreateNoWindow = false
                 };
@@ -134,28 +134,6 @@ public static class DockerRunner
     {
         var (exit, stdout, stderr) = RunCaptureBoth("docker", $"logs --tail {tail} \"{containerIdOrName}\"");
         return (exit, (stdout + "\n" + stderr).Trim());
-    }
-
-    /// <summary>Close agent terminal windows opened by ExecInteractive.</summary>
-    public static void CloseAgentTerminals()
-    {
-        try
-        {
-            // taskkill reliably matches cmd.exe windows by their title set via "title" command.
-            // WT tabs show "process exited" after docker exec dies — user closes manually.
-            var psi = new ProcessStartInfo
-            {
-                FileName = "taskkill",
-                Arguments = "/F /FI \"WINDOWTITLE eq Agent Sandbox Terminal\"",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
-            using var proc = Process.Start(psi);
-            proc?.WaitForExit(5000);
-        }
-        catch { /* best effort */ }
     }
 
     public static int StopContainer(string containerName)
