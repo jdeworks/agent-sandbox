@@ -91,9 +91,8 @@ public static class DockerRunner
     {
         if (newWindow)
         {
-            // Use cmd /c so the terminal auto-closes when docker exec exits
-            // (either normally or when the container is stopped).
-            // Prefer Windows Terminal (wt.exe) for better Ctrl+C handling.
+            // Prefer Windows Terminal (wt.exe) — Ctrl+C copies text when selected,
+            // sends SIGINT only when nothing is selected. Falls back to cmd.exe.
             ProcessStartInfo psi;
             var wtPath = FindExecutable("wt.exe");
             if (wtPath != null)
@@ -101,7 +100,7 @@ public static class DockerRunner
                 psi = new ProcessStartInfo
                 {
                     FileName = wtPath,
-                    Arguments = $"--title \"Agent Sandbox\" -- cmd /c docker exec -it \"{containerName}\" {command}",
+                    Arguments = $"--title \"Agent Sandbox\" -- docker exec -it \"{containerName}\" {command}",
                     UseShellExecute = true,
                     CreateNoWindow = false
                 };
@@ -111,7 +110,7 @@ public static class DockerRunner
                 psi = new ProcessStartInfo
                 {
                     FileName = "cmd.exe",
-                    Arguments = $"/c title Agent Sandbox && docker exec -it --detach-keys=\"ctrl-]\" \"{containerName}\" {command}",
+                    Arguments = $"/k title Agent Sandbox && docker exec -it --detach-keys=\"ctrl-]\" \"{containerName}\" {command}",
                     UseShellExecute = true,
                     CreateNoWindow = false
                 };
@@ -135,6 +134,28 @@ public static class DockerRunner
     {
         var (exit, stdout, stderr) = RunCaptureBoth("docker", $"logs --tail {tail} \"{containerIdOrName}\"");
         return (exit, (stdout + "\n" + stderr).Trim());
+    }
+
+    /// <summary>Close agent terminal windows opened by ExecInteractive.</summary>
+    public static void CloseAgentTerminals()
+    {
+        try
+        {
+            // taskkill reliably matches cmd.exe windows by their title set via "title" command.
+            // WT tabs show "process exited" after docker exec dies — user closes manually.
+            var psi = new ProcessStartInfo
+            {
+                FileName = "taskkill",
+                Arguments = "/F /FI \"WINDOWTITLE eq Agent Sandbox\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            using var proc = Process.Start(psi);
+            proc?.WaitForExit(5000);
+        }
+        catch { /* best effort */ }
     }
 
     public static int StopContainer(string containerName)
