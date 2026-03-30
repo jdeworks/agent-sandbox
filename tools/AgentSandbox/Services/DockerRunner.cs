@@ -72,9 +72,9 @@ public static class DockerRunner
         return false;
     }
 
-    public static int ComposeDown(string composeFile, string projectDir)
+    public static int ComposeDown(string composeFile, string projectDir, Action<string>? onOutput = null)
     {
-        return Run("docker", $"compose -f \"{composeFile}\" --project-directory \"{projectDir}\" down", null);
+        return Run("docker", $"compose -f \"{composeFile}\" --project-directory \"{projectDir}\" down", onOutput);
     }
 
     public static int ComposeDownVolumes(string composeFile, string projectDir)

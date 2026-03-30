@@ -1723,20 +1723,36 @@ public sealed class WizardForm : Form
         RefreshRecentProjects();
     }
 
-    private void OnStopContainerClicked(object? sender, EventArgs e)
+    private async void OnStopContainerClicked(object? sender, EventArgs e)
     {
+        _btnStopContainer.Enabled = false;
+        _btnStopContainer.Text = "Stopping\u2026";
+        AppendLog("[sandbox] Stopping container...");
+
         try
         {
-            if (!string.IsNullOrEmpty(_lastLaunchedComposePath) && File.Exists(_lastLaunchedComposePath))
-                DockerRunner.ComposeDown(_lastLaunchedComposePath, _lastLaunchedProjectDir);
-            AppendLog("[sandbox] Container stopped.");
+            var composePath = _lastLaunchedComposePath;
+            var projectDir = _lastLaunchedProjectDir;
+            var exitCode = await Task.Run(() =>
+            {
+                if (!string.IsNullOrEmpty(composePath) && File.Exists(composePath))
+                    return DockerRunner.ComposeDown(composePath, projectDir,
+                        msg => Invoke(() => AppendLog(msg)));
+                return -1;
+            });
+
+            if (exitCode == 0)
+                AppendLog("[sandbox] Container stopped.");
+            else if (exitCode == -1)
+                AppendLog("[sandbox] No compose file found.");
+            else
+                AppendLog("[sandbox] Container stop may have failed (check Docker Desktop).");
         }
         catch (Exception ex)
         {
             AppendLog($"[sandbox] Error stopping container: {ex.Message}");
         }
 
-        _btnStopContainer.Enabled = false;
         _btnStopContainer.Text = "Stopped";
     }
 
